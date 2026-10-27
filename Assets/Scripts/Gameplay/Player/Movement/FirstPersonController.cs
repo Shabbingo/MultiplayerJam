@@ -66,6 +66,24 @@ public class FirstPersonController : MonoBehaviour
         // booleans
         public uint StateFlags;
 
+        // Ammo for both weapon slots is packed into unused portions of StateFlags so adding
+        // a secondary magazine does not change the existing NetCode ghost component layout.
+        private const int PrimaryAmmoShift = 16;
+        private const int SecondaryAmmoShift = 24;
+        private const uint PackedAmmoMask = 0xffu;
+
+        public int PrimaryWeaponAmmo
+        {
+            get => (int)((StateFlags >> PrimaryAmmoShift) & PackedAmmoMask);
+            set => SetPackedAmmo(PrimaryAmmoShift, value);
+        }
+
+        public int SecondaryWeaponAmmo
+        {
+            get => (int)((StateFlags >> SecondaryAmmoShift) & PackedAmmoMask);
+            set => SetPackedAmmo(SecondaryAmmoShift, value);
+        }
+
         [GhostField(SendData = false)]
         public bool Jump
         {
@@ -183,6 +201,13 @@ public class FirstPersonController : MonoBehaviour
             {
                 StateFlags &= ~(uint)flag;
             }
+        }
+
+        private void SetPackedAmmo(int shift, int value)
+        {
+            uint shiftedMask = PackedAmmoMask << shift;
+            uint packedValue = (uint)Math.Clamp(value, 0, (int)PackedAmmoMask) << shift;
+            StateFlags = (StateFlags & ~shiftedMask) | packedValue;
         }
 
         public void Init(in float3 worldPosition, in quaternion worldRotation)

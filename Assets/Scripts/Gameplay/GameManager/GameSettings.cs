@@ -45,7 +45,8 @@ namespace Unity.MP_FPS
         GameSettings()
         {
             m_PlayerName = PlayerPrefs.GetString(k_PlayerNameKey, Environment.UserName);
-            m_PlayerCharacter = PlayerPrefs.GetInt(k_PlayerCharacterKey, 0);  
+            // There is currently one loadout: rifle primary and resize-gun secondary.
+            m_PlayerCharacter = 0;
             m_ConnectionMode = PlayerPrefs.GetInt(k_ConnectionModeKey, 0);
             m_SessionName = PlayerPrefs.GetString(k_SessionNameKey, "default-session");
         }

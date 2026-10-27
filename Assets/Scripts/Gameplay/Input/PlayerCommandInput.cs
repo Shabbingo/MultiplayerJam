@@ -11,19 +11,23 @@ public struct PlayerInput
         Shoot = 1 << 1,
         Sprint = 1 << 2,
         Reload = 1 << 3,
-        ToggleShrink = 1 << 4
+        ToggleShrink = 1 << 4,
+        SelectPrimaryWeapon = 1 << 5,
+        SelectSecondaryWeapon = 1 << 6
     }
 
     public float2 MoveInput;
     public float2 LookYawPitchDegrees;
 
-    public uint InputFlags; // 4 (16)
+    public uint InputFlags; // 4 bytes (32 flags)
 
     public bool Jump => (InputFlags & (uint)InputFlag.Jump) != 0;
     public bool Shoot => (InputFlags & (uint)InputFlag.Shoot) != 0;
     public bool Sprint => (InputFlags & (uint)InputFlag.Sprint) != 0;
     public bool Reload => (InputFlags & (uint)InputFlag.Reload) != 0;
     public bool ToggleShrink => (InputFlags & (uint)InputFlag.ToggleShrink) != 0;
+    public bool SelectPrimaryWeapon => (InputFlags & (uint)InputFlag.SelectPrimaryWeapon) != 0;
+    public bool SelectSecondaryWeapon => (InputFlags & (uint)InputFlag.SelectSecondaryWeapon) != 0;
 
     public void SetFlag(InputFlag flag, bool set)
     {

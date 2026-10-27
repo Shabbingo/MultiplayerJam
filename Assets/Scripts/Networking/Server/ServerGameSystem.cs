@@ -201,14 +201,21 @@ namespace Unity.MP_FPS
             ecb.SetComponent(clientInputEntity, new PlayerCommandTarget { NetworkId = ownerNetworkId.Value });
 
             // Instantiate the player entity
-            var playerEntityPrefab = characterIndex == 0 ? playerEntityPrefabs.PlayerRifleEntityPrefab : playerEntityPrefabs.PlayerShotgunEntityPrefab;
+            var playerEntityPrefab = playerEntityPrefabs.PlayerRifleEntityPrefab;
             var playerEntity = ecb.Instantiate(playerEntityPrefab);
 
-            // The second menu option reuses the shotgun character prefab, but equips the resize gun.
-            var weaponId = characterIndex == 0 ? (uint)0 : 2;
+            // Every player starts with the automatic rifle. Weapon selection is handled in-game.
+            var weaponId = WeaponManager.PrimaryWeaponId;
             
             var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(weaponId);
             var magazineSize = weaponData != null ? weaponData.MagazineSize : 30; // Default to 30 if weapon not found
+            var secondaryWeaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
+                WeaponManager.SecondaryWeaponId);
+            var initialControllerState = new FirstPersonController.ControllerState();
+            initialControllerState.PrimaryWeaponAmmo = magazineSize;
+            initialControllerState.SecondaryWeaponAmmo = secondaryWeaponData != null
+                ? secondaryWeaponData.MagazineSize
+                : 0;
 
             ecb.SetComponent(playerEntity, new GhostOwner { NetworkId = ownerNetworkId.Value });
             ecb.AddComponent(playerEntity, new PlayerClientCommandInputLookup { ClientCommandInputEntity = clientInputEntity });
@@ -217,6 +224,7 @@ namespace Unity.MP_FPS
                 InputIndex = 0,
                 MaxHealth = 100f,
                 CurrentHealth = 100f,
+                ControllerState = initialControllerState,
                 EquippedWeaponID = weaponId,
                 CurrentAmmo = magazineSize
             });

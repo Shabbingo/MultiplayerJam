@@ -203,6 +203,17 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     {
                         predictedPlayer.ValueRW.LocalLookYawPitchDegrees = input.LookYawPitchDegrees;
 
+                        if (input.SelectPrimaryWeapon)
+                        {
+                            WeaponManager.Instance.TryEquipWeapon(
+                                ref predictedPlayer.ValueRW, WeaponManager.PrimaryWeaponId);
+                        }
+                        else if (input.SelectSecondaryWeapon)
+                        {
+                            WeaponManager.Instance.TryEquipWeapon(
+                                ref predictedPlayer.ValueRW, WeaponManager.SecondaryWeaponId);
+                        }
+
                         if (input.ToggleShrink &&
                             !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed &&
                             !predictedPlayer.ValueRO.ControllerState.IsForcedFullSize)

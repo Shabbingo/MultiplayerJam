@@ -293,6 +293,29 @@ namespace Unity.MP_FPS
 
                     predictedPlayer.ValueRW.ControllerState.Shoot = false;
 
+                    // Apply weapon selection before reload/fire processing so the authoritative
+                    // server and client prediction use the same weapon for this input batch.
+                    for (int i = 0; i < predictedClient.InputCount; i++)
+                    {
+                        var selectionCommand = commands[i + predictedClient.BeginInputIndex];
+                        if (!selectionCommand.TryGetPlayerMovementInput(
+                                predictedPlayer.ValueRO.InputIndex, out var selectionInput))
+                        {
+                            continue;
+                        }
+
+                        if (selectionInput.SelectPrimaryWeapon)
+                        {
+                            WeaponManager.Instance.TryEquipWeapon(
+                                ref predictedPlayer.ValueRW, WeaponManager.PrimaryWeaponId);
+                        }
+                        else if (selectionInput.SelectSecondaryWeapon)
+                        {
+                            WeaponManager.Instance.TryEquipWeapon(
+                                ref predictedPlayer.ValueRW, WeaponManager.SecondaryWeaponId);
+                        }
+                    }
+
                     var weaponData =
                         WeaponManager.Instance.WeaponRegistry.GetWeaponData(predictedPlayer.ValueRO.EquippedWeaponID);
                     if (weaponData != null)

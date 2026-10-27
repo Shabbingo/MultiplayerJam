@@ -105,5 +105,7 @@ public partial class ClientInputReaderSystem : SystemBase
         playerInput.SetFlag(PlayerInput.InputFlag.Sprint, controls.Player.Sprint.IsPressed());
         playerInput.SetFlag(PlayerInput.InputFlag.Reload, controls.FPS.Reload.triggered);
         playerInput.SetFlag(PlayerInput.InputFlag.ToggleShrink, controls.UI.RightClick.triggered);
+        playerInput.SetFlag(PlayerInput.InputFlag.SelectPrimaryWeapon, controls.Player.Previous.triggered);
+        playerInput.SetFlag(PlayerInput.InputFlag.SelectSecondaryWeapon, controls.Player.Next.triggered);
     }
 }
