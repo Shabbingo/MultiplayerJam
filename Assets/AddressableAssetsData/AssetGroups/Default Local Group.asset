@@ -15,6 +15,11 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: 92b6b833b5f846f45bbe32bd85d5ee8d
   m_SerializeEntries:
+  - m_GUID: 38ee40c188d217c4fbd0f86d3a8afe09
+    m_Address: Assets/Prefabs/ActorGhosts/Projectile_Resize.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 63934da2ab499aa479387455c5ccfd99
     m_Address: Assets/Prefabs/Effects/MachineGunBulletHit.prefab
     m_ReadOnly: 0

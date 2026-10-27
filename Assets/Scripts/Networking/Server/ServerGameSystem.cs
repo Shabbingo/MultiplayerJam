@@ -204,7 +204,8 @@ namespace Unity.MP_FPS
             var playerEntityPrefab = characterIndex == 0 ? playerEntityPrefabs.PlayerRifleEntityPrefab : playerEntityPrefabs.PlayerShotgunEntityPrefab;
             var playerEntity = ecb.Instantiate(playerEntityPrefab);
 
-            var weaponId = characterIndex == 0 ? (uint)0 : 1;
+            // The second menu option reuses the shotgun character prefab, but equips the resize gun.
+            var weaponId = characterIndex == 0 ? (uint)0 : 2;
             
             var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(weaponId);
             var magazineSize = weaponData != null ? weaponData.MagazineSize : 30; // Default to 30 if weapon not found

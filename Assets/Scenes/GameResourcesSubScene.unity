@@ -190,6 +190,11 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
+  - m_AssetGUID: 38ee40c188d217c4fbd0f86d3a8afe09
+    m_SubObjectName:
+    m_SubObjectType:
+    m_SubObjectGUID:
+    m_EditorAssetChanged: 0
   - m_AssetGUID: d66bf1c0cf4a94990815a86b3d55b686
     m_SubObjectName: 
     m_SubObjectType: 

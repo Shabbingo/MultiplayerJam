@@ -12,7 +12,6 @@ using UnityEngine;
 public class FirstPersonController : MonoBehaviour
 {
     public SoundDef PlayerHitSFX;
-    [SerializeField, Min(1f)] private float m_MaximumShrinkSpeedMultiplier = 1.5f;
     [SerializeField, Range(0.05f, 1f)] private float m_ManualShrinkHealthMultiplier = 0.2f;
 
     private static class AnimationParameters
@@ -58,7 +57,8 @@ public class FirstPersonController : MonoBehaviour
             JumpTrigger = 1 << 6,
             LandTrigger = 1 << 7,
             IsManualShrinkActive = 1 << 8,
-            ShrinkTogglePressed = 1 << 9
+            ShrinkTogglePressed = 1 << 9,
+            IsForcedFullSize = 1 << 10
         }
 
         //WARNING WARNING: Adding more members to this struct might break network serialisation speak to Claire/Andy B
@@ -134,6 +134,13 @@ public class FirstPersonController : MonoBehaviour
         {
             get => (StateFlags & (uint)StateFlag.ShrinkTogglePressed) != 0;
             set => SetFlag(StateFlag.ShrinkTogglePressed, value);
+        }
+
+        [GhostField(SendData = false)]
+        public bool IsForcedFullSize
+        {
+            get => (StateFlags & (uint)StateFlag.IsForcedFullSize) != 0;
+            set => SetFlag(StateFlag.IsForcedFullSize, value);
         }
 
         public quaternion CurrentRotation;
@@ -281,18 +288,6 @@ public class FirstPersonController : MonoBehaviour
     public void SetExcludeLayers(LayerMask excludeLayers)
     {
         m_Controller.excludeLayers = excludeLayers;
-    }
-
-    public float GetScaleSpeedMultiplier(in PredictedPlayerGhost predictedPlayer)
-    {
-        if (predictedPlayer.MaxHealth <= 0f)
-        {
-            return 1f;
-        }
-
-        var healthRatio = Mathf.Clamp01(predictedPlayer.CurrentHealth / predictedPlayer.MaxHealth);
-        var shrinkProgress = predictedPlayer.ControllerState.IsManualShrinkActive ? 1f : 1f - healthRatio;
-        return Mathf.Lerp(1f, m_MaximumShrinkSpeedMultiplier, shrinkProgress);
     }
 
     public void ApplyManualShrinkHealth(ref PredictedPlayerGhost predictedPlayer, bool shrinking)
@@ -779,8 +774,7 @@ public class FirstPersonController : MonoBehaviour
     }
 
     public static void AccumulateMovement(ref ControllerState state,
-        ref float3 accumulatedMovement, in PlayerInput input, in ControllerConsts consts,
-        float speedMultiplier, float deltaTime)
+        ref float3 accumulatedMovement, in PlayerInput input, in ControllerConsts consts, float deltaTime)
     {
         state.TimeInState += deltaTime;
 
@@ -790,10 +784,7 @@ public class FirstPersonController : MonoBehaviour
 
         var updateRotation = true;
 
-        float combinedMoveSpeedModifier = speedMultiplier;
-
-        float modifiedTargetMoveSpeed =
-            stateConsts.Speed * combinedMoveSpeedModifier; //don't apply modifiers to the aiming speed
+        float modifiedTargetMoveSpeed = stateConsts.Speed;
 
         float inputMagnitude = math.length(input.MoveInput);
 
@@ -805,7 +796,7 @@ public class FirstPersonController : MonoBehaviour
 
         state.MovementSpeed = applyTargetSpeed;
         state.AnimatorTargetSpeedChangeRate = stateConsts.SpeedChangeRate;
-        state.AnimatorTargetSpeed = stateConsts.Speed * speedMultiplier * inputMagnitude;
+        state.AnimatorTargetSpeed = stateConsts.Speed * inputMagnitude;
         state.AnimatorMotionSpeed = inputMagnitude > 0f ? state.MovementSpeed : 1f; //play the idle at 1x
 
         state.AnimatorMotion = float3.zero;

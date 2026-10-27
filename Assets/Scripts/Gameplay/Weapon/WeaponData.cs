@@ -16,6 +16,12 @@ namespace Unity.MP_FPS
         CircularCross
     }
 
+    public enum PlayerResizeEffect
+    {
+        None,
+        RestoreFullSize
+    }
+
     [CreateAssetMenu(fileName = "NewWeaponData", menuName = "FPS Sample/Weapon Data")]
     public class WeaponData : ScriptableObject
     {
@@ -42,9 +48,20 @@ namespace Unity.MP_FPS
         public SoundDef WeaponFireSfx;
         public SoundDef WeaponReloadSfx;
 
+        [Header("Player Effects")]
+        [Tooltip("Optional size effect applied to each living player hit. Restore Full Size temporarily forces a full-size body and hitbox without changing health.")]
+        public PlayerResizeEffect ResizeEffect = PlayerResizeEffect.None;
+
+        [Min(0.1f)]
+        [Tooltip("How many seconds the resize effect lasts before the player returns to the size permitted by their unchanged health.")]
+        public float ResizeEffectDuration = 5f;
+
+        public float PlayerDamage => ResizeEffect == PlayerResizeEffect.RestoreFullSize ? 0f : Damage;
+
         public ProjectileBehavior Behavior = ProjectileBehavior.DirectDamage;
         public float AoeRadius = 5f;
         public float ProjectileSpeed = 30f;
+
     }
 
     public enum ProjectileBehavior

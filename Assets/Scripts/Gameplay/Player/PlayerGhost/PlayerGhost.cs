@@ -47,7 +47,6 @@ namespace Unity.MP_FPS
         private Animator _animatorCharacter;
         private Vector3 m_InitialScale;
         private float m_ManualScaleMultiplier = 1f;
-        private bool m_LastManualShrinkActive;
         private Vector3 m_ReticleVector;
 
         private CinemachineTargetGroup m_TargetGroup;
@@ -255,36 +254,18 @@ namespace Unity.MP_FPS
                 predictedPlayerGhost.CurrentHealth / predictedPlayerGhost.MaxHealth);
             var healthScaleMultiplier = Mathf.Lerp(m_MinimumPlayerScale, 1f, healthRatio);
 
-            var isManualShrinkActive = predictedPlayerGhost.ControllerState.IsManualShrinkActive;
-            if (isManualShrinkActive != m_LastManualShrinkActive)
-            {
-                // Begin the manual transition from the currently displayed size. Health is
-                // converted separately, so it must not make the visual scale jump instantly.
-                if (isManualShrinkActive)
-                {
-                    var currentScaleMultiplier = Mathf.Abs(m_InitialScale.x) > Mathf.Epsilon
-                        ? transform.localScale.x / m_InitialScale.x
-                        : 1f;
-                    m_ManualScaleMultiplier = Mathf.Clamp(
-                        currentScaleMultiplier, m_MinimumPlayerScale, 1f);
-                }
-
-                m_LastManualShrinkActive = isManualShrinkActive;
-            }
-
-            var manualTargetMultiplier = isManualShrinkActive
-                ? m_MinimumPlayerScale
-                : 1f;
+            var controllerState = predictedPlayerGhost.ControllerState;
+            var targetScaleMultiplier = controllerState.IsForcedFullSize
+                ? 1f
+                : controllerState.IsManualShrinkActive
+                    ? m_MinimumPlayerScale
+                    : healthScaleMultiplier;
             m_ManualScaleMultiplier = Mathf.MoveTowards(
                 m_ManualScaleMultiplier,
-                manualTargetMultiplier,
+                targetScaleMultiplier,
                 m_ManualScaleTransitionSpeed * deltaTime);
 
-            // Toggling back never grows beyond the size allowed by current health.
-            var scaleMultiplier = isManualShrinkActive
-                ? m_ManualScaleMultiplier
-                : Mathf.Min(healthScaleMultiplier, m_ManualScaleMultiplier);
-            var targetScale = m_InitialScale * scaleMultiplier;
+            var targetScale = m_InitialScale * m_ManualScaleMultiplier;
 
             // Avoid rebuilding the CharacterController's physics shape every frame.
             if ((transform.localScale - targetScale).sqrMagnitude > 0.000001f)

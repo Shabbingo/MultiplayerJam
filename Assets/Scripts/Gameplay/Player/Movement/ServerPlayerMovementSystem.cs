@@ -1,4 +1,5 @@
 using Gameplay.Leaderboard;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -49,6 +50,8 @@ namespace Unity.MP_FPS
         private ComponentLookup<PredictedPlayerGhost> m_PlayerGhostLookup;
         private readonly Collider[] m_HitscanOverlapResults = new Collider[16];
         private readonly RaycastHit[] m_HitscanCastResults = new RaycastHit[32];
+        private readonly Dictionary<Entity, float> m_ForcedFullSizeTimers = new();
+        private readonly List<Entity> m_ForcedFullSizeEntitiesScratch = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
@@ -88,6 +91,8 @@ namespace Unity.MP_FPS
         protected override void OnDestroy()
         {
             m_ProcessedClientInputCommands.Dispose();
+            m_ForcedFullSizeTimers.Clear();
+            m_ForcedFullSizeEntitiesScratch.Clear();
 
             var query = GetEntityQuery(typeof(PlayerControllerLink));
             foreach (var entity in query.ToEntityArray(Allocator.Temp))
@@ -111,6 +116,7 @@ namespace Unity.MP_FPS
             }
 
             uint serverTick = networkTime.ServerTick.TickIndexForValidTick;
+            UpdateForcedFullSizeEffects(deltaTime);
 
             s_PlayerMovementActive = true;
             s_PlayerMovementTick = serverTick;
@@ -356,10 +362,13 @@ namespace Unity.MP_FPS
                                                 }
 
                                                 var healthBeforeDamage = targetPredictedPlayer.ValueRO.CurrentHealth;
-                                                targetPredictedPlayer.ValueRW.CurrentHealth -= weaponData.Damage;
+                                                var appliedDamage = weaponData.PlayerDamage;
+                                                targetPredictedPlayer.ValueRW.CurrentHealth -= appliedDamage;
+                                                ApplyWeaponResizeEffect(hitGhostObject.LinkedEntity, weaponData,
+                                                    ref targetPredictedPlayer.ValueRW);
                                                 targetPredictedPlayer.ValueRW.ControllerState.IsHit = true;
 
-                                                targetPredictedPlayer.ValueRW.LastDamageAmount = weaponData.Damage;
+                                                targetPredictedPlayer.ValueRW.LastDamageAmount = appliedDamage;
                                                 targetPredictedPlayer.ValueRW.LastHitTick = serverTick;
 
                                                 if (healthBeforeDamage > 0 &&
@@ -430,6 +439,11 @@ namespace Unity.MP_FPS
                                             WeaponId = predictedPlayer.ValueRO.EquippedWeaponID
                                         });
                                     }
+                                    else
+                                    {
+                                        Debug.LogError(
+                                            $"[Server] Projectile ghost for weapon '{weaponData.WeaponName}' is not registered in GhostPrefabsAuthoring.");
+                                    }
 
                                     break;
                                 }
@@ -487,7 +501,8 @@ namespace Unity.MP_FPS
                         if (commandInput.TryGetPlayerMovementInput(predictedPlayer.ValueRO.InputIndex, out var input))
                         {
                             if (input.ToggleShrink &&
-                                !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed)
+                                !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed &&
+                                !predictedPlayer.ValueRO.ControllerState.IsForcedFullSize)
                             {
                                 var shrinking = !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
                                 predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive = shrinking;
@@ -496,15 +511,10 @@ namespace Unity.MP_FPS
                             }
                             predictedPlayer.ValueRW.ControllerState.ShrinkTogglePressed = input.ToggleShrink;
 
-                            var speedMultiplier = controllerLink.Controller.GetScaleSpeedMultiplier(
-                                in predictedPlayer.ValueRO);
-
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
-                                controllerConsts.ValueRO.ControllerConsts,
-                                speedMultiplier,
-                                movementDt);
+                                controllerConsts.ValueRO.ControllerConsts, movementDt);
                         }
                     }
 
@@ -644,6 +654,60 @@ namespace Unity.MP_FPS
             }
 
             return foundCollision;
+        }
+
+        public void ApplyWeaponResizeEffect(Entity targetEntity, WeaponData weaponData,
+            ref PredictedPlayerGhost player)
+        {
+            if (weaponData.ResizeEffect != PlayerResizeEffect.RestoreFullSize ||
+                player.CurrentHealth <= 0f)
+            {
+                return;
+            }
+
+            player.ControllerState.IsManualShrinkActive = false;
+            player.ControllerState.IsForcedFullSize = true;
+            m_ForcedFullSizeTimers[targetEntity] = Mathf.Max(0.1f, weaponData.ResizeEffectDuration);
+        }
+
+        private void UpdateForcedFullSizeEffects(float deltaTime)
+        {
+            if (m_ForcedFullSizeTimers.Count == 0)
+            {
+                return;
+            }
+
+            m_ForcedFullSizeEntitiesScratch.Clear();
+            m_ForcedFullSizeEntitiesScratch.AddRange(m_ForcedFullSizeTimers.Keys);
+            foreach (var entity in m_ForcedFullSizeEntitiesScratch)
+            {
+                float remainingTime = m_ForcedFullSizeTimers[entity] - deltaTime;
+                if (remainingTime > 0f)
+                {
+                    m_ForcedFullSizeTimers[entity] = remainingTime;
+
+                    // Reassert the authoritative flag every server tick so prediction replay
+                    // cannot cancel the effect while the timer is active.
+                    if (EntityManager.Exists(entity) && EntityManager.HasComponent<PredictedPlayerGhost>(entity))
+                    {
+                        var activePlayer = EntityManager.GetComponentData<PredictedPlayerGhost>(entity);
+                        activePlayer.ControllerState.IsManualShrinkActive = false;
+                        activePlayer.ControllerState.IsForcedFullSize = true;
+                        EntityManager.SetComponentData(entity, activePlayer);
+                    }
+
+                    continue;
+                }
+
+                if (EntityManager.Exists(entity) && EntityManager.HasComponent<PredictedPlayerGhost>(entity))
+                {
+                    var player = EntityManager.GetComponentData<PredictedPlayerGhost>(entity);
+                    player.ControllerState.IsForcedFullSize = false;
+                    EntityManager.SetComponentData(entity, player);
+                }
+
+                m_ForcedFullSizeTimers.Remove(entity);
+            }
         }
 
         private bool IsShooterCollider(Collider collider, int shooterNetworkId)

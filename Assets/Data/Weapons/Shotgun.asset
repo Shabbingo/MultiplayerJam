@@ -61,6 +61,8 @@ MonoBehaviour:
         w: 3997788915
   WeaponFireSfx: {fileID: 11400000, guid: efa46b087affc004e90934acb0e499bb, type: 2}
   WeaponReloadSfx: {fileID: 11400000, guid: 787dd818efa43da4f969b63e44de56b7, type: 2}
+  ResizeEffect: 0
+  ResizeEffectDuration: 5
   Behavior: 0
   AoeRadius: 5
   ProjectileSpeed: 30
