@@ -17,6 +17,7 @@ namespace Unity.MP_FPS
         [SerializeField] private GameObject m_OwnerVisuals;
         [SerializeField] private GameObject m_OtherPlayerVisuals;
         [SerializeField] private SoundDef m_SpawnSFX;
+        [SerializeField, Range(0.1f, 1f)] private float m_MinimumPlayerScale = 0.5f;
         [field: SerializeField] public Transform CameraTarget { get; private set; }
         [field: SerializeField] public Transform ReticlePoint { get; private set; }
         [field: SerializeField] public Transform ShotOrigin { get; private set; }
@@ -43,6 +44,7 @@ namespace Unity.MP_FPS
 
         private Camera m_PlayerCamera;
         private Animator _animatorCharacter;
+        private Vector3 m_InitialScale;
         private Vector3 m_ReticleVector;
 
         private CinemachineTargetGroup m_TargetGroup;
@@ -88,6 +90,7 @@ namespace Unity.MP_FPS
         {
             GetRequiredComponent(out m_Controller);
             m_ReticleVector = ReticlePoint.localPosition;
+            m_InitialScale = transform.localScale;
         }
         
         private void LateUpdate()
@@ -201,11 +204,13 @@ namespace Unity.MP_FPS
 
         public void UpdateServer(float deltaTime)
         {
-            // Server does not need to do anything for now regarding PlayerGhost
+            ApplyHealthBasedScale();
         }
 
         public void UpdateClient(float deltaTime)
         {
+            ApplyHealthBasedScale();
+
             var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
             var controllerState = predictedPlayerGhost.ControllerState;
             if (Role == MultiplayerRole.ClientOwned)
@@ -221,6 +226,26 @@ namespace Unity.MP_FPS
             //TODO: The following is a temporary fix for animation root moves (Robot Jump for example)
             m_OtherPlayerVisuals.transform.localPosition = Vector3.zero;
             m_OtherPlayerVisuals.transform.localRotation = Quaternion.identity;
+        }
+
+        private void ApplyHealthBasedScale()
+        {
+            var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
+            if (predictedPlayerGhost.MaxHealth <= 0f)
+            {
+                return;
+            }
+
+            var healthRatio = Mathf.Clamp01(
+                predictedPlayerGhost.CurrentHealth / predictedPlayerGhost.MaxHealth);
+            var scaleMultiplier = Mathf.Lerp(m_MinimumPlayerScale, 1f, healthRatio);
+            var targetScale = m_InitialScale * scaleMultiplier;
+
+            // Avoid rebuilding the CharacterController's physics shape every frame.
+            if ((transform.localScale - targetScale).sqrMagnitude > 0.000001f)
+            {
+                transform.localScale = targetScale;
+            }
         }
 
         public bool SetPlayerPositionFromRPC(float3 rpcPosition, float positionErrorSq)
