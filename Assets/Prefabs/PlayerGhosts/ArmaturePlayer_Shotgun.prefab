@@ -145,12 +145,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c79d771cedb4794bf100ce60df5f764, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.NetCode.Authoring.Hybrid::Unity.NetCode.GhostAuthoringComponent
-  DefaultGhostMode: 2
-  SupportedGhostModes: 3
-  OptimizationMode: 0
-  Importance: 200
-  MaxSendRate: 0
-  prefabId: f4bc4302cb16c4e29aaa203772f1461c
   HasOwner: 1
   SupportAutoCommandTarget: 0
   TrackInterpolationDelay: 0
@@ -159,6 +153,12 @@ MonoBehaviour:
   UseSingleBaseline: 0
   RollbackPredictedSpawnedGhostState: 0
   RollbackPredictionOnStructuralChanges: 0
+  DefaultGhostMode: 2
+  SupportedGhostModes: 3
+  OptimizationMode: 0
+  Importance: 200
+  MaxSendRate: 0
+  prefabId: f4bc4302cb16c4e29aaa203772f1461c
 --- !u!114 &3944503306077019667
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -238,6 +238,8 @@ MonoBehaviour:
   m_OwnerVisuals: {fileID: 5736986264473589180}
   m_OtherPlayerVisuals: {fileID: 2363139590035842310}
   m_SpawnSFX: {fileID: 11400000, guid: bfec68d58a412fa4fb63e149caa5b3e5, type: 2}
+  m_MinimumPlayerScale: 0.2
+  m_ManualScaleTransitionSpeed: 4
   <CameraTarget>k__BackingField: {fileID: 1666222585322407308}
   <ReticlePoint>k__BackingField: {fileID: 912756953968078347}
   <ShotOrigin>k__BackingField: {fileID: 6355405324223741531}
@@ -258,7 +260,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PredictedPlayerControllerConstsAuthoring
   <WalkSpeed>k__BackingField: 4.7
-  <SprintSpeed>k__BackingField: 4.7
+  <SprintSpeed>k__BackingField: 7
   <WalkRotationSmoothTime>k__BackingField: 0.1
   <WalkAnimationMotionScale>k__BackingField: 0.4
   <SprintRotationSmoothTime>k__BackingField: 0.08

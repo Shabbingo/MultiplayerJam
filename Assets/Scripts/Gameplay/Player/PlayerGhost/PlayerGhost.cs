@@ -18,6 +18,7 @@ namespace Unity.MP_FPS
         [SerializeField] private GameObject m_OtherPlayerVisuals;
         [SerializeField] private SoundDef m_SpawnSFX;
         [SerializeField, Range(0.1f, 1f)] private float m_MinimumPlayerScale = 0.5f;
+        [SerializeField, Min(0.01f)] private float m_ManualScaleTransitionSpeed = 4f;
         [field: SerializeField] public Transform CameraTarget { get; private set; }
         [field: SerializeField] public Transform ReticlePoint { get; private set; }
         [field: SerializeField] public Transform ShotOrigin { get; private set; }
@@ -45,6 +46,8 @@ namespace Unity.MP_FPS
         private Camera m_PlayerCamera;
         private Animator _animatorCharacter;
         private Vector3 m_InitialScale;
+        private float m_ManualScaleMultiplier = 1f;
+        private bool m_LastManualShrinkActive;
         private Vector3 m_ReticleVector;
 
         private CinemachineTargetGroup m_TargetGroup;
@@ -154,6 +157,18 @@ namespace Unity.MP_FPS
                 ? (int)LayerIndex.ServerPlayer
                 : (int)LayerIndex.ClientPlayer;
 
+            // Host mode creates authoritative server and predicted client copies
+            // in the same Unity physics scene. They occupy the same position and
+            // must not collide with one another.
+            if (Role == MultiplayerRole.Server)
+            {
+                Controller.SetExcludeLayers(LayerMask.GetMask("ClientPlayer"));
+            }
+            else if (Role == MultiplayerRole.ClientOwned)
+            {
+                Controller.SetExcludeLayers(LayerMask.GetMask("ServerPlayer"));
+            }
+
             PlayerGhostManager.TryGetInstanceByRole(Role, out var playerManager);
             playerManager.Register(this);
         }
@@ -204,12 +219,12 @@ namespace Unity.MP_FPS
 
         public void UpdateServer(float deltaTime)
         {
-            ApplyHealthBasedScale();
+            ApplyPlayerScale(deltaTime);
         }
 
         public void UpdateClient(float deltaTime)
         {
-            ApplyHealthBasedScale();
+            ApplyPlayerScale(deltaTime);
 
             var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
             var controllerState = predictedPlayerGhost.ControllerState;
@@ -228,7 +243,7 @@ namespace Unity.MP_FPS
             m_OtherPlayerVisuals.transform.localRotation = Quaternion.identity;
         }
 
-        private void ApplyHealthBasedScale()
+        private void ApplyPlayerScale(float deltaTime)
         {
             var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
             if (predictedPlayerGhost.MaxHealth <= 0f)
@@ -238,7 +253,30 @@ namespace Unity.MP_FPS
 
             var healthRatio = Mathf.Clamp01(
                 predictedPlayerGhost.CurrentHealth / predictedPlayerGhost.MaxHealth);
-            var scaleMultiplier = Mathf.Lerp(m_MinimumPlayerScale, 1f, healthRatio);
+            var healthScaleMultiplier = Mathf.Lerp(m_MinimumPlayerScale, 1f, healthRatio);
+
+            var isManualShrinkActive = predictedPlayerGhost.ControllerState.IsManualShrinkActive;
+            if (isManualShrinkActive != m_LastManualShrinkActive)
+            {
+                // Begin shrinking from the size currently permitted by health.
+                if (isManualShrinkActive)
+                {
+                    m_ManualScaleMultiplier = Mathf.Min(m_ManualScaleMultiplier, healthScaleMultiplier);
+                }
+
+                m_LastManualShrinkActive = isManualShrinkActive;
+            }
+
+            var manualTargetMultiplier = isManualShrinkActive
+                ? m_MinimumPlayerScale
+                : 1f;
+            m_ManualScaleMultiplier = Mathf.MoveTowards(
+                m_ManualScaleMultiplier,
+                manualTargetMultiplier,
+                m_ManualScaleTransitionSpeed * deltaTime);
+
+            // Toggling back never grows beyond the size allowed by current health.
+            var scaleMultiplier = Mathf.Min(healthScaleMultiplier, m_ManualScaleMultiplier);
             var targetScale = m_InitialScale * scaleMultiplier;
 
             // Avoid rebuilding the CharacterController's physics shape every frame.

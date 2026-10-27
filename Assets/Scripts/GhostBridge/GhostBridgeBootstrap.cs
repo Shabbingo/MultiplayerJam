@@ -119,7 +119,10 @@ public class GhostBridgeBootstrap : ClientServerBootstrap
         // which occasionally triggers the sporadic-and-unrecoverable "Loading Entity Scene failed" error
         if (World.DefaultGameObjectInjectionWorld != null)
         {
-            World.DefaultGameObjectInjectionWorld.Dispose();
+            if (World.DefaultGameObjectInjectionWorld.IsCreated)
+            {
+                World.DefaultGameObjectInjectionWorld.Dispose();
+            }
             World.DefaultGameObjectInjectionWorld = null;
         }
 
@@ -135,7 +138,7 @@ public class GhostBridgeBootstrap : ClientServerBootstrap
 
     private void SafelyQuitWorld(World world)
     {
-        if (world != null)
+        if (world != null && world.IsCreated)
         {
             world.QuitUpdate = true;
             world.EntityManager.CompleteAllTrackedJobs();
@@ -145,15 +148,15 @@ public class GhostBridgeBootstrap : ClientServerBootstrap
 
     public void DestroyMultiplayerWorlds()
     {
-        if (ClientWorld != null)
-        {
-            DestroyWorld(ClientWorld);
-        }
+        // Clear the references before disposal so repeated or concurrent cleanup
+        // cannot attempt to destroy the same world twice.
+        var clientWorld = ClientWorld;
+        var serverWorld = ServerWorld;
+        ClientWorld = null;
+        ServerWorld = null;
 
-        if (ServerWorld != null)
-        {
-            DestroyWorld(ServerWorld);
-        }
+        DestroyWorld(clientWorld);
+        DestroyWorld(serverWorld);
         
         if (m_ClientGameObjectHierarchy != null)
         {
@@ -185,7 +188,7 @@ public class GhostBridgeBootstrap : ClientServerBootstrap
 
     private void DestroyWorld(World world)
     {
-        if (world != null)
+        if (world != null && world.IsCreated)
         {
             world.QuitUpdate = true;
             world.EntityManager.CompleteAllTrackedJobs();

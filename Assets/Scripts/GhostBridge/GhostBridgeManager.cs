@@ -21,25 +21,45 @@ namespace Unity.GhostBridge
             Instance = this;
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+        }
+
         void Start()
         {
             DontDestroyOnLoad(this);
         }
 
 #region Server functions
-        private NetworkStreamDriver _serverNetworkStreamDriver;
-
         public void SetServerNetworkStreamDriver(NetworkStreamDriver serverNetworkStreamDriver)
         {
-            _serverNetworkStreamDriver = serverNetworkStreamDriver;
+            // Kept for compatibility with the existing startup paths. Do not cache
+            // NetworkStreamDriver here: it contains native pointers owned by its ECS
+            // world and becomes unsafe as soon as that world is disposed/recreated.
         }
         
         public bool IsServerListening()
         {
-            var driverStore = _serverNetworkStreamDriver.DriverStore; 
+            if (!TryGetServerEntityManager(out var manager))
+            {
+                return false;
+            }
+
+            using var driverQuery = manager.CreateEntityQuery(ComponentType.ReadOnly<NetworkStreamDriver>());
+            if (driverQuery.IsEmptyIgnoreFilter)
+            {
+                return false;
+            }
+
+            var networkStreamDriver = driverQuery.GetSingleton<NetworkStreamDriver>();
+            var driverStore = networkStreamDriver.DriverStore;
             if (driverStore.IsCreated && driverStore.DriversCount > 0)
             {
-                int driverId = _serverNetworkStreamDriver.DriverStore.FirstDriver;
+                int driverId = driverStore.FirstDriver;
                 return driverStore.GetDriverInstanceRO(driverId).driver.IsCreated &&
                        driverStore.GetDriverInstanceRO(driverId).driver.Listening;
             }
@@ -58,7 +78,7 @@ namespace Unity.GhostBridge
                 }
             }
 
-            if (serverWorld != null)
+            if (serverWorld != null && serverWorld.IsCreated)
             {
                 manager = serverWorld.EntityManager;
                 return true;

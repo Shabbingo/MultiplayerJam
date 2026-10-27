@@ -203,6 +203,14 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     {
                         predictedPlayer.ValueRW.LocalLookYawPitchDegrees = input.LookYawPitchDegrees;
 
+                        if (input.ToggleShrink &&
+                            !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed)
+                        {
+                            predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive =
+                                !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
+                        }
+                        predictedPlayer.ValueRW.ControllerState.ShrinkTogglePressed = input.ToggleShrink;
+
                         var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(predictedPlayer.ValueRO.EquippedWeaponID);
                         if (weaponData != null)
                         {
@@ -278,10 +286,14 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             }
 
                             FirstPersonController.ProcessInputs(ref predictedPlayer.ValueRW.ControllerState, input, accumulateDT);
+                            var speedMultiplier = controllerLink.Controller.GetScaleSpeedMultiplier(
+                                in predictedPlayer.ValueRO);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
-                                controllerConsts.ValueRO.ControllerConsts, accumulateDT);
+                                controllerConsts.ValueRO.ControllerConsts,
+                                speedMultiplier,
+                                accumulateDT);
                             
                             if (predictedPlayer.ValueRW.ControllerState.JumpTriggered)
                             {

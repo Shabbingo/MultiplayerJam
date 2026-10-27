@@ -12,6 +12,7 @@ using UnityEngine;
 public class FirstPersonController : MonoBehaviour
 {
     public SoundDef PlayerHitSFX;
+    [SerializeField, Min(1f)] private float m_MaximumShrinkSpeedMultiplier = 1.5f;
 
     private static class AnimationParameters
     {
@@ -21,6 +22,7 @@ public class FirstPersonController : MonoBehaviour
         public static readonly int IsMoving = Animator.StringToHash("IsMoving"); //1P
         public static readonly int Speed = Animator.StringToHash("Speed"); //3P
         public static readonly int StrafeSpeed = Animator.StringToHash("SpeedStrafe"); //3P
+        public static readonly int MovementPlaybackSpeed = Animator.StringToHash("MovementPlaybackSpeed"); //3P
         public static readonly int TurnSpeed = Animator.StringToHash("Turn"); //3P
         public static readonly int Shoot = Animator.StringToHash("Shoot");
         public static readonly int IsShooting = Animator.StringToHash("IsShooting");
@@ -53,7 +55,9 @@ public class FirstPersonController : MonoBehaviour
             IsReloading = 1 << 4,
             IsHit = 1 << 5,
             JumpTrigger = 1 << 6,
-            LandTrigger = 1 << 7
+            LandTrigger = 1 << 7,
+            IsManualShrinkActive = 1 << 8,
+            ShrinkTogglePressed = 1 << 9
         }
 
         //WARNING WARNING: Adding more members to this struct might break network serialisation speak to Claire/Andy B
@@ -115,6 +119,20 @@ public class FirstPersonController : MonoBehaviour
         {
             get => (StateFlags & (uint)StateFlag.LandTrigger) != 0;
             set => SetFlag(StateFlag.LandTrigger, value);
+        }
+
+        [GhostField(SendData = false)]
+        public bool IsManualShrinkActive
+        {
+            get => (StateFlags & (uint)StateFlag.IsManualShrinkActive) != 0;
+            set => SetFlag(StateFlag.IsManualShrinkActive, value);
+        }
+
+        [GhostField(SendData = false)]
+        public bool ShrinkTogglePressed
+        {
+            get => (StateFlags & (uint)StateFlag.ShrinkTogglePressed) != 0;
+            set => SetFlag(StateFlag.ShrinkTogglePressed, value);
         }
 
         public quaternion CurrentRotation;
@@ -262,6 +280,18 @@ public class FirstPersonController : MonoBehaviour
     public void SetExcludeLayers(LayerMask excludeLayers)
     {
         m_Controller.excludeLayers = excludeLayers;
+    }
+
+    public float GetScaleSpeedMultiplier(in PredictedPlayerGhost predictedPlayer)
+    {
+        if (predictedPlayer.MaxHealth <= 0f)
+        {
+            return 1f;
+        }
+
+        var healthRatio = Mathf.Clamp01(predictedPlayer.CurrentHealth / predictedPlayer.MaxHealth);
+        var shrinkProgress = predictedPlayer.ControllerState.IsManualShrinkActive ? 1f : 1f - healthRatio;
+        return Mathf.Lerp(1f, m_MaximumShrinkSpeedMultiplier, shrinkProgress);
     }
 
     public void ApplyMovementUpdate(ref ControllerState state, in ControllerConsts consts,
@@ -512,7 +542,7 @@ public class FirstPersonController : MonoBehaviour
         }
         else
         {
-            ApplyThirdPersonMovementAnimation(animator, state, predictedPlayerGhost.CurrentHealth);
+            ApplyThirdPersonMovementAnimation(animator, state, consts, predictedPlayerGhost.CurrentHealth);
         }
     }
 
@@ -621,16 +651,23 @@ public class FirstPersonController : MonoBehaviour
         animator.SetFloat(AnimationParameters.IsMoving, targetIsMovingValue);
     }
 
-    private void ApplyThirdPersonMovementAnimation(Animator animator, in ControllerState state, float currentHealth)
+    private void ApplyThirdPersonMovementAnimation(Animator animator, in ControllerState state,
+        in ControllerConsts consts, float currentHealth)
     {
         float3 relativeSpeed = math.mul(math.inverse(state.CurrentRotation), state.MovementRequest);
-        animator.SetFloat(AnimationParameters.Speed, relativeSpeed.z); // Use raw value for blend trees
-        animator.SetFloat(AnimationParameters.StrafeSpeed, relativeSpeed.x);
 
         float speedZ = (math.abs(relativeSpeed.z) < 0.01f) ? 0.0f : math.sign(relativeSpeed.z);
         float speedX = (math.abs(relativeSpeed.x) < 0.01f) ? 0.0f : math.sign(relativeSpeed.x);
         animator.SetFloat(AnimationParameters.Speed, speedZ);
         animator.SetFloat(AnimationParameters.StrafeSpeed, speedX);
+
+        // The blend tree parameters select a movement direction, while this parameter controls
+        // the cadence of only the locomotion state. This keeps footsteps matched to the actual
+        // walk/sprint/shrink-adjusted movement speed without accelerating weapon or hit animations.
+        float playbackSpeed = state.MovementSpeed > 0.01f
+            ? state.MovementSpeed / math.max(consts.Walk.Speed, 0.01f)
+            : 1f;
+        animator.SetFloat(AnimationParameters.MovementPlaybackSpeed, playbackSpeed);
 
         bool isDead = (currentHealth <= 0);
         animator.SetBool(AnimationParameters.IsDead, isDead);
@@ -684,7 +721,7 @@ public class FirstPersonController : MonoBehaviour
                 case MovementType.Standing:
                 case MovementType.Jumping:
                 case MovementType.Falling:
-                    stateConsts = consts.Walk;
+                    stateConsts = input.Sprint ? consts.Sprint : consts.Walk;
                     break;
                 default:
                     Debug.LogError(
@@ -728,7 +765,8 @@ public class FirstPersonController : MonoBehaviour
     }
 
     public static void AccumulateMovement(ref ControllerState state,
-        ref float3 accumulatedMovement, in PlayerInput input, in ControllerConsts consts, float deltaTime)
+        ref float3 accumulatedMovement, in PlayerInput input, in ControllerConsts consts,
+        float speedMultiplier, float deltaTime)
     {
         state.TimeInState += deltaTime;
 
@@ -738,7 +776,7 @@ public class FirstPersonController : MonoBehaviour
 
         var updateRotation = true;
 
-        float combinedMoveSpeedModifier = 1f;
+        float combinedMoveSpeedModifier = speedMultiplier;
 
         float modifiedTargetMoveSpeed =
             stateConsts.Speed * combinedMoveSpeedModifier; //don't apply modifiers to the aiming speed
@@ -753,7 +791,7 @@ public class FirstPersonController : MonoBehaviour
 
         state.MovementSpeed = applyTargetSpeed;
         state.AnimatorTargetSpeedChangeRate = stateConsts.SpeedChangeRate;
-        state.AnimatorTargetSpeed = stateConsts.Speed * inputMagnitude;
+        state.AnimatorTargetSpeed = stateConsts.Speed * speedMultiplier * inputMagnitude;
         state.AnimatorMotionSpeed = inputMagnitude > 0f ? state.MovementSpeed : 1f; //play the idle at 1x
 
         state.AnimatorMotion = float3.zero;

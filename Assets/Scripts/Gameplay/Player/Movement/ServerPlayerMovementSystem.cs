@@ -465,9 +465,11 @@ namespace Unity.MP_FPS
                      in SystemAPI
                          .Query<RefRW<PredictedPlayerGhost>, RefRO<PlayerClientCommandInputLookup>,
                              RefRO<PredictedPlayerControllerConsts>>()
-                         .WithAll<Simulate>()
+                         .WithAll<Simulate, PlayerControllerLink>()
                          .WithEntityAccess())
             {
+                var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+                var speedMultiplier = controllerLink.Controller.GetScaleSpeedMultiplier(in predictedPlayer.ValueRO);
                 var predictedClient = predictedClientInputComponentLookup[inputLookup.ValueRO.ClientCommandInputEntity];
                 if (predictedClient.InputCount > 0)
                 {
@@ -477,10 +479,19 @@ namespace Unity.MP_FPS
                         var commandInput = commands[i + predictedClient.BeginInputIndex];
                         if (commandInput.TryGetPlayerMovementInput(predictedPlayer.ValueRO.InputIndex, out var input))
                         {
+                            if (input.ToggleShrink &&
+                                !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed)
+                            {
+                                predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive =
+                                    !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
+                            }
+                            predictedPlayer.ValueRW.ControllerState.ShrinkTogglePressed = input.ToggleShrink;
+
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
                                 controllerConsts.ValueRO.ControllerConsts,
+                                speedMultiplier,
                                 movementDt);
                         }
                     }

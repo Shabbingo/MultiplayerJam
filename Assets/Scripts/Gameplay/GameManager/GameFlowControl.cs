@@ -105,54 +105,70 @@ namespace Unity.MP_FPS
             for (var i = World.All.Count - 1; i >= 0; i--)
             {
                 var world = World.All[i];
-                if (world.IsServer() || world.IsClient())
+                if (world.IsCreated && (world.IsServer() || world.IsClient()))
                 {
                     world.Dispose();
                 }
             }
         }
         
-        async Task DisconnectAndUnloadWorlds()
-        {
-            NetworkStreamReceiveSystem.DriverConstructor = null;
-            ConnectionSettings.Instance.GameConnectionState = ConnectionState.State.Disconnected;
+        private Task m_DisconnectAndUnloadTask;
 
-            bool requestedDisconnect = false;
-            foreach (var world in World.All)
+        Task DisconnectAndUnloadWorlds()
+        {
+            // Relay/session callbacks and failed startup can request cleanup in the
+            // same frame. All callers must await the same teardown operation.
+            return m_DisconnectAndUnloadTask ??= DisconnectAndUnloadWorldsInternal();
+        }
+
+        async Task DisconnectAndUnloadWorldsInternal()
+        {
+            try
             {
-                if (world.IsClient())
+                NetworkStreamReceiveSystem.DriverConstructor = null;
+                ConnectionSettings.Instance.GameConnectionState = ConnectionState.State.Disconnected;
+
+                bool requestedDisconnect = false;
+                foreach (var world in World.All)
                 {
-                    using var query = world.EntityManager.CreateEntityQuery(ComponentType.ReadOnly<NetworkId>());
-                    if (query.TryGetSingletonEntity<NetworkId>(out var networkId))
+                    if (world.IsCreated && world.IsClient())
                     {
-                        requestedDisconnect = true;
-                        world.EntityManager.AddComponentData(networkId, new NetworkStreamRequestDisconnect());
+                        using var query = world.EntityManager.CreateEntityQuery(ComponentType.ReadOnly<NetworkId>());
+                        if (query.TryGetSingletonEntity<NetworkId>(out var networkId))
+                        {
+                            requestedDisconnect = true;
+                            world.EntityManager.AddComponentData(networkId, new NetworkStreamRequestDisconnect());
+                        }
                     }
                 }
-            }
 
-            if (requestedDisconnect)
-            {
-                await Awaitable.NextFrameAsync();
-            }
+                if (requestedDisconnect)
+                {
+                    await Awaitable.NextFrameAsync();
+                }
 
-            await LeaveSessionAsync();
-            await DestroyGameSessionWorlds();
-            
-            if (GhostBridgeBootstrap.Instance != null)
-            {
-                // Destroy all "Server" and "Client" GameObjects and all their children.
-                Debug.Log($"[{nameof(DisconnectAndUnloadWorlds)}] Destroying multiplayer worlds via GhostBridgeBootstrap.");
-                GhostBridgeBootstrap.Instance.DestroyMultiplayerWorlds();
+                await LeaveSessionAsync();
+                await DestroyGameSessionWorlds();
+
+                if (GhostBridgeBootstrap.Instance != null)
+                {
+                    // Destroy all "Server" and "Client" GameObjects and all their children.
+                    Debug.Log($"[{nameof(DisconnectAndUnloadWorlds)}] Destroying multiplayer worlds via GhostBridgeBootstrap.");
+                    GhostBridgeBootstrap.Instance.DestroyMultiplayerWorlds();
+                }
+                else
+                {
+                    // Fallback in case bootstrap instance is lost
+                    Debug.Log($"[{nameof(DisconnectAndUnloadWorlds)}] InvokeAndClearStaticCallbacks");
+                    GhostSingleton.InvokeAndClearStaticCallbacks();
+                }
+
+                await ScenesLoader.UnloadGameplayScenesAsync();
             }
-            else
+            finally
             {
-                // Fallback in case bootstrap instance is lost
-                Debug.Log($"[{nameof(DisconnectAndUnloadWorlds)}] InvokeAndClearStaticCallbacks");
-                GhostSingleton.InvokeAndClearStaticCallbacks();
+                m_DisconnectAndUnloadTask = null;
             }
-            
-            await ScenesLoader.UnloadGameplayScenesAsync();
         }
     }
 }
