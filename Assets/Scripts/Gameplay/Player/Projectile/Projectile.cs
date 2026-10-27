@@ -17,6 +17,8 @@ namespace Unity.MP_FPS
 
         public static List<PredictedProjectileInfo> PredictedProjectiles = new List<PredictedProjectileInfo>();
         private int _hitLayerMask;
+        private readonly Collider[] _overlapResults = new Collider[16];
+        private readonly RaycastHit[] _castResults = new RaycastHit[16];
 
         // Holds the projectile's networked state
         public struct ProjectileData : IComponentData
@@ -63,6 +65,14 @@ namespace Unity.MP_FPS
         public void UpdateServer(float deltaTime)
         {
             var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(_weaponId);
+
+            // Test the segment the projectile is about to travel. The previous implementation
+            // moved first and cast forward from the new position, which skipped close targets.
+            if (CheckForCollision(weaponData, deltaTime))
+            {
+                return;
+            }
+
             Move(deltaTime, weaponData.ProjectileSpeed);
 
             _localTime += deltaTime;
@@ -71,8 +81,6 @@ namespace Unity.MP_FPS
                 GhostGameObject.DestroyEntity();
                 return;
             }
-
-            CheckForCollision(weaponData, deltaTime);
         }
 
         private void Move(float deltaTime, float speed)
@@ -86,59 +94,126 @@ namespace Unity.MP_FPS
             Move(deltaTime, weaponData.ProjectileSpeed);
         }
 
-        // In Projectile.cs
-        private void CheckForCollision(WeaponData weaponData, float deltaTime)
+        private bool CheckForCollision(WeaponData weaponData, float deltaTime)
         {
-            float projectileRadius = 0.2f;
+            const float projectileRadius = 0.2f;
             float distanceThisFrame = weaponData.ProjectileSpeed * deltaTime;
+            var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+            var world = GhostGameObject.World;
+            var movementSystem = world.GetExistingSystemManaged<ServerPlayerMovementSystem>();
+            var playerGhostLookup = movementSystem.GetComponentLookup<PredictedPlayerGhost>();
+            var ghostOwnerLookup = movementSystem.GetComponentLookup<GhostOwner>();
 
-            // Combine layer masks for a single, efficient cast
-            if (UnityEngine.Physics.SphereCast(transform.position, projectileRadius, transform.forward,
-                    out RaycastHit hitInfo, distanceThisFrame, _hitLayerMask, QueryTriggerInteraction.Ignore))
+            // A cast does not reliably report a collider that already contains its origin.
+            // Check initial overlaps first, skipping the shooter's own controller.
+            int overlapCount = UnityEngine.Physics.OverlapSphereNonAlloc(
+                transform.position,
+                projectileRadius,
+                _overlapResults,
+                _hitLayerMask,
+                QueryTriggerInteraction.Ignore);
+
+            Collider overlappingGeometry = null;
+            for (int i = 0; i < overlapCount; i++)
             {
-                // We hit something! The precise impact point is in hitInfo.point
-                GameObject hitObject = hitInfo.collider.gameObject;
-
-                var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
-
-                // Check if the hit object is a player
-                if (hitObject.layer == LayerMask.NameToLayer("ServerPlayer"))
+                var hitCollider = _overlapResults[i];
+                if (hitCollider == null || IsOwnerCollider(hitCollider, projectileData, ghostOwnerLookup))
                 {
-                    var world = GhostGameObject.World;
-
-                    var playerGhostLookup = world.GetExistingSystemManaged<ServerPlayerMovementSystem>()
-                        .GetComponentLookup<PredictedPlayerGhost>();
-                    var ghostOwnerLookup = world.GetExistingSystemManaged<ServerPlayerMovementSystem>()
-                        .GetComponentLookup<GhostOwner>();
-
-
-                    if (GhostGameObject.TryFindGhostGameObject(hitObject, out var hitGhostObject) &&
-                        playerGhostLookup.HasComponent(hitGhostObject.LinkedEntity))
-                    {
-                        var hitPlayerOwner = ghostOwnerLookup[hitGhostObject.LinkedEntity];
-                        if (hitPlayerOwner.NetworkId == projectileData.OwnerNetworkId)
-                        {
-                            // It's the owner, so we ignore this hit and do nothing.
-                            // The projectile continues its path.
-                            return;
-                        }
-                    }
-
-                    // It's another player, so handle the impact using the precise hit point
-                    HandlePlayerImpact(hitObject, hitInfo.point, world, projectileData, playerGhostLookup,
-                        ghostOwnerLookup);
-                }
-                else
-                {
-                    // It's geometry (Ground, Default, etc.), handle the impact
-                    HandleGeometryImpact(hitInfo.point);
+                    continue;
                 }
 
-                if (weaponData.ProjectileHitVfxPrefab != null)
+                // When the projectile overlaps both the floor and a nearby player, prefer the
+                // player. This avoids a small player's low muzzle clipping the floor first.
+                if (hitCollider.gameObject.layer == LayerMask.NameToLayer("ServerPlayer"))
                 {
-                    GhostSpawner.SpawnGhostPrefab(weaponData.ProjectileHitVfxPrefab, hitInfo.point,
-                        Quaternion.LookRotation(hitInfo.normal), GhostGameObject.GenerateRandomHash());
+                    var impactPosition = hitCollider.ClosestPoint(transform.position);
+                    HandleCollision(hitCollider, impactPosition, -transform.forward, weaponData,
+                        projectileData, world, playerGhostLookup, ghostOwnerLookup);
+                    return true;
                 }
+
+                overlappingGeometry ??= hitCollider;
+            }
+
+            if (overlappingGeometry != null)
+            {
+                var impactPosition = overlappingGeometry.ClosestPoint(transform.position);
+                HandleCollision(overlappingGeometry, impactPosition, -transform.forward, weaponData,
+                    projectileData, world, playerGhostLookup, ghostOwnerLookup);
+                return true;
+            }
+
+            int castCount = UnityEngine.Physics.SphereCastNonAlloc(
+                transform.position,
+                projectileRadius,
+                transform.forward,
+                _castResults,
+                distanceThisFrame,
+                _hitLayerMask,
+                QueryTriggerInteraction.Ignore);
+
+            RaycastHit closestHit = default;
+            bool foundHit = false;
+            float closestDistance = float.MaxValue;
+            for (int i = 0; i < castCount; i++)
+            {
+                var candidate = _castResults[i];
+                if (candidate.collider == null ||
+                    IsOwnerCollider(candidate.collider, projectileData, ghostOwnerLookup) ||
+                    candidate.distance >= closestDistance)
+                {
+                    continue;
+                }
+
+                closestHit = candidate;
+                closestDistance = candidate.distance;
+                foundHit = true;
+            }
+
+            if (!foundHit)
+            {
+                return false;
+            }
+
+            HandleCollision(closestHit.collider, closestHit.point, closestHit.normal, weaponData,
+                projectileData, world, playerGhostLookup, ghostOwnerLookup);
+            return true;
+        }
+
+        private static bool IsOwnerCollider(Collider collider, in ProjectileData projectileData,
+            ComponentLookup<GhostOwner> ghostOwnerLookup)
+        {
+            if (collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") ||
+                !GhostGameObject.TryFindGhostGameObject(collider.gameObject, out var hitGhostObject) ||
+                !ghostOwnerLookup.HasComponent(hitGhostObject.LinkedEntity))
+            {
+                return false;
+            }
+
+            return ghostOwnerLookup[hitGhostObject.LinkedEntity].NetworkId == projectileData.OwnerNetworkId;
+        }
+
+        private void HandleCollision(Collider hitCollider, Vector3 impactPosition, Vector3 impactNormal,
+            WeaponData weaponData, in ProjectileData projectileData, World world,
+            ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
+            ComponentLookup<GhostOwner> ghostOwnerLookup)
+        {
+            var hitObject = hitCollider.gameObject;
+            if (hitObject.layer == LayerMask.NameToLayer("ServerPlayer"))
+            {
+                HandlePlayerImpact(hitObject, impactPosition, world, projectileData, playerGhostLookup,
+                    ghostOwnerLookup);
+            }
+            else
+            {
+                HandleGeometryImpact(impactPosition);
+            }
+
+            if (weaponData.ProjectileHitVfxPrefab != null)
+            {
+                var normal = impactNormal.sqrMagnitude > 0.0001f ? impactNormal : -transform.forward;
+                GhostSpawner.SpawnGhostPrefab(weaponData.ProjectileHitVfxPrefab, impactPosition,
+                    Quaternion.LookRotation(normal), GhostGameObject.GenerateRandomHash());
             }
         }
 

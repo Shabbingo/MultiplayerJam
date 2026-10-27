@@ -258,10 +258,15 @@ namespace Unity.MP_FPS
             var isManualShrinkActive = predictedPlayerGhost.ControllerState.IsManualShrinkActive;
             if (isManualShrinkActive != m_LastManualShrinkActive)
             {
-                // Begin shrinking from the size currently permitted by health.
+                // Begin the manual transition from the currently displayed size. Health is
+                // converted separately, so it must not make the visual scale jump instantly.
                 if (isManualShrinkActive)
                 {
-                    m_ManualScaleMultiplier = Mathf.Min(m_ManualScaleMultiplier, healthScaleMultiplier);
+                    var currentScaleMultiplier = Mathf.Abs(m_InitialScale.x) > Mathf.Epsilon
+                        ? transform.localScale.x / m_InitialScale.x
+                        : 1f;
+                    m_ManualScaleMultiplier = Mathf.Clamp(
+                        currentScaleMultiplier, m_MinimumPlayerScale, 1f);
                 }
 
                 m_LastManualShrinkActive = isManualShrinkActive;
@@ -276,7 +281,9 @@ namespace Unity.MP_FPS
                 m_ManualScaleTransitionSpeed * deltaTime);
 
             // Toggling back never grows beyond the size allowed by current health.
-            var scaleMultiplier = Mathf.Min(healthScaleMultiplier, m_ManualScaleMultiplier);
+            var scaleMultiplier = isManualShrinkActive
+                ? m_ManualScaleMultiplier
+                : Mathf.Min(healthScaleMultiplier, m_ManualScaleMultiplier);
             var targetScale = m_InitialScale * scaleMultiplier;
 
             // Avoid rebuilding the CharacterController's physics shape every frame.

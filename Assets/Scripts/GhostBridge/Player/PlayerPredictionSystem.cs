@@ -206,8 +206,10 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         if (input.ToggleShrink &&
                             !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed)
                         {
-                            predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive =
-                                !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
+                            var shrinking = !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
+                            predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive = shrinking;
+                            controllerLink.Controller.ApplyManualShrinkHealth(
+                                ref predictedPlayer.ValueRW, shrinking);
                         }
                         predictedPlayer.ValueRW.ControllerState.ShrinkTogglePressed = input.ToggleShrink;
 

@@ -30,6 +30,13 @@ namespace Unity.MP_FPS
         public quaternion Rotation;
     }
 
+    struct ShotCollision
+    {
+        public Collider Collider;
+        public Vector3 Point;
+        public Vector3 Normal;
+    }
+
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
     [UpdateInGroup(typeof(PredictedSimulationSystemGroup))]
     public partial class ServerPlayerMovementSystem : SingletonSystem<ServerPlayerMovementSystem>
@@ -40,6 +47,8 @@ namespace Unity.MP_FPS
         private NativeList<ClientCommandInput> m_ProcessedClientInputCommands;
         private ComponentLookup<PredictedClientInput> m_PredictedClientInputComponentLookup;
         private ComponentLookup<PredictedPlayerGhost> m_PlayerGhostLookup;
+        private readonly Collider[] m_HitscanOverlapResults = new Collider[16];
+        private readonly RaycastHit[] m_HitscanCastResults = new RaycastHit[32];
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
@@ -326,13 +335,12 @@ namespace Unity.MP_FPS
                                 case WeaponType.Hitscan:
                                 {
                                     // Use the calculated eyePosition and aimDirection
-                                    if (UnityEngine.Physics.Raycast(eyePosition, aimDirection, out var hit,
-                                            weaponData.HitscanRange,
-                                            s_HitscanLayerMask))
+                                    if (TryGetClosestHitscanCollision(eyePosition, aimDirection,
+                                            weaponData.HitscanRange, shooterNetworkId, out var hit))
                                     {
-                                        if (hit.collider.gameObject.layer == LayerMask.NameToLayer("ServerPlayer"))
+                                        if (hit.Collider.gameObject.layer == LayerMask.NameToLayer("ServerPlayer"))
                                         {
-                                            if (GhostGameObject.TryFindGhostGameObject(hit.collider.gameObject,
+                                            if (GhostGameObject.TryFindGhostGameObject(hit.Collider.gameObject,
                                                     out var hitGhostObject) &&
                                                 playerGhostLookup.HasComponent(hitGhostObject.LinkedEntity))
                                             {
@@ -377,8 +385,8 @@ namespace Unity.MP_FPS
                                         {
                                             vfxSpawnList.Add(new VfxSpawnData()
                                             {
-                                                Position = hit.point,
-                                                Rotation = Quaternion.LookRotation(hit.normal),
+                                                Position = hit.Point,
+                                                Rotation = Quaternion.LookRotation(hit.Normal),
                                                 Prefab = GhostSpawner.FindGhostPrefabEntity(weaponData
                                                     .ProjectileHitVfxPrefab.GhostGuid)
                                             });
@@ -469,7 +477,6 @@ namespace Unity.MP_FPS
                          .WithEntityAccess())
             {
                 var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
-                var speedMultiplier = controllerLink.Controller.GetScaleSpeedMultiplier(in predictedPlayer.ValueRO);
                 var predictedClient = predictedClientInputComponentLookup[inputLookup.ValueRO.ClientCommandInputEntity];
                 if (predictedClient.InputCount > 0)
                 {
@@ -482,10 +489,15 @@ namespace Unity.MP_FPS
                             if (input.ToggleShrink &&
                                 !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed)
                             {
-                                predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive =
-                                    !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
+                                var shrinking = !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
+                                predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive = shrinking;
+                                controllerLink.Controller.ApplyManualShrinkHealth(
+                                    ref predictedPlayer.ValueRW, shrinking);
                             }
                             predictedPlayer.ValueRW.ControllerState.ShrinkTogglePressed = input.ToggleShrink;
+
+                            var speedMultiplier = controllerLink.Controller.GetScaleSpeedMultiplier(
+                                in predictedPlayer.ValueRO);
 
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
@@ -569,6 +581,81 @@ namespace Unity.MP_FPS
             ecb.Dispose();
 
             s_PlayerMovementActive = false;
+        }
+
+        private bool TryGetClosestHitscanCollision(Vector3 origin, Vector3 direction, float range,
+            int shooterNetworkId, out ShotCollision collision)
+        {
+            // Raycasts do not report a collider when their origin is already inside it. This
+            // overlap catches point-blank targets, which is especially important for small players.
+            int overlapCount = UnityEngine.Physics.OverlapSphereNonAlloc(
+                origin,
+                0.05f,
+                m_HitscanOverlapResults,
+                LayerMask.GetMask("ServerPlayer"),
+                QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < overlapCount; i++)
+            {
+                var candidate = m_HitscanOverlapResults[i];
+                if (candidate == null || IsShooterCollider(candidate, shooterNetworkId))
+                {
+                    continue;
+                }
+
+                collision = new ShotCollision
+                {
+                    Collider = candidate,
+                    Point = candidate.ClosestPoint(origin),
+                    Normal = -direction
+                };
+                return true;
+            }
+
+            int hitCount = UnityEngine.Physics.RaycastNonAlloc(
+                origin,
+                direction,
+                m_HitscanCastResults,
+                range,
+                s_HitscanLayerMask,
+                QueryTriggerInteraction.Ignore);
+
+            float closestDistance = float.MaxValue;
+            collision = default;
+            bool foundCollision = false;
+            for (int i = 0; i < hitCount; i++)
+            {
+                var candidate = m_HitscanCastResults[i];
+                if (candidate.collider == null ||
+                    IsShooterCollider(candidate.collider, shooterNetworkId) ||
+                    candidate.distance >= closestDistance)
+                {
+                    continue;
+                }
+
+                closestDistance = candidate.distance;
+                collision = new ShotCollision
+                {
+                    Collider = candidate.collider,
+                    Point = candidate.point,
+                    Normal = candidate.normal
+                };
+                foundCollision = true;
+            }
+
+            return foundCollision;
+        }
+
+        private bool IsShooterCollider(Collider collider, int shooterNetworkId)
+        {
+            if (collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") ||
+                !GhostGameObject.TryFindGhostGameObject(collider.gameObject, out var hitGhostObject) ||
+                !ghostOwnerLookup.HasComponent(hitGhostObject.LinkedEntity))
+            {
+                return false;
+            }
+
+            return ghostOwnerLookup[hitGhostObject.LinkedEntity].NetworkId == shooterNetworkId;
         }
     }
 }

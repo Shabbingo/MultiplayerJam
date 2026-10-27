@@ -13,6 +13,7 @@ public class FirstPersonController : MonoBehaviour
 {
     public SoundDef PlayerHitSFX;
     [SerializeField, Min(1f)] private float m_MaximumShrinkSpeedMultiplier = 1.5f;
+    [SerializeField, Range(0.05f, 1f)] private float m_ManualShrinkHealthMultiplier = 0.2f;
 
     private static class AnimationParameters
     {
@@ -292,6 +293,19 @@ public class FirstPersonController : MonoBehaviour
         var healthRatio = Mathf.Clamp01(predictedPlayer.CurrentHealth / predictedPlayer.MaxHealth);
         var shrinkProgress = predictedPlayer.ControllerState.IsManualShrinkActive ? 1f : 1f - healthRatio;
         return Mathf.Lerp(1f, m_MaximumShrinkSpeedMultiplier, shrinkProgress);
+    }
+
+    public void ApplyManualShrinkHealth(ref PredictedPlayerGhost predictedPlayer, bool shrinking)
+    {
+        if (predictedPlayer.MaxHealth <= 0f || predictedPlayer.CurrentHealth <= 0f)
+        {
+            return;
+        }
+
+        predictedPlayer.CurrentHealth = shrinking
+            ? predictedPlayer.CurrentHealth * m_ManualShrinkHealthMultiplier
+            : Mathf.Min(predictedPlayer.MaxHealth,
+                predictedPlayer.CurrentHealth / m_ManualShrinkHealthMultiplier);
     }
 
     public void ApplyMovementUpdate(ref ControllerState state, in ControllerConsts consts,
