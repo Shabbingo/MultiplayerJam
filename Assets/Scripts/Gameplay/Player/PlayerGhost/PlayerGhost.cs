@@ -37,6 +37,7 @@ namespace Unity.MP_FPS
         #region Cached Player Components
         private FirstPersonController m_Controller;
         public FirstPersonController Controller => m_Controller;
+        private UnityEngine.CharacterController m_CharacterController;
 
         #endregion
 
@@ -44,8 +45,19 @@ namespace Unity.MP_FPS
 
         private Camera m_PlayerCamera;
         private Animator _animatorCharacter;
-        private Vector3 m_InitialScale;
         private Vector3 m_ReticleVector;
+        private Vector3 m_InitialReticleScale;
+        private Vector3 m_InitialCameraTargetPosition;
+        private Vector3 m_InitialCameraTargetScale;
+        private Vector3 m_InitialOwnerVisualsScale;
+        private Vector3 m_InitialOtherPlayerVisualsScale;
+        private float m_InitialControllerHeight;
+        private float m_InitialControllerRadius;
+        private float m_InitialControllerStepOffset;
+        private float m_InitialControllerSkinWidth;
+        private Vector3 m_InitialControllerCenter;
+
+        public float CurrentScaleMultiplier { get; private set; } = 1f;
 
         private CinemachineTargetGroup m_TargetGroup;
         private CinemachinePositionComposer m_PositionComposer;
@@ -89,8 +101,18 @@ namespace Unity.MP_FPS
         public void Awake()
         {
             GetRequiredComponent(out m_Controller);
+            GetRequiredComponent(out m_CharacterController);
             m_ReticleVector = ReticlePoint.localPosition;
-            m_InitialScale = transform.localScale;
+            m_InitialReticleScale = ReticlePoint.localScale;
+            m_InitialCameraTargetPosition = CameraTarget.localPosition;
+            m_InitialCameraTargetScale = CameraTarget.localScale;
+            m_InitialOwnerVisualsScale = m_OwnerVisuals.transform.localScale;
+            m_InitialOtherPlayerVisualsScale = m_OtherPlayerVisuals.transform.localScale;
+            m_InitialControllerHeight = m_CharacterController.height;
+            m_InitialControllerRadius = m_CharacterController.radius;
+            m_InitialControllerStepOffset = m_CharacterController.stepOffset;
+            m_InitialControllerSkinWidth = m_CharacterController.skinWidth;
+            m_InitialControllerCenter = m_CharacterController.center;
         }
         
         private void LateUpdate()
@@ -221,7 +243,7 @@ namespace Unity.MP_FPS
             }
 
             var rot = Quaternion.Euler(controllerState.PitchDegrees, 0.0f, 0.0f);
-            ReticlePoint.localPosition = rot * m_ReticleVector;
+            ReticlePoint.localPosition = rot * m_ReticleVector * CurrentScaleMultiplier;
 
             //TODO: The following is a temporary fix for animation root moves (Robot Jump for example)
             m_OtherPlayerVisuals.transform.localPosition = Vector3.zero;
@@ -239,13 +261,28 @@ namespace Unity.MP_FPS
             var healthRatio = Mathf.Clamp01(
                 predictedPlayerGhost.CurrentHealth / predictedPlayerGhost.MaxHealth);
             var scaleMultiplier = Mathf.Lerp(m_MinimumPlayerScale, 1f, healthRatio);
-            var targetScale = m_InitialScale * scaleMultiplier;
 
             // Avoid rebuilding the CharacterController's physics shape every frame.
-            if ((transform.localScale - targetScale).sqrMagnitude > 0.000001f)
+            if (Mathf.Abs(CurrentScaleMultiplier - scaleMultiplier) <= 0.0001f)
             {
-                transform.localScale = targetScale;
+                return;
             }
+
+            CurrentScaleMultiplier = scaleMultiplier;
+
+            // Resize the authoritative hitbox without scaling the network/movement root.
+            // Keeping the root at scale one prevents prediction and server movement divergence.
+            m_CharacterController.height = m_InitialControllerHeight * scaleMultiplier;
+            m_CharacterController.radius = m_InitialControllerRadius * scaleMultiplier;
+            m_CharacterController.center = m_InitialControllerCenter * scaleMultiplier;
+            m_CharacterController.stepOffset = m_InitialControllerStepOffset * scaleMultiplier;
+            m_CharacterController.skinWidth = m_InitialControllerSkinWidth * scaleMultiplier;
+
+            m_OwnerVisuals.transform.localScale = m_InitialOwnerVisualsScale * scaleMultiplier;
+            m_OtherPlayerVisuals.transform.localScale = m_InitialOtherPlayerVisualsScale * scaleMultiplier;
+            CameraTarget.localPosition = m_InitialCameraTargetPosition * scaleMultiplier;
+            CameraTarget.localScale = m_InitialCameraTargetScale * scaleMultiplier;
+            ReticlePoint.localScale = m_InitialReticleScale * scaleMultiplier;
         }
 
         public bool SetPlayerPositionFromRPC(float3 rpcPosition, float positionErrorSq)

@@ -354,11 +354,10 @@ public class FirstPersonController : MonoBehaviour
         {
             var currentPos = GetGroundRaycastOrigin(state, m_Controller);
             // set sphere position, with offset
-            var lossyScale = transform.lossyScale;
-            var scaledControllerOffset = Vector3.Scale(ControllerOffset, lossyScale);
-            var controllerCentre = transform.rotation * scaledControllerOffset;
-            var testRadius = m_Controller.radius * Mathf.Max(Mathf.Abs(lossyScale.x), Mathf.Abs(lossyScale.z));
-            var scaledGroundedOffset = GroundedOffset * Mathf.Abs(lossyScale.y);
+            var scaleMultiplier = m_PlayerGhost.CurrentScaleMultiplier;
+            var controllerCentre = transform.rotation * (ControllerOffset * scaleMultiplier);
+            var testRadius = m_Controller.radius;
+            var scaledGroundedOffset = GroundedOffset * scaleMultiplier;
             var testStart = new Vector3(currentPos.x + controllerCentre.x, currentPos.y + +controllerCentre.y,
                 currentPos.z + controllerCentre.z);
             var numHits = Physics.SphereCastNonAlloc(testStart, testRadius, Vector3.down,
