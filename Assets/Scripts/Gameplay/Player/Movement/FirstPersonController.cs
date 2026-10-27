@@ -1064,12 +1064,14 @@ public class FirstPersonController : MonoBehaviour
             }
 
             var playerGhost = GetComponent<PlayerGhost>();
-            var projectilePrefabRef = playerGhost.ProjectilePrefabAR;
+            var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(weaponId);
+            var projectilePrefabRef = weaponData?.ProjectileGhostPrefab?.GhostPrefab;
 
-            if (!projectilePrefabRef.RuntimeKeyIsValid() || playerGhost.CameraTarget == null)
+            if (projectilePrefabRef == null || !projectilePrefabRef.RuntimeKeyIsValid() ||
+                playerGhost.CameraTarget == null)
             {
                 Debug.LogWarning(
-                    "[CLIENT] Cannot spawn predicted projectile as prefab ref or camera target is null");
+                    $"[CLIENT] Cannot spawn predicted projectile for weapon ID {weaponId.ToString()}: prefab ref or camera target is null");
                 return;
             }
 

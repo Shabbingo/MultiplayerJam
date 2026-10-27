@@ -14,11 +14,13 @@ namespace Unity.MP_FPS
             public const string ResumeButton = "ResumeButton";
             public const string MainMenuButton = "MainMenuButton";
             public const string QuitButton = "QuitButton";
+            public const string SensitivitySlider = "MouseSensitivitySlider";
         }
 
         Button m_ResumeButton;
         Button m_MainMenuButton;
         Button m_QuitButton;
+        Slider m_SensitivitySlider;
 
         void OnEnable()
         {
@@ -41,6 +43,10 @@ namespace Unity.MP_FPS
 
             m_QuitButton = root.Q<Button>(UIElementNames.QuitButton);
             m_QuitButton.clicked += OnQuitPressed;
+
+            m_SensitivitySlider = root.Q<Slider>(UIElementNames.SensitivitySlider);
+            RefreshSensitivitySlider();
+            m_SensitivitySlider.RegisterValueChangedCallback(OnSensitivityChanged);
         }
 
         void OnDisable()
@@ -49,12 +55,30 @@ namespace Unity.MP_FPS
             m_ResumeButton.clicked -= OnResumePressed;
             m_MainMenuButton.clicked -= OnMainMenuPressed;
             m_QuitButton.clicked -= OnQuitPressed;
+            m_SensitivitySlider.UnregisterValueChangedCallback(OnSensitivityChanged);
         }
 
         void TogglePauseMenuVisibility(InputAction.CallbackContext obj)
         {
             EventSystem.current.SetSelectedGameObject(transform.parent.GetComponentInChildren<PanelRaycaster>().gameObject);
+            if (!GameSettings.Instance.IsPauseMenuOpen)
+            {
+                RefreshSensitivitySlider();
+            }
             GameSettings.Instance.IsPauseMenuOpen = !GameSettings.Instance.IsPauseMenuOpen;
+        }
+
+        void RefreshSensitivitySlider()
+        {
+            float sensitivity = GameSettings.Instance.MouseSensitivity;
+            m_SensitivitySlider.SetValueWithoutNotify(sensitivity);
+            m_SensitivitySlider.label = $"Mouse Sensitivity: {sensitivity:0.00}";
+        }
+
+        void OnSensitivityChanged(ChangeEvent<float> evt)
+        {
+            GameSettings.Instance.MouseSensitivity = evt.newValue;
+            m_SensitivitySlider.label = $"Mouse Sensitivity: {GameSettings.Instance.MouseSensitivity:0.00}";
         }
 
         static void OnResumePressed() => GameSettings.Instance.IsPauseMenuOpen = false;

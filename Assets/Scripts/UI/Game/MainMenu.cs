@@ -18,6 +18,11 @@ namespace Unity.MP_FPS.Client
             public const string CreateGame = "CreateJoinGame";
             public const string StartHost = "StartHost";
             public const string ConnectToServer = "ConnectToServer";
+            public const string ConnectionPanel = "ConnectionPanel";
+            public const string OptionsPanel = "OptionsPanel";
+            public const string OptionsButton = "OptionsButton";
+            public const string OptionsBackButton = "OptionsBackButton";
+            public const string SensitivitySlider = "MouseSensitivitySlider";
             public const string QuitGame = "QuitButton";
         }
 
@@ -29,6 +34,11 @@ namespace Unity.MP_FPS.Client
         Button m_CreateGameButton;
         Button m_StartHostButton;
         Button m_ConnectToServerButton;
+        VisualElement m_ConnectionPanel;
+        VisualElement m_OptionsPanel;
+        Button m_OptionsButton;
+        Button m_OptionsBackButton;
+        Slider m_SensitivitySlider;
         Button m_QuitButton;
 
         void OnEnable()
@@ -85,6 +95,20 @@ namespace Unity.MP_FPS.Client
             m_ConnectToServerButton = m_MainMenu.Q<Button>(UIElementNames.ConnectToServer);
             m_ConnectToServerButton.clicked += OnConnectToServerPressed;
 
+            m_ConnectionPanel = m_MainMenu.Q<VisualElement>(UIElementNames.ConnectionPanel);
+            m_OptionsPanel = m_MainMenu.Q<VisualElement>(UIElementNames.OptionsPanel);
+
+            m_OptionsButton = m_MainMenu.Q<Button>(UIElementNames.OptionsButton);
+            m_OptionsButton.clicked += OnOptionsPressed;
+
+            m_OptionsBackButton = m_MainMenu.Q<Button>(UIElementNames.OptionsBackButton);
+            m_OptionsBackButton.clicked += OnOptionsBackPressed;
+
+            m_SensitivitySlider = m_MainMenu.Q<Slider>(UIElementNames.SensitivitySlider);
+            m_SensitivitySlider.SetValueWithoutNotify(GameSettings.Instance.MouseSensitivity);
+            UpdateSensitivityLabel(m_SensitivitySlider.value);
+            m_SensitivitySlider.RegisterValueChangedCallback(OnSensitivityChanged);
+
             m_QuitButton = m_MainMenu.Q<Button>(UIElementNames.QuitGame);
             m_QuitButton.clicked += OnQuitPressed;
 
@@ -104,6 +128,9 @@ namespace Unity.MP_FPS.Client
             m_CreateGameButton.clicked -= OnCreateGamePressed;
             m_ConnectionModeGroup.UnregisterValueChangedCallback(OnConnectionModeChanged);
             m_ConnectToServerButton.clicked -= OnConnectToServerPressed;
+            m_OptionsButton.clicked -= OnOptionsPressed;
+            m_OptionsBackButton.clicked -= OnOptionsBackPressed;
+            m_SensitivitySlider.UnregisterValueChangedCallback(OnSensitivityChanged);
             m_QuitButton.clicked -= OnQuitPressed;
         }
 
@@ -139,6 +166,31 @@ namespace Unity.MP_FPS.Client
         static void OnStartHostPressed() => GameManager.Instance.StartGameAsync(CreationType.Host);
 
         static void OnConnectToServerPressed() => GameManager.Instance.StartGameAsync(CreationType.ConnectAndJoin);
+
+        void OnOptionsPressed()
+        {
+            m_SensitivitySlider.SetValueWithoutNotify(GameSettings.Instance.MouseSensitivity);
+            UpdateSensitivityLabel(m_SensitivitySlider.value);
+            m_ConnectionPanel.style.display = DisplayStyle.None;
+            m_OptionsPanel.style.display = DisplayStyle.Flex;
+        }
+
+        void OnOptionsBackPressed()
+        {
+            m_OptionsPanel.style.display = DisplayStyle.None;
+            m_ConnectionPanel.style.display = DisplayStyle.Flex;
+        }
+
+        void OnSensitivityChanged(ChangeEvent<float> evt)
+        {
+            GameSettings.Instance.MouseSensitivity = evt.newValue;
+            UpdateSensitivityLabel(GameSettings.Instance.MouseSensitivity);
+        }
+
+        void UpdateSensitivityLabel(float value)
+        {
+            m_SensitivitySlider.label = $"Mouse Sensitivity: {value:0.00}";
+        }
 
         static void OnQuitPressed() => GameManager.Instance.QuitAsync();
     }

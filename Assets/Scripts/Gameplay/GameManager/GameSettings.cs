@@ -41,6 +41,7 @@ namespace Unity.MP_FPS
         const string k_PlayerCharacterKey = "PlayerCharacer";
         const string k_ConnectionModeKey = "ConnectionMode";
         const string k_SessionNameKey = "SessionName";
+        const string k_MouseSensitivityKey = "MouseSensitivity";
 
         GameSettings()
         {
@@ -49,6 +50,8 @@ namespace Unity.MP_FPS
             m_PlayerCharacter = 0;
             m_ConnectionMode = PlayerPrefs.GetInt(k_ConnectionModeKey, 0);
             m_SessionName = PlayerPrefs.GetString(k_SessionNameKey, "default-session");
+            m_MouseSensitivity = Mathf.Clamp(
+                PlayerPrefs.GetFloat(k_MouseSensitivityKey, 1.5f), 0.1f, 5f);
         }
 
         public event EventHandler<BindablePropertyChangedEventArgs> propertyChanged;
@@ -239,6 +242,25 @@ namespace Unity.MP_FPS
 
                 m_SessionName = value;
                 PlayerPrefs.SetString(k_SessionNameKey, value);
+            }
+        }
+
+        float m_MouseSensitivity = 1.5f;
+        [CreateProperty]
+        public float MouseSensitivity
+        {
+            get => m_MouseSensitivity;
+            set
+            {
+                float clampedValue = Mathf.Clamp(value, 0.1f, 5f);
+                if (Mathf.Approximately(m_MouseSensitivity, clampedValue))
+                {
+                    return;
+                }
+
+                m_MouseSensitivity = clampedValue;
+                PlayerPrefs.SetFloat(k_MouseSensitivityKey, clampedValue);
+                Notify();
             }
         }
 

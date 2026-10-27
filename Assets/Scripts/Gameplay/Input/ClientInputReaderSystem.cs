@@ -75,8 +75,7 @@ public partial class ClientInputReaderSystem : SystemBase
 
                 var addedDelta = (float2)controls.Player.LookDelta.ReadValue<Vector2>();
 
-                const float sensitivity = 3.7f;
-                var lookDelta = addedDelta * sensitivity;
+                var lookDelta = addedDelta * GameSettings.Instance.MouseSensitivity;
 
                 // Accumulate the delta to our persistent rotation value
                 _accumulatedLook.x += lookDelta.x;

@@ -37,7 +37,7 @@ namespace Unity.MP_FPS
                          .WithEntityAccess())
             {
                 if (projectileData.ValueRO.OwnerNetworkId != localPlayerNetworkId)
-                    return;
+                    continue;
 
                 uint serverInputTick = projectileData.ValueRO.SpawnTick;
                 Projectile.PredictedProjectileInfo bestMatchInfo = null;

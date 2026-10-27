@@ -21,7 +21,13 @@
                     <ui:Button text="Connect to Server" name="ConnectToServer" tabindex="4" selectable="true" />
                     <ui:Button text="Matchmake" name="QuickJoin" tabindex="5" enabled="true" class="section-separator hidden" style="display: none;" />
                     <ui:VisualElement name="Seperator" style="flex-grow: 1; height: 16px;" />
+                    <ui:Button text="Options" name="OptionsButton" tabindex="6" />
                     <ui:Button text="Quit" name="QuitButton" tabindex="6" />
+                </ui:VisualElement>
+                <ui:VisualElement name="OptionsPanel" picking-mode="Ignore" style="display: none;">
+                    <ui:Label text="OPTIONS" class="options-title" />
+                    <ui:Slider label="Mouse Sensitivity: 1.50" low-value="0.1" high-value="5" value="1.5" show-input-field="true" name="MouseSensitivitySlider" class="sensitivity-slider" />
+                    <ui:Button text="Back" name="OptionsBackButton" tabindex="7" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

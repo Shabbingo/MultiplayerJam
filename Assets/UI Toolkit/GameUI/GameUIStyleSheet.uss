@@ -141,6 +141,17 @@ Slider .unity-base-slider__tracker {
     background-color: var(--color-progress-bar);
 }
 
+.options-title {
+    margin-bottom: 20px;
+    -unity-font-style: bold;
+}
+
+.sensitivity-slider {
+    min-height: var(--height-element);
+    margin-top: var(--button-top-margin);
+    margin-bottom: 20px;
+}
+
 Button {
     height: var(--height-element);
     margin-top: var(--button-top-margin);
