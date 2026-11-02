@@ -65,10 +65,10 @@ MonoBehaviour:
   ResizeEffectDuration: 3
   Behavior: 1
   AoeRadius: 2
-  ProjectileSpeed: 20
+  ProjectileSpeed: 30
   IsLobbedProjectile: 1
   LobUpwardSpeed: 1
   ProjectileGravity: 15.1
   ProjectileBounces: 1
-  BounceVelocityRetention: 0.65
+  BounceVelocityRetention: 0.35
   ProjectileFuseTime: 3

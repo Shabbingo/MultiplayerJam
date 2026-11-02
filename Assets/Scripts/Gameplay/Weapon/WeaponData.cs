@@ -79,7 +79,7 @@ namespace Unity.MP_FPS
         public int ProjectileBounces = 1;
 
         [Range(0f, 1f)]
-        [Tooltip("Percentage of projectile velocity retained after each bounce.")]
+        [Tooltip("Percentage of projectile velocity retained after the first bounce. A value of 0.35 keeps 35% of its impact speed.")]
         public float BounceVelocityRetention = 0.65f;
 
         [Min(0.1f)]

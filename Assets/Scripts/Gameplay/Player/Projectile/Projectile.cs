@@ -310,7 +310,10 @@ namespace Unity.MP_FPS
                 ? impactNormal.normalized
                 : -_velocity.normalized;
             transform.position = impactPosition + normal * (ProjectileRadius + BounceSurfaceOffset);
-            _velocity = Vector3.Reflect(_velocity, normal) * weaponData.BounceVelocityRetention;
+            float velocityRetention = _bounceCount == 0
+                ? weaponData.BounceVelocityRetention
+                : 1f;
+            _velocity = Vector3.Reflect(_velocity, normal) * velocityRetention;
             _bounceCount++;
             _collisionGraceTimer = BounceCollisionGrace;
 
