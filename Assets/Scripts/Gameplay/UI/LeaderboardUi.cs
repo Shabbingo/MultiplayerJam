@@ -21,9 +21,14 @@ namespace Unity.MP_FPS.UI
         VisualElement _rootElement;
 
         ListView _listView;
+        Label _matchResultLabel;
+        Label _matchRestartLabel;
+        Label _matchTimerLabel;
         readonly List<ScoreUiPlayerInfo> _items = new();
 
         private float _timer;
+        private bool _scoreboardHeld;
+        private bool _wasMatchEnded;
 
         void Awake()
         {
@@ -32,6 +37,9 @@ namespace Unity.MP_FPS.UI
             _rootElement.style.display = DisplayStyle.None;
 
             _listView = _rootElement.Q<ListView>("score-items");
+            _matchResultLabel = _rootElement.Q<Label>("match-result");
+            _matchRestartLabel = _rootElement.Q<Label>("match-restart");
+            _matchTimerLabel = _rootElement.Q<Label>("match-timer");
 
             _listView.itemsSource = _items;
             _listView.makeItem = () => ScoreItemTemplate.Instantiate();
@@ -65,12 +73,18 @@ namespace Unity.MP_FPS.UI
         
         private void OnShowLeaderboard(InputAction.CallbackContext context)
         {
+            _scoreboardHeld = true;
             _rootElement.style.display = DisplayStyle.Flex;
         }
         
         private void OnHideLeaderboard(InputAction.CallbackContext context)
         {
-            _rootElement.style.display = DisplayStyle.None;
+            _scoreboardHeld = false;
+            if (LeaderboardManager.Instance == null ||
+                !LeaderboardManager.Instance.IsMatchEnded)
+            {
+                _rootElement.style.display = DisplayStyle.None;
+            }
         }
         
         void InitializeClientWorld(World clientWorld)
@@ -85,6 +99,7 @@ namespace Unity.MP_FPS.UI
                 );
                 
                 _rootElement.style.display = DisplayStyle.None;
+                _wasMatchEnded = false;
             }
             else
             {
@@ -132,6 +147,45 @@ namespace Unity.MP_FPS.UI
                 _rootElement.style.display = DisplayStyle.None;
                 return;
             }
+
+            bool matchEnded = LeaderboardManager.Instance != null &&
+                              LeaderboardManager.Instance.IsMatchEnded;
+            if (LeaderboardManager.Instance != null)
+            {
+                float remaining = LeaderboardManager.Instance.MatchTimeRemaining;
+                int totalSeconds = Mathf.Max(0, Mathf.CeilToInt(remaining));
+                int minutes = totalSeconds / 60;
+                int seconds = totalSeconds % 60;
+                _matchTimerLabel.text = matchEnded
+                    ? "MATCH ENDED"
+                    : $"MATCH TIME: {minutes:00}:{seconds:00}";
+            }
+            if (matchEnded)
+            {
+                _rootElement.style.display = DisplayStyle.Flex;
+                _matchResultLabel.style.display = DisplayStyle.Flex;
+                _matchRestartLabel.style.display = DisplayStyle.Flex;
+                _matchResultLabel.text =
+                    $"WINNER: {LeaderboardManager.Instance.WinnerName}";
+                _matchRestartLabel.text =
+                    $"NEXT ROUND IN {Mathf.CeilToInt(LeaderboardManager.Instance.MatchRestartTimeRemaining)}";
+
+                if (!_wasMatchEnded)
+                {
+                    UpdateLeaderboardUI();
+                }
+            }
+            else if (_wasMatchEnded)
+            {
+                _matchResultLabel.style.display = DisplayStyle.None;
+                _matchRestartLabel.style.display = DisplayStyle.None;
+                if (!_scoreboardHeld)
+                {
+                    _rootElement.style.display = DisplayStyle.None;
+                }
+            }
+
+            _wasMatchEnded = matchEnded;
 
             if (_rootElement.style.display == DisplayStyle.None)
             {

@@ -2,6 +2,9 @@
     <Style src="project://database/Assets/UI%20Toolkit/GameUI/Leaderboard/table.uss?fileID=7433441132597879392&amp;guid=ae0f7f1b297840a4f85f4c14cf0a086f&amp;type=3#table"/>
     <ui:VisualElement name="root" style="flex-grow: 1; align-self: stretch; justify-content: center; align-items: center; align-content: stretch;">
         <ui:VisualElement name="VisualElement" class="score-table">
+            <ui:Label text="MATCH TIME: 10:00" name="match-timer" style="font-size: 18px; color: rgb(255, 255, 255); -unity-font-style: bold; -unity-text-align: middle-center; margin-bottom: 8px;"/>
+            <ui:Label text="WINNER: PLAYER" name="match-result" style="font-size: 28px; color: rgb(255, 170, 40); -unity-font-style: bold; -unity-text-align: middle-center; margin-bottom: 8px; display: none;"/>
+            <ui:Label text="NEXT ROUND IN 8" name="match-restart" style="font-size: 16px; color: rgb(255, 255, 255); -unity-text-align: middle-center; margin-bottom: 12px; display: none;"/>
             <ui:VisualElement class="table-header" style="flex-direction: row; justify-content: flex-start; align-self: auto; align-content: auto; margin-right: 3px;">
                 <ui:Label text="Name" name="Label" class="header-cell" style="flex-basis: 200px; flex-grow: 2; color: rgb(255, 255, 255);"/>
                 <ui:Label text="Kills" class="header-cell" style="flex-basis: 50px; flex-grow: 1; color: rgb(255, 255, 255);"/>

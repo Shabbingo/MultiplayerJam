@@ -42,7 +42,10 @@ namespace Unity.MP_FPS
         const string k_ConnectionModeKey = "ConnectionMode";
         const string k_SessionNameKey = "SessionName";
         const string k_MouseSensitivityKey = "MouseSensitivity";
+        const string k_CameraFovKey = "CameraFov";
         const string k_HoldToShrinkKey = "HoldToShrink";
+        const string k_KillLimitKey = "MatchKillLimit";
+        const string k_TimeLimitMinutesKey = "MatchTimeLimitMinutes";
 
         GameSettings()
         {
@@ -53,7 +56,12 @@ namespace Unity.MP_FPS
             m_SessionName = PlayerPrefs.GetString(k_SessionNameKey, "default-session");
             m_MouseSensitivity = Mathf.Clamp(
                 PlayerPrefs.GetFloat(k_MouseSensitivityKey, 1.5f), 0.1f, 5f);
+            m_CameraFov = Mathf.Clamp(
+                PlayerPrefs.GetFloat(k_CameraFovKey, 75f), 60f, 110f);
             m_HoldToShrink = PlayerPrefs.GetInt(k_HoldToShrinkKey, 1) != 0;
+            m_MatchKillLimit = Mathf.Clamp(PlayerPrefs.GetInt(k_KillLimitKey, 20), 1, 100);
+            m_MatchTimeLimitMinutes = Mathf.Clamp(
+                PlayerPrefs.GetInt(k_TimeLimitMinutesKey, 10), 1, 60);
         }
 
         public event EventHandler<BindablePropertyChangedEventArgs> propertyChanged;
@@ -266,6 +274,25 @@ namespace Unity.MP_FPS
             }
         }
 
+        float m_CameraFov = 75f;
+        [CreateProperty]
+        public float CameraFov
+        {
+            get => m_CameraFov;
+            set
+            {
+                float clampedValue = Mathf.Clamp(value, 60f, 110f);
+                if (Mathf.Approximately(m_CameraFov, clampedValue))
+                {
+                    return;
+                }
+
+                m_CameraFov = clampedValue;
+                PlayerPrefs.SetFloat(k_CameraFovKey, clampedValue);
+                Notify();
+            }
+        }
+
         bool m_HoldToShrink = true;
         [CreateProperty]
         public bool HoldToShrink
@@ -280,6 +307,44 @@ namespace Unity.MP_FPS
 
                 m_HoldToShrink = value;
                 PlayerPrefs.SetInt(k_HoldToShrinkKey, value ? 1 : 0);
+                Notify();
+            }
+        }
+
+        int m_MatchKillLimit = 20;
+        [CreateProperty]
+        public int MatchKillLimit
+        {
+            get => m_MatchKillLimit;
+            set
+            {
+                int clampedValue = Mathf.Clamp(value, 1, 100);
+                if (m_MatchKillLimit == clampedValue)
+                {
+                    return;
+                }
+
+                m_MatchKillLimit = clampedValue;
+                PlayerPrefs.SetInt(k_KillLimitKey, clampedValue);
+                Notify();
+            }
+        }
+
+        int m_MatchTimeLimitMinutes = 10;
+        [CreateProperty]
+        public int MatchTimeLimitMinutes
+        {
+            get => m_MatchTimeLimitMinutes;
+            set
+            {
+                int clampedValue = Mathf.Clamp(value, 1, 60);
+                if (m_MatchTimeLimitMinutes == clampedValue)
+                {
+                    return;
+                }
+
+                m_MatchTimeLimitMinutes = clampedValue;
+                PlayerPrefs.SetInt(k_TimeLimitMinutesKey, clampedValue);
                 Notify();
             }
         }

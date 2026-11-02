@@ -15,6 +15,7 @@ namespace Unity.MP_FPS
             public const string MainMenuButton = "MainMenuButton";
             public const string QuitButton = "QuitButton";
             public const string SensitivitySlider = "MouseSensitivitySlider";
+            public const string CameraFovSlider = "CameraFovSlider";
             public const string HoldToShrinkToggle = "HoldToShrinkToggle";
             public const string ShrinkBindingButton = "ShrinkBindingButton";
             public const string GrenadeBindingButton = "GrenadeBindingButton";
@@ -24,6 +25,7 @@ namespace Unity.MP_FPS
         Button m_MainMenuButton;
         Button m_QuitButton;
         Slider m_SensitivitySlider;
+        Slider m_CameraFovSlider;
         Toggle m_HoldToShrinkToggle;
         Button m_ShrinkBindingButton;
         Button m_GrenadeBindingButton;
@@ -57,6 +59,10 @@ namespace Unity.MP_FPS
             RefreshSensitivitySlider();
             m_SensitivitySlider.RegisterValueChangedCallback(OnSensitivityChanged);
 
+            m_CameraFovSlider = root.Q<Slider>(UIElementNames.CameraFovSlider);
+            RefreshCameraFovSlider();
+            m_CameraFovSlider.RegisterValueChangedCallback(OnCameraFovChanged);
+
             m_HoldToShrinkToggle = root.Q<Toggle>(UIElementNames.HoldToShrinkToggle);
             m_HoldToShrinkToggle.SetValueWithoutNotify(GameSettings.Instance.HoldToShrink);
             m_HoldToShrinkToggle.RegisterValueChangedCallback(OnHoldToShrinkChanged);
@@ -77,6 +83,7 @@ namespace Unity.MP_FPS
             m_MainMenuButton.clicked -= OnMainMenuPressed;
             m_QuitButton.clicked -= OnQuitPressed;
             m_SensitivitySlider.UnregisterValueChangedCallback(OnSensitivityChanged);
+            m_CameraFovSlider.UnregisterValueChangedCallback(OnCameraFovChanged);
             m_HoldToShrinkToggle.UnregisterValueChangedCallback(OnHoldToShrinkChanged);
             m_ShrinkBindingButton.clicked -= StartShrinkRebind;
             m_GrenadeBindingButton.clicked -= StartGrenadeRebind;
@@ -104,6 +111,7 @@ namespace Unity.MP_FPS
             if (!GameSettings.Instance.IsPauseMenuOpen)
             {
                 RefreshSensitivitySlider();
+                RefreshCameraFovSlider();
                 RefreshShrinkControls();
             }
             GameSettings.Instance.IsPauseMenuOpen = !GameSettings.Instance.IsPauseMenuOpen;
@@ -120,6 +128,19 @@ namespace Unity.MP_FPS
         {
             GameSettings.Instance.MouseSensitivity = evt.newValue;
             m_SensitivitySlider.label = $"Mouse Sensitivity: {GameSettings.Instance.MouseSensitivity:0.00}";
+        }
+
+        void RefreshCameraFovSlider()
+        {
+            float fov = GameSettings.Instance.CameraFov;
+            m_CameraFovSlider.SetValueWithoutNotify(fov);
+            m_CameraFovSlider.label = $"Camera FOV: {fov:0}";
+        }
+
+        void OnCameraFovChanged(ChangeEvent<float> evt)
+        {
+            GameSettings.Instance.CameraFov = evt.newValue;
+            m_CameraFovSlider.label = $"Camera FOV: {GameSettings.Instance.CameraFov:0}";
         }
 
         void RefreshShrinkControls()

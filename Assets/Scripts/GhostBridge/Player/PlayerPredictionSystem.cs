@@ -93,6 +93,12 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                 predictedPlayer.ValueRW.WeaponCooldown += dt;
             }
 
+            if (predictedPlayer.ValueRO.EquippedWeaponID != WeaponManager.SecondaryWeaponId &&
+                predictedPlayer.ValueRO.SecondaryWeaponCooldown < float.MaxValue)
+            {
+                predictedPlayer.ValueRW.SecondaryWeaponCooldown += dt;
+            }
+
             if (predictedPlayer.ValueRO.ControllerState.IsReloadingState)
             {
                 predictedPlayer.ValueRW.ReloadTimer -= dt;
@@ -209,11 +215,18 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             WeaponManager.Instance.TryEquipWeapon(
                                 ref predictedPlayer.ValueRW, WeaponManager.PrimaryWeaponId);
                         }
-                        else if (input.SelectSecondaryWeapon || input.TossGrenade)
+                        else if (input.SelectSecondaryWeapon)
                         {
                             WeaponManager.Instance.TryEquipWeapon(
                                 ref predictedPlayer.ValueRW, WeaponManager.SecondaryWeaponId);
                         }
+
+                        var weaponBeforeGrenade = default(WeaponManager.TemporaryWeaponState);
+                        bool restoreWeaponAfterGrenade = input.TossGrenade &&
+                            WeaponManager.Instance.TryBeginTemporaryWeapon(
+                                ref predictedPlayer.ValueRW,
+                                WeaponManager.SecondaryWeaponId,
+                                out weaponBeforeGrenade);
 
                         controllerLink.Controller.ProcessShrinkInput(
                             ref predictedPlayer.ValueRW, input);
@@ -297,6 +310,13 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         shotOriginPosition,
                                         spawnRotation);
                                 }
+                            }
+
+                            if (restoreWeaponAfterGrenade)
+                            {
+                                WeaponManager.Instance.EndTemporaryWeapon(
+                                    ref predictedPlayer.ValueRW,
+                                    in weaponBeforeGrenade);
                             }
 
                             FirstPersonController.ProcessInputs(ref predictedPlayer.ValueRW.ControllerState, input, accumulateDT);

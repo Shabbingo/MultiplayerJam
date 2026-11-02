@@ -327,6 +327,13 @@ namespace Unity.MP_FPS
                     predictedPlayer.ValueRW.WeaponCooldown += deltaTime;
                 }
 
+
+                if (predictedPlayer.ValueRO.EquippedWeaponID != WeaponManager.SecondaryWeaponId &&
+                    predictedPlayer.ValueRO.SecondaryWeaponCooldown < float.MaxValue)
+                {
+                    predictedPlayer.ValueRW.SecondaryWeaponCooldown += deltaTime;
+                }
+
                 if (predictedPlayer.ValueRO.ControllerState.IsReloadingState)
                 {
                     predictedPlayer.ValueRW.ReloadTimer -= deltaTime;
@@ -380,12 +387,19 @@ namespace Unity.MP_FPS
                             WeaponManager.Instance.TryEquipWeapon(
                                 ref predictedPlayer.ValueRW, WeaponManager.PrimaryWeaponId);
                         }
-                        else if (selectionInput.SelectSecondaryWeapon || selectionInput.TossGrenade)
+                        else if (selectionInput.SelectSecondaryWeapon)
                         {
                             WeaponManager.Instance.TryEquipWeapon(
                                 ref predictedPlayer.ValueRW, WeaponManager.SecondaryWeaponId);
                         }
                     }
+
+                    var weaponBeforeGrenade = default(WeaponManager.TemporaryWeaponState);
+                    bool restoreWeaponAfterGrenade = commandInput.PlayerInput.TossGrenade &&
+                        WeaponManager.Instance.TryBeginTemporaryWeapon(
+                            ref predictedPlayer.ValueRW,
+                            WeaponManager.SecondaryWeaponId,
+                            out weaponBeforeGrenade);
 
                     var weaponData =
                         WeaponManager.Instance.WeaponRegistry.GetWeaponData(predictedPlayer.ValueRO.EquippedWeaponID);
@@ -545,6 +559,13 @@ namespace Unity.MP_FPS
                                 }
                             }
                         }
+                    }
+
+                    if (restoreWeaponAfterGrenade)
+                    {
+                        WeaponManager.Instance.EndTemporaryWeapon(
+                            ref predictedPlayer.ValueRW,
+                            in weaponBeforeGrenade);
                     }
                 }
             }

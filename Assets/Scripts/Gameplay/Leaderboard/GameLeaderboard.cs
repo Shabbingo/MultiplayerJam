@@ -3,6 +3,7 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.NetCode;
 using UnityEngine;
+using Unity.MP_FPS;
 using Unity.MP_FPS.UI;
 
 // This is a GhostMonoBehaviour that will be spawned as a singleton manager for the leaderboard.
@@ -14,6 +15,22 @@ namespace Gameplay.Leaderboard
     public class LeaderboardManager : GhostMonoBehaviour, IUpdateServer, IUpdateClient
     {
         public static LeaderboardManager Instance { get; private set; }
+
+        private const float MatchRestartDelay = 8f;
+        private float _matchElapsed;
+        private float _matchRestartTimeRemaining;
+        private float _matchTimeRemaining;
+        private float _matchTimerSyncTimer;
+        private bool _matchEnded;
+        private bool _matchEndAnnouncementPending;
+        private bool _preparePlayersForRestartPending;
+        private float _matchEndSyncTimer;
+        private FixedString64Bytes _winnerName;
+
+        public bool IsMatchEnded => _matchEnded;
+        public string WinnerName => _winnerName.ToString();
+        public float MatchRestartTimeRemaining => _matchRestartTimeRemaining;
+        public float MatchTimeRemaining => _matchTimeRemaining;
 
         private struct KillInfo
         {
@@ -97,7 +114,14 @@ namespace Gameplay.Leaderboard
                 return;
             }
 
+            if (_matchEnded)
+            {
+                return;
+            }
+
             var buffer = GhostGameObject.GetGhostDynamicBuffer<PlayerScoreEntry>();
+            bool reachedKillLimit = false;
+            int killLimit = Mathf.Max(1, GameSettings.Instance.MatchKillLimit);
             for (int i = 0; i < buffer.Length; i++)
             {
                 if (buffer[i].NetworkId == killer)
@@ -105,6 +129,7 @@ namespace Gameplay.Leaderboard
                     var entry = buffer[i];
                     entry.Kills++;
                     buffer[i] = entry;
+                    reachedKillLimit = entry.Kills >= killLimit;
                     break;
                 }
             }
@@ -121,6 +146,11 @@ namespace Gameplay.Leaderboard
             }
 
             AnnounceKillFeed(killer, victim);
+
+            if (reachedKillLimit)
+            {
+                EndMatch(buffer);
+            }
         }
 
         public void AnnouncePlayerJoined(FixedString64Bytes playerName)
@@ -141,7 +171,7 @@ namespace Gameplay.Leaderboard
                 return;
             }
 
-            if (!GhostGameObject.IsGhostLinked()) return;
+            if (!GhostGameObject.IsGhostLinked() || _matchEnded) return;
 
             var buffer = GhostGameObject.GetGhostDynamicBuffer<PlayerScoreEntry>();
             for (int i = 0; i < buffer.Length; i++)
@@ -257,6 +287,8 @@ namespace Gameplay.Leaderboard
                 GhostGameObject.BroadcastRPC(joinRpc);
                 ActionFeed.Instance.AnnouncePlayerJoined(playerName.ToString());
             }
+
+            UpdateMatchState(deltaTime, buffer);
         }
 
         public void UpdateClient(float deltaTime)
@@ -275,6 +307,162 @@ namespace Gameplay.Leaderboard
             {
                 ActionFeed.Instance.AnnouncePlayerJoined(joinRpc.PlayerName.ToString());
             }
+
+            while (GhostGameObject.ConsumeRPC(out MatchEndedRpc matchEndedRpc))
+            {
+                _matchEnded = true;
+                _winnerName = matchEndedRpc.WinnerName;
+                _matchRestartTimeRemaining = matchEndedRpc.RestartDelay;
+            }
+
+            while (GhostGameObject.ConsumeRPC(out MatchRestartedRpc _))
+            {
+                _matchEnded = false;
+                _winnerName = default;
+                _matchRestartTimeRemaining = 0f;
+            }
+
+            while (GhostGameObject.ConsumeRPC(out MatchTimerRpc matchTimerRpc))
+            {
+                _matchTimeRemaining = Mathf.Max(0f, matchTimerRpc.RemainingSeconds);
+            }
+
+            if (_matchEnded)
+            {
+                _matchRestartTimeRemaining = Mathf.Max(0f,
+                    _matchRestartTimeRemaining - deltaTime);
+            }
+            else if (_matchTimeRemaining > 0f)
+            {
+                _matchTimeRemaining = Mathf.Max(0f, _matchTimeRemaining - deltaTime);
+            }
+        }
+
+        private void UpdateMatchState(float deltaTime,
+            DynamicBuffer<PlayerScoreEntry> buffer)
+        {
+            if (_matchEndAnnouncementPending)
+            {
+                GhostGameObject.BroadcastRPC(new MatchEndedRpc
+                {
+                    WinnerName = _winnerName,
+                    RestartDelay = MatchRestartDelay
+                });
+                _matchEndAnnouncementPending = false;
+                _matchEndSyncTimer = 1f;
+            }
+
+            if (_preparePlayersForRestartPending)
+            {
+                PreparePlayersForNextRound();
+                _preparePlayersForRestartPending = false;
+            }
+
+            if (_matchEnded)
+            {
+                _matchRestartTimeRemaining -= deltaTime;
+                _matchEndSyncTimer -= deltaTime;
+                if (_matchEndSyncTimer <= 0f && _matchRestartTimeRemaining > 0f)
+                {
+                    GhostGameObject.BroadcastRPC(new MatchEndedRpc
+                    {
+                        WinnerName = _winnerName,
+                        RestartDelay = _matchRestartTimeRemaining
+                    });
+                    _matchEndSyncTimer = 1f;
+                }
+                if (_matchRestartTimeRemaining <= 0f)
+                {
+                    for (int i = 0; i < buffer.Length; i++)
+                    {
+                        var entry = buffer[i];
+                        entry.Kills = 0;
+                        entry.Deaths = 0;
+                        buffer[i] = entry;
+                    }
+
+                    _matchElapsed = 0f;
+                    _matchTimerSyncTimer = 0f;
+                    _matchEnded = false;
+                    _winnerName = default;
+                    _matchRestartTimeRemaining = 0f;
+                    _matchEndSyncTimer = 0f;
+                    GhostGameObject.BroadcastRPC(new MatchRestartedRpc());
+                }
+                return;
+            }
+
+            _matchElapsed += deltaTime;
+            float timeLimitSeconds = Mathf.Max(1,
+                GameSettings.Instance.MatchTimeLimitMinutes) * 60f;
+            _matchTimeRemaining = Mathf.Max(0f, timeLimitSeconds - _matchElapsed);
+            _matchTimerSyncTimer -= deltaTime;
+            if (_matchTimerSyncTimer <= 0f)
+            {
+                GhostGameObject.BroadcastRPC(new MatchTimerRpc
+                {
+                    RemainingSeconds = _matchTimeRemaining
+                });
+                _matchTimerSyncTimer = 1f;
+            }
+            if (_matchElapsed >= timeLimitSeconds)
+            {
+                EndMatch(buffer);
+            }
+        }
+
+        private void EndMatch(DynamicBuffer<PlayerScoreEntry> buffer)
+        {
+            if (_matchEnded)
+            {
+                return;
+            }
+
+            _winnerName = GetWinnerName(buffer);
+            _matchEnded = true;
+            _matchTimeRemaining = 0f;
+            _matchEndAnnouncementPending = true;
+            _preparePlayersForRestartPending = true;
+            _matchRestartTimeRemaining = MatchRestartDelay;
+        }
+
+        private void PreparePlayersForNextRound()
+        {
+            var entityManager = GhostGameObject.World.EntityManager;
+            using var playerQuery = entityManager.CreateEntityQuery(
+                ComponentType.ReadWrite<PredictedPlayerGhost>());
+            using var playerEntities = playerQuery.ToEntityArray(Allocator.Temp);
+            foreach (var playerEntity in playerEntities)
+            {
+                var player = entityManager.GetComponentData<PredictedPlayerGhost>(playerEntity);
+                if (player.CurrentHealth > 0f)
+                {
+                    player.CurrentHealth = 0f;
+                    entityManager.SetComponentData(playerEntity, player);
+                }
+            }
+        }
+
+        private static FixedString64Bytes GetWinnerName(
+            DynamicBuffer<PlayerScoreEntry> buffer)
+        {
+            if (buffer.Length == 0)
+            {
+                return new FixedString64Bytes("No winner");
+            }
+
+            var winner = buffer[0];
+            for (int i = 1; i < buffer.Length; i++)
+            {
+                var candidate = buffer[i];
+                if (candidate.Kills > winner.Kills ||
+                    candidate.Kills == winner.Kills && candidate.Deaths < winner.Deaths)
+                {
+                    winner = candidate;
+                }
+            }
+
+            return winner.PlayerName;
         }
     }
 
@@ -287,5 +475,20 @@ namespace Gameplay.Leaderboard
     public struct PlayerJoinedEntryRpc : IRpcCommand
     {
         public FixedString64Bytes PlayerName;
+    }
+
+    public struct MatchEndedRpc : IRpcCommand
+    {
+        public FixedString64Bytes WinnerName;
+        public float RestartDelay;
+    }
+
+    public struct MatchRestartedRpc : IRpcCommand
+    {
+    }
+
+    public struct MatchTimerRpc : IRpcCommand
+    {
+        public float RemainingSeconds;
     }
 }

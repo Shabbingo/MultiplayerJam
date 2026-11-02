@@ -62,8 +62,11 @@ namespace Unity.MP_FPS
                 LocalToWorld targetLocalToWorld = SystemAPI.GetComponent<LocalToWorld>(mainEntityCameraEntity);
                 MainCameraSingleton.Instance.transform.SetPositionAndRotation(targetLocalToWorld.Position,targetLocalToWorld.Rotation);
                 float fovOffset = CameraFovEffect.UpdateAndGetOffset(SystemAPI.Time.DeltaTime);
+                float baseFov = GameSettings.Instance != null
+                    ? GameSettings.Instance.CameraFov
+                    : mainCamera.BaseFov;
                 MainCameraSingleton.Instance.fieldOfView =
-                    mainCamera.CurrentFov = mainCamera.BaseFov + fovOffset;
+                    mainCamera.CurrentFov = baseFov + fovOffset;
             }
         }
     }

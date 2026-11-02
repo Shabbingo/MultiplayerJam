@@ -68,10 +68,10 @@ MonoBehaviour:
   ProjectileSpeed: 30
   IsLobbedProjectile: 1
   LobUpwardSpeed: 1
-  ProjectileGravity: 15.1
+  ProjectileGravity: 20
   ProjectileBounces: 3
   FirstBounceVelocityRetention: 0.3
   ConsecutiveBounceVelocityRetentions:
-  - 0.2
-  - 0.1
+  - 0.7
+  - 0.4
   ProjectileFuseTime: 3

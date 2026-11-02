@@ -23,6 +23,9 @@ namespace Unity.MP_FPS.Client
             public const string OptionsButton = "OptionsButton";
             public const string OptionsBackButton = "OptionsBackButton";
             public const string SensitivitySlider = "MouseSensitivitySlider";
+            public const string CameraFovSlider = "CameraFovSlider";
+            public const string KillLimitSlider = "KillLimitSlider";
+            public const string TimeLimitSlider = "TimeLimitSlider";
             public const string QuitGame = "QuitButton";
         }
 
@@ -39,6 +42,9 @@ namespace Unity.MP_FPS.Client
         Button m_OptionsButton;
         Button m_OptionsBackButton;
         Slider m_SensitivitySlider;
+        Slider m_CameraFovSlider;
+        SliderInt m_KillLimitSlider;
+        SliderInt m_TimeLimitSlider;
         Button m_QuitButton;
 
         void OnEnable()
@@ -109,6 +115,16 @@ namespace Unity.MP_FPS.Client
             UpdateSensitivityLabel(m_SensitivitySlider.value);
             m_SensitivitySlider.RegisterValueChangedCallback(OnSensitivityChanged);
 
+            m_CameraFovSlider = m_MainMenu.Q<Slider>(UIElementNames.CameraFovSlider);
+            RefreshCameraFovSlider();
+            m_CameraFovSlider.RegisterValueChangedCallback(OnCameraFovChanged);
+
+            m_KillLimitSlider = m_MainMenu.Q<SliderInt>(UIElementNames.KillLimitSlider);
+            m_KillLimitSlider.RegisterValueChangedCallback(OnKillLimitChanged);
+            m_TimeLimitSlider = m_MainMenu.Q<SliderInt>(UIElementNames.TimeLimitSlider);
+            m_TimeLimitSlider.RegisterValueChangedCallback(OnTimeLimitChanged);
+            RefreshMatchSettings();
+
             m_QuitButton = m_MainMenu.Q<Button>(UIElementNames.QuitGame);
             m_QuitButton.clicked += OnQuitPressed;
 
@@ -131,6 +147,9 @@ namespace Unity.MP_FPS.Client
             m_OptionsButton.clicked -= OnOptionsPressed;
             m_OptionsBackButton.clicked -= OnOptionsBackPressed;
             m_SensitivitySlider.UnregisterValueChangedCallback(OnSensitivityChanged);
+            m_CameraFovSlider.UnregisterValueChangedCallback(OnCameraFovChanged);
+            m_KillLimitSlider.UnregisterValueChangedCallback(OnKillLimitChanged);
+            m_TimeLimitSlider.UnregisterValueChangedCallback(OnTimeLimitChanged);
             m_QuitButton.clicked -= OnQuitPressed;
         }
 
@@ -171,6 +190,8 @@ namespace Unity.MP_FPS.Client
         {
             m_SensitivitySlider.SetValueWithoutNotify(GameSettings.Instance.MouseSensitivity);
             UpdateSensitivityLabel(m_SensitivitySlider.value);
+            RefreshCameraFovSlider();
+            RefreshMatchSettings();
             m_ConnectionPanel.style.display = DisplayStyle.None;
             m_OptionsPanel.style.display = DisplayStyle.Flex;
         }
@@ -190,6 +211,42 @@ namespace Unity.MP_FPS.Client
         void UpdateSensitivityLabel(float value)
         {
             m_SensitivitySlider.label = $"Mouse Sensitivity: {value:0.00}";
+        }
+
+        void RefreshCameraFovSlider()
+        {
+            float fov = GameSettings.Instance.CameraFov;
+            m_CameraFovSlider.SetValueWithoutNotify(fov);
+            m_CameraFovSlider.label = $"Camera FOV: {fov:0}";
+        }
+
+        void OnCameraFovChanged(ChangeEvent<float> evt)
+        {
+            GameSettings.Instance.CameraFov = evt.newValue;
+            m_CameraFovSlider.label = $"Camera FOV: {GameSettings.Instance.CameraFov:0}";
+        }
+
+        void RefreshMatchSettings()
+        {
+            int killLimit = GameSettings.Instance.MatchKillLimit;
+            int timeLimit = GameSettings.Instance.MatchTimeLimitMinutes;
+            m_KillLimitSlider.SetValueWithoutNotify(killLimit);
+            m_TimeLimitSlider.SetValueWithoutNotify(timeLimit);
+            m_KillLimitSlider.label = $"Kill Limit: {killLimit}";
+            m_TimeLimitSlider.label = $"Time Limit: {timeLimit} Minutes";
+        }
+
+        void OnKillLimitChanged(ChangeEvent<int> evt)
+        {
+            GameSettings.Instance.MatchKillLimit = evt.newValue;
+            m_KillLimitSlider.label = $"Kill Limit: {GameSettings.Instance.MatchKillLimit}";
+        }
+
+        void OnTimeLimitChanged(ChangeEvent<int> evt)
+        {
+            GameSettings.Instance.MatchTimeLimitMinutes = evt.newValue;
+            m_TimeLimitSlider.label =
+                $"Time Limit: {GameSettings.Instance.MatchTimeLimitMinutes} Minutes";
         }
 
         static void OnQuitPressed() => GameManager.Instance.QuitAsync();

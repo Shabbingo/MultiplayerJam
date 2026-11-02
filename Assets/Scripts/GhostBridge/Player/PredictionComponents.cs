@@ -62,6 +62,7 @@ public struct PredictedPlayerGhost : IComponentData
     
     [GhostField] public uint EquippedWeaponID;
     [GhostField] public float WeaponCooldown;   // Timer to control rate of fire
+    [GhostField] public float SecondaryWeaponCooldown;
     
     [GhostField] public int CurrentAmmo;
     [GhostField] public float LastDamageAmount;

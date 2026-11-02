@@ -1,3 +1,4 @@
+using System;
 using Unity.Cinemachine;
 using Unity.Collections;
 using Unity.Entities;
@@ -53,6 +54,10 @@ namespace Unity.MP_FPS
         private CinemachineTargetGroup m_TargetGroup;
         private CinemachinePositionComposer m_PositionComposer;
         private CinemachineCamera m_CinemachineCamera;
+
+        private static readonly int s_BaseColorProperty = Shader.PropertyToID("_BaseColor");
+        private static readonly int s_ColorProperty = Shader.PropertyToID("_Color");
+        private const float GoldenRatioConjugate = 0.61803398875f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
@@ -119,6 +124,12 @@ namespace Unity.MP_FPS
             m_OwnerVisuals.SetActive(isClientOwned);
             m_OtherPlayerVisuals.SetActive(!isClientOwned);
 
+            if (Role != MultiplayerRole.Server &&
+                TryReadGhostComponentData<GhostOwner>(out var ghostOwner))
+            {
+                ApplyPlayerColor(GetPlayerColor(ghostOwner.NetworkId));
+            }
+
             if (Role != MultiplayerRole.Server)
             {
                 _animatorCharacter = GetComponent<Animator>();
@@ -171,6 +182,57 @@ namespace Unity.MP_FPS
 
             PlayerGhostManager.TryGetInstanceByRole(Role, out var playerManager);
             playerManager.Register(this);
+        }
+
+        private static Color GetPlayerColor(int networkId)
+        {
+            // A golden-ratio hue step remains deterministic on every client while
+            // keeping adjacent network IDs visually distinct without a fixed palette limit.
+            float hue = Mathf.Repeat((Mathf.Max(1, networkId) - 1) *
+                                     GoldenRatioConjugate, 1f);
+            return Color.HSVToRGB(hue, 0.7f, 1f);
+        }
+
+        private void ApplyPlayerColor(Color playerColor)
+        {
+            ApplyPlayerColor(m_OwnerVisuals, playerColor);
+            ApplyPlayerColor(m_OtherPlayerVisuals, playerColor);
+        }
+
+        private static void ApplyPlayerColor(GameObject visualRoot, Color playerColor)
+        {
+            if (visualRoot == null)
+            {
+                return;
+            }
+
+            var propertyBlock = new MaterialPropertyBlock();
+            foreach (var visualRenderer in
+                     visualRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                var materials = visualRenderer.sharedMaterials;
+                for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+                {
+                    var material = materials[materialIndex];
+                    if (material == null ||
+                        !material.name.StartsWith("M_Armature_", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    visualRenderer.GetPropertyBlock(propertyBlock, materialIndex);
+                    if (material.HasProperty(s_BaseColorProperty))
+                    {
+                        propertyBlock.SetColor(s_BaseColorProperty, playerColor);
+                    }
+                    if (material.HasProperty(s_ColorProperty))
+                    {
+                        propertyBlock.SetColor(s_ColorProperty, playerColor);
+                    }
+                    visualRenderer.SetPropertyBlock(propertyBlock, materialIndex);
+                    propertyBlock.Clear();
+                }
+            }
         }
 
         public override void OnGhostPreDestroy()

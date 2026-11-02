@@ -226,7 +226,10 @@ namespace Unity.MP_FPS
                 CurrentHealth = 100f,
                 ControllerState = initialControllerState,
                 EquippedWeaponID = weaponId,
-                CurrentAmmo = magazineSize
+                CurrentAmmo = magazineSize,
+                SecondaryWeaponCooldown = secondaryWeaponData != null
+                    ? secondaryWeaponData.CooldownInMs
+                    : 0f
             });
             ecb.AddComponent(playerEntity, new PlayerCharacterInitialized());
             ecb.SetComponentEnabled<PlayerCharacterInitialized>(playerEntity, false);
