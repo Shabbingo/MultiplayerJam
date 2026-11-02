@@ -304,6 +304,10 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,
                                 out float jumpHeightMultiplier);
+                            controllerLink.Controller.ProcessResizeBounce(
+                                ref predictedPlayer.ValueRW,
+                                input,
+                                accumulateDT);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,

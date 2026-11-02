@@ -57,6 +57,7 @@ public struct PredictedPlayerGhost : IComponentData
     // while the local HUD can respond immediately.
     [GhostField] public float CurrentShrinkResource;
     [GhostField] public float MaxShrinkResource;
+    [GhostField] public float ResizeBounceWindowRemaining;
     [GhostField] public float3 RecoilVelocity;
     
     [GhostField] public uint EquippedWeaponID;

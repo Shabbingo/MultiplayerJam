@@ -605,6 +605,10 @@ namespace Unity.MP_FPS
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,
                                 out float jumpHeightMultiplier);
+                            controllerLink.Controller.ProcessResizeBounce(
+                                ref predictedPlayer.ValueRW,
+                                input,
+                                movementDt);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,

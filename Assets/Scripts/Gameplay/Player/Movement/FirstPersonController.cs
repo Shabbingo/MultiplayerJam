@@ -32,6 +32,16 @@ public class FirstPersonController : MonoBehaviour
     [SerializeField, Range(0f, 1f), Tooltip("How strongly player size affects jump height. At 1, a 50% sized player jumps 50% as high; at 0, size has no effect.")]
     private float m_SizeJumpHeightInfluence = 1f;
 
+    [Header("Full-Size Bhop")]
+    [SerializeField, Min(0f), Tooltip("How long after returning from manually-shrunk to full size that a fresh jump press can trigger the resize bounce.")]
+    private float m_ResizeBounceInputWindow = 0.2f;
+    [SerializeField, Min(0f), Tooltip("Upward launch speed of the full-size resize bounce. Horizontal movement and airborne recoil are preserved.")]
+    private float m_ResizeBounceSpeed = 7.5f;
+    [SerializeField, Min(0f), Tooltip("Temporary field-of-view increase when the local player successfully performs a resize bounce.")]
+    private float m_ResizeBounceFovKick = 6f;
+    [SerializeField, Min(0.01f), Tooltip("Seconds taken for the resize-bounce field-of-view kick to settle back to normal.")]
+    private float m_ResizeBounceFovDuration = 0.25f;
+
     [Header("Airborne Weapon Thruster")]
     [SerializeField, Min(0f), Tooltip("Thrust velocity added opposite the firing direction for every shot while airborne. This does not depend on the shot hitting anything.")]
     private float m_AirborneRecoilImpulse = 4f;
@@ -650,8 +660,13 @@ public class FirstPersonController : MonoBehaviour
         predictedPlayer.ControllerState.IsManualShrinkActive = shrinking;
         if (shrinking)
         {
+            predictedPlayer.ResizeBounceWindowRemaining = 0f;
             predictedPlayer.CurrentShrinkResource = Mathf.Max(0f,
                 predictedPlayer.CurrentShrinkResource - m_ShrinkActivationCost);
+        }
+        else
+        {
+            ArmResizeBounce(ref predictedPlayer);
         }
 
         ApplyManualShrinkHealth(ref predictedPlayer, shrinking);
@@ -701,6 +716,7 @@ public class FirstPersonController : MonoBehaviour
             if (predictedPlayer.CurrentShrinkResource <= 0f)
             {
                 predictedPlayer.ControllerState.IsManualShrinkActive = false;
+                ArmResizeBounce(ref predictedPlayer);
                 ApplyManualShrinkHealth(ref predictedPlayer, false);
             }
         }
@@ -709,6 +725,48 @@ public class FirstPersonController : MonoBehaviour
             predictedPlayer.CurrentShrinkResource = Mathf.Min(predictedPlayer.MaxShrinkResource,
                 predictedPlayer.CurrentShrinkResource + m_ShrinkRefillRate * deltaTime);
         }
+    }
+
+    private void ArmResizeBounce(ref PredictedPlayerGhost predictedPlayer)
+    {
+        predictedPlayer.ResizeBounceWindowRemaining = Mathf.Max(0f, m_ResizeBounceInputWindow);
+    }
+
+    public void ProcessResizeBounce(ref PredictedPlayerGhost predictedPlayer,
+        in PlayerInput input, float deltaTime)
+    {
+        if (predictedPlayer.ResizeBounceWindowRemaining <= 0f)
+        {
+            return;
+        }
+
+        if (input.Jump)
+        {
+            ref var state = ref predictedPlayer.ControllerState;
+            float bounceSpeed = Mathf.Max(0f, m_ResizeBounceSpeed);
+            if (bounceSpeed > 0f)
+            {
+                state.JumpFallSpeed = bounceSpeed;
+                SetMovementType(ref state, MovementType.Jumping);
+                state.Jump = true;
+                state.JumpTriggered = true;
+
+                if (m_PlayerGhost != null &&
+                    m_PlayerGhost.Role == MultiplayerRole.ClientOwned)
+                {
+                    CameraFovEffect.Trigger(
+                        m_ResizeBounceFovKick,
+                        m_ResizeBounceFovDuration);
+                }
+            }
+
+            // A resize can produce only one bounce, even if its height is set to zero.
+            predictedPlayer.ResizeBounceWindowRemaining = 0f;
+            return;
+        }
+
+        predictedPlayer.ResizeBounceWindowRemaining = Mathf.Max(0f,
+            predictedPlayer.ResizeBounceWindowRemaining - deltaTime);
     }
 
     public void GetSizeMovementMultipliers(in PredictedPlayerGhost predictedPlayer,
