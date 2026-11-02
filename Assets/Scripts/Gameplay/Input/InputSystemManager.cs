@@ -6,6 +6,7 @@ using UnityEngine;
 public class InputSystemManager : Singleton<InputSystemManager>
 {
     private const string k_ShrinkBindingOverridesKey = "ShrinkBindingOverrides";
+    private const string k_GrenadeBindingOverridesKey = "GrenadeBindingOverrides";
 
     protected override bool Persistent => true;
 
@@ -137,6 +138,7 @@ public class InputSystemManager : Singleton<InputSystemManager>
 
         var gameControls = new InputSystem_Actions();
         ApplySavedShrinkBinding(gameControls);
+        ApplySavedGrenadeBinding(gameControls);
         gameControls.Enable();
         user.AssociateActionsWithUser(gameControls);
 
@@ -166,6 +168,22 @@ public class InputSystemManager : Singleton<InputSystemManager>
     {
         PlayerPrefs.SetString(k_ShrinkBindingOverridesKey,
             controls.UI.RightClick.SaveBindingOverridesAsJson());
+    }
+
+    public static void ApplySavedGrenadeBinding(InputSystem_Actions controls)
+    {
+        string bindingOverrides = PlayerPrefs.GetString(
+            k_GrenadeBindingOverridesKey, string.Empty);
+        if (!string.IsNullOrEmpty(bindingOverrides))
+        {
+            controls.FPS.ShootGrenade.LoadBindingOverridesFromJson(bindingOverrides);
+        }
+    }
+
+    public static void SaveGrenadeBinding(InputSystem_Actions controls)
+    {
+        PlayerPrefs.SetString(k_GrenadeBindingOverridesKey,
+            controls.FPS.ShootGrenade.SaveBindingOverridesAsJson());
     }
 
     private bool TryFindUserWithLostDevice(InputDevice desiredDevice, out InputUser existingUser)

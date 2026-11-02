@@ -14,6 +14,7 @@ public static class GameInput
     {
         Actions = new InputSystem_Actions();
         InputSystemManager.ApplySavedShrinkBinding(Actions);
+        InputSystemManager.ApplySavedGrenadeBinding(Actions);
         Actions.Enable();
     }
 

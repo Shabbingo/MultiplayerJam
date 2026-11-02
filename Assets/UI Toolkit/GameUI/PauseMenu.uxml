@@ -7,9 +7,10 @@
                     <ui:Slider label="Mouse Sensitivity: 1.50" low-value="0.1" high-value="5" value="1.5" show-input-field="true" name="MouseSensitivitySlider" class="sensitivity-slider"/>
                     <ui:Toggle label="Hold to Shrink (Off = Toggle)" value="true" name="HoldToShrinkToggle" class="shrink-mode-toggle"/>
                     <ui:Button text="Shrink Binding: Right Button" name="ShrinkBindingButton" tabindex="0"/>
-                    <ui:Button text="Resume" name="ResumeButton" tabindex="1" selectable="false" focusable="false"/>
-                    <ui:Button text="Main Menu" name="MainMenuButton" tabindex="2"/>
-                    <ui:Button text="Quit" name="QuitButton" tabindex="3"/>
+                    <ui:Button text="Toss Grenade Binding: G" name="GrenadeBindingButton" tabindex="1"/>
+                    <ui:Button text="Resume" name="ResumeButton" tabindex="2" selectable="false" focusable="false"/>
+                    <ui:Button text="Main Menu" name="MainMenuButton" tabindex="3"/>
+                    <ui:Button text="Quit" name="QuitButton" tabindex="4"/>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

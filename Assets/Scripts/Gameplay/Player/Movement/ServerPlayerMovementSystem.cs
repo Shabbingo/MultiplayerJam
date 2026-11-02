@@ -380,7 +380,7 @@ namespace Unity.MP_FPS
                             WeaponManager.Instance.TryEquipWeapon(
                                 ref predictedPlayer.ValueRW, WeaponManager.PrimaryWeaponId);
                         }
-                        else if (selectionInput.SelectSecondaryWeapon)
+                        else if (selectionInput.SelectSecondaryWeapon || selectionInput.TossGrenade)
                         {
                             WeaponManager.Instance.TryEquipWeapon(
                                 ref predictedPlayer.ValueRW, WeaponManager.SecondaryWeaponId);
@@ -392,7 +392,8 @@ namespace Unity.MP_FPS
                     if (weaponData != null)
                     {
                         bool wantsToReload = commandInput.PlayerInput.Reload;
-                        bool wantsToShoot = commandInput.PlayerInput.Shoot;
+                        bool wantsToShoot = commandInput.PlayerInput.Shoot ||
+                                            commandInput.PlayerInput.TossGrenade;
                         bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
                         if ((wantsToReload || mustReload) &&

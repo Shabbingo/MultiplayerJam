@@ -15,7 +15,8 @@ public struct PlayerInput
         SelectPrimaryWeapon = 1 << 5,
         SelectSecondaryWeapon = 1 << 6,
         ShrinkHeld = 1 << 7,
-        HoldShrinkMode = 1 << 8
+        HoldShrinkMode = 1 << 8,
+        TossGrenade = 1 << 9
     }
 
     public float2 MoveInput;
@@ -30,6 +31,7 @@ public struct PlayerInput
     public bool ToggleShrink => (InputFlags & (uint)InputFlag.ToggleShrink) != 0;
     public bool ShrinkHeld => (InputFlags & (uint)InputFlag.ShrinkHeld) != 0;
     public bool HoldShrinkMode => (InputFlags & (uint)InputFlag.HoldShrinkMode) != 0;
+    public bool TossGrenade => (InputFlags & (uint)InputFlag.TossGrenade) != 0;
     public bool SelectPrimaryWeapon => (InputFlags & (uint)InputFlag.SelectPrimaryWeapon) != 0;
     public bool SelectSecondaryWeapon => (InputFlags & (uint)InputFlag.SelectSecondaryWeapon) != 0;
 

@@ -103,6 +103,8 @@ public partial class ClientInputReaderSystem : SystemBase
         playerInput.SetFlag(PlayerInput.InputFlag.Shoot, controls.FPS.ShootSingle.IsPressed());
         playerInput.SetFlag(PlayerInput.InputFlag.Sprint, controls.Player.Sprint.IsPressed());
         playerInput.SetFlag(PlayerInput.InputFlag.Reload, controls.FPS.Reload.triggered);
+        playerInput.SetFlag(PlayerInput.InputFlag.TossGrenade,
+            controls.FPS.ShootGrenade.triggered);
         bool holdToShrink = GameSettings.Instance.HoldToShrink;
         playerInput.SetFlag(PlayerInput.InputFlag.HoldShrinkMode, holdToShrink);
         playerInput.SetFlag(PlayerInput.InputFlag.ShrinkHeld,

@@ -209,7 +209,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             WeaponManager.Instance.TryEquipWeapon(
                                 ref predictedPlayer.ValueRW, WeaponManager.PrimaryWeaponId);
                         }
-                        else if (input.SelectSecondaryWeapon)
+                        else if (input.SelectSecondaryWeapon || input.TossGrenade)
                         {
                             WeaponManager.Instance.TryEquipWeapon(
                                 ref predictedPlayer.ValueRW, WeaponManager.SecondaryWeaponId);
@@ -222,7 +222,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         if (weaponData != null)
                         {
                             bool wantsToReload = input.Reload;
-                            bool wantsToShoot = input.Shoot;
+                            bool wantsToShoot = input.Shoot || input.TossGrenade;
                             bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
                             if ((wantsToReload || mustReload) &&

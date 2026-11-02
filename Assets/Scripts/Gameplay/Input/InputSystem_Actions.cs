@@ -1246,6 +1246,17 @@ namespace Unity.MP_FPS
                 },
                 {
                     ""name"": """",
+                    ""id"": ""663ba268-e999-4b57-9c66-acde5f5d03bb"",
+                    ""path"": ""<Keyboard>/g"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": "";Keyboard&Mouse"",
+                    ""action"": ""ShootGrenade"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""d790be5f-a012-4ec1-95de-b636f3fa1b3a"",
                     ""path"": ""<Keyboard>/r"",
                     ""interactions"": """",
