@@ -214,6 +214,12 @@ MonoBehaviour:
   m_MaxShrinkResource: 5
   m_ShrinkDrainRate: 1
   m_ShrinkRefillRate: 1
+  m_ResizeObstructionLayers:
+    serializedVersion: 2
+    m_Bits: 129
+  m_FullSizeClearanceProbeScale: 0.9
+  m_FullSizeClearanceSearchDistance: 0.75
+  m_FullSizeClearanceSearchSteps: 3
   <CinemachineCameraTarget>k__BackingField: {fileID: 0}
   GroundedOffset: 0.2
   <ControllerOffset>k__BackingField: {x: 0, y: 0, z: 0}

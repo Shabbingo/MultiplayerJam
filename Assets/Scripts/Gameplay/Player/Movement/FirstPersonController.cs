@@ -22,6 +22,28 @@ public class FirstPersonController : MonoBehaviour
     [SerializeField, Min(0f), Tooltip("Shrink resource restored per second while the player is normal-sized.")]
     private float m_ShrinkRefillRate = 1f;
 
+    [Header("Forced Resize Clearance")]
+    [SerializeField, Tooltip("Map layers that can crush a player when they are forced to full size.")]
+    private LayerMask m_ResizeObstructionLayers = 129;
+    [SerializeField, Range(0.8f, 1f), Tooltip("Slightly narrows the clearance probe to avoid false positives from touching walls. Vertical head clearance remains full size.")]
+    private float m_FullSizeClearanceProbeScale = 0.9f;
+    [SerializeField, Min(0f), Tooltip("How far the server may nudge a growing player sideways to find valid full-size space before gibbing them.")]
+    private float m_FullSizeClearanceSearchDistance = 0.75f;
+    [SerializeField, Range(1, 5), Tooltip("Number of distance steps tested in each horizontal direction.")]
+    private int m_FullSizeClearanceSearchSteps = 3;
+
+    private static readonly Vector3[] s_ClearanceSearchDirections =
+    {
+        Vector3.forward,
+        Vector3.back,
+        Vector3.left,
+        Vector3.right,
+        new Vector3(1f, 0f, 1f).normalized,
+        new Vector3(1f, 0f, -1f).normalized,
+        new Vector3(-1f, 0f, 1f).normalized,
+        new Vector3(-1f, 0f, -1f).normalized
+    };
+
     private static class AnimationParameters
     {
         //Speed, Strafe, Turn: float values
@@ -279,6 +301,7 @@ public class FirstPersonController : MonoBehaviour
 
     private CharacterController m_Controller;
     public CharacterController CharacterController => m_Controller;
+    private Vector3 m_InitialLossyScale;
 
     private PlayerGhost m_PlayerGhost;
     private PlayerGhost PlayerGhost => m_PlayerGhost;
@@ -309,6 +332,7 @@ public class FirstPersonController : MonoBehaviour
     {
         TryGetComponent(out m_Controller);
         Debug.Assert(m_Controller, "[THIRDPERSONCONTROLLER] Player has no CharacterController component");
+        m_InitialLossyScale = transform.lossyScale;
 
         TryGetComponent(out m_PlayerGhost);
         Debug.Assert(m_PlayerGhost, "[THIRDPERSONCONTROLLER] Player has no PlayerGhost component");
@@ -321,6 +345,134 @@ public class FirstPersonController : MonoBehaviour
     public void SetExcludeLayers(LayerMask excludeLayers)
     {
         m_Controller.excludeLayers = excludeLayers;
+    }
+
+    public bool TryFindFullSizeClearance(Vector3 playerPosition,
+        Quaternion playerRotation, out Vector3 positionAdjustment)
+    {
+        positionAdjustment = Vector3.zero;
+        if (m_Controller == null)
+        {
+            return true;
+        }
+
+        var fullScale = new Vector3(
+            Mathf.Abs(m_InitialLossyScale.x),
+            Mathf.Abs(m_InitialLossyScale.y),
+            Mathf.Abs(m_InitialLossyScale.z));
+        var scaledCenter = Vector3.Scale(m_Controller.center, fullScale);
+        float fullSizeSkin = m_Controller.skinWidth * fullScale.y;
+        var capsuleUp = playerRotation * Vector3.up;
+        var worldCenter = playerPosition + playerRotation * scaledCenter +
+                          capsuleUp * (fullSizeSkin * 0.5f);
+
+        float radius = m_Controller.radius * Mathf.Max(fullScale.x, fullScale.z) *
+                       m_FullSizeClearanceProbeScale;
+        float height = Mathf.Max(
+            m_Controller.height * fullScale.y - fullSizeSkin,
+            radius * 2f);
+        float capsuleOffset = Mathf.Max(0f, height * 0.5f - radius);
+        var capsuleAxis = capsuleUp * capsuleOffset;
+
+        var currentScale = new Vector3(
+            Mathf.Abs(transform.lossyScale.x),
+            Mathf.Abs(transform.lossyScale.y),
+            Mathf.Abs(transform.lossyScale.z));
+        float currentSkin = m_Controller.skinWidth * currentScale.y;
+        var currentCenter = playerPosition + playerRotation *
+            Vector3.Scale(m_Controller.center, currentScale) +
+            capsuleUp * (currentSkin * 0.5f);
+        float currentRadius = m_Controller.radius *
+                              Mathf.Max(currentScale.x, currentScale.z) *
+                              m_FullSizeClearanceProbeScale;
+        float currentHeight = Mathf.Max(
+            m_Controller.height * currentScale.y - currentSkin,
+            currentRadius * 2f);
+        var currentCapsuleAxis = capsuleUp *
+                                 Mathf.Max(0f, currentHeight * 0.5f - currentRadius);
+
+        if (IsFullSizeCapsuleClear(worldCenter, capsuleAxis, radius))
+        {
+            return true;
+        }
+
+        var currentTop = currentCenter + currentCapsuleAxis + capsuleUp * currentRadius;
+        var fullSizeTop = worldCenter + capsuleAxis + capsuleUp * radius;
+        float headProbeRadius = Mathf.Max(0.02f,
+            Mathf.Min(currentRadius, radius) * 0.75f);
+        if (IsHeadExpansionBlocked(currentTop, fullSizeTop, capsuleUp, headProbeRadius))
+        {
+            return false;
+        }
+
+        int searchSteps = Mathf.Max(1, m_FullSizeClearanceSearchSteps);
+        for (int step = 1; step <= searchSteps; step++)
+        {
+            float distance = m_FullSizeClearanceSearchDistance * step / searchSteps;
+            foreach (var localDirection in s_ClearanceSearchDirections)
+            {
+                var worldDirection = playerRotation * localDirection;
+                worldDirection.y = 0f;
+                worldDirection.Normalize();
+                var candidateAdjustment = worldDirection * distance;
+
+                if (CanMoveCapsuleToAdjustment(currentCenter, currentCapsuleAxis,
+                        currentRadius, candidateAdjustment) &&
+                    IsFullSizeCapsuleClear(
+                        worldCenter + candidateAdjustment, capsuleAxis, radius))
+                {
+                    positionAdjustment = candidateAdjustment;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsHeadExpansionBlocked(Vector3 currentTop, Vector3 fullSizeTop,
+        Vector3 capsuleUp, float probeRadius)
+    {
+        var start = currentTop - capsuleUp * probeRadius;
+        var end = fullSizeTop - capsuleUp * probeRadius;
+
+        return Physics.CheckCapsule(
+            start,
+            end,
+            probeRadius,
+            m_ResizeObstructionLayers,
+            QueryTriggerInteraction.Ignore);
+    }
+
+    private bool CanMoveCapsuleToAdjustment(Vector3 worldCenter, Vector3 capsuleAxis,
+        float radius, Vector3 adjustment)
+    {
+        float distance = adjustment.magnitude;
+        if (distance <= Mathf.Epsilon)
+        {
+            return true;
+        }
+
+        return !Physics.CapsuleCast(
+            worldCenter - capsuleAxis,
+            worldCenter + capsuleAxis,
+            radius,
+            adjustment / distance,
+            out _,
+            distance,
+            m_ResizeObstructionLayers,
+            QueryTriggerInteraction.Ignore);
+    }
+
+    private bool IsFullSizeCapsuleClear(Vector3 worldCenter, Vector3 capsuleAxis,
+        float radius)
+    {
+        return !Physics.CheckCapsule(
+            worldCenter - capsuleAxis,
+            worldCenter + capsuleAxis,
+            radius,
+            m_ResizeObstructionLayers,
+            QueryTriggerInteraction.Ignore);
     }
 
     public void ApplyManualShrinkHealth(ref PredictedPlayerGhost predictedPlayer, bool shrinking)

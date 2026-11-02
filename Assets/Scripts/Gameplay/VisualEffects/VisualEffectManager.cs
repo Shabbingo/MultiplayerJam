@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 using System;
+using Unity.Mathematics;
 using Unity.NetCode;
 
 namespace Unity.MP_FPS
@@ -11,13 +12,29 @@ namespace Unity.MP_FPS
         public uint WeaponId;
     }
 
+    public struct ClientSpawnPlayerExplosionRpc : IRpcCommand
+    {
+        public float3 Position;
+    }
+
     public class VisualEffectManager : GhostSingleton<VisualEffectManager>, IUpdateServer, IUpdateClient, IGhostManager
     {
         private Queue<ClientSpawnVfxRpc> _vfxQueue = new();
+        private Queue<ClientSpawnPlayerExplosionRpc> m_PlayerExplosionQueue = new();
+
+        [SerializeField] private GameObject m_PlayerExplosionPrefab;
 
         public void Server_RequestVfx(int ownerNetworkId, uint weaponId)
         {
             _vfxQueue.Enqueue(new ClientSpawnVfxRpc { OwnerNetworkId = ownerNetworkId, WeaponId = weaponId });
+        }
+
+        public void Server_RequestPlayerExplosion(Vector3 position)
+        {
+            m_PlayerExplosionQueue.Enqueue(new ClientSpawnPlayerExplosionRpc
+            {
+                Position = position
+            });
         }
 
         public void UpdateServer(float deltaTime)
@@ -27,10 +44,24 @@ namespace Unity.MP_FPS
                 var vfxRequest = _vfxQueue.Dequeue();
                 GhostGameObject.BroadcastRPC(vfxRequest);
             }
+
+            while (m_PlayerExplosionQueue.Count > 0)
+            {
+                GhostGameObject.BroadcastRPC(m_PlayerExplosionQueue.Dequeue());
+            }
         }
 
         public void UpdateClient(float deltaTime)
         {
+            while (GhostGameObject.ConsumeRPC(out ClientSpawnPlayerExplosionRpc explosionRpc))
+            {
+                if (m_PlayerExplosionPrefab != null)
+                {
+                    Instantiate(m_PlayerExplosionPrefab, (Vector3)explosionRpc.Position,
+                        Quaternion.identity);
+                }
+            }
+
             while (GhostGameObject.ConsumeRPC(out ClientSpawnVfxRpc rpc))
             {
                 int localPlayerNetworkId = -1;

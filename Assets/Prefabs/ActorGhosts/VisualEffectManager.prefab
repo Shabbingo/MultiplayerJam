@@ -47,6 +47,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b46c84f205c485c91b4293f875c7910, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.VisualEffectManager
+  m_PlayerExplosionPrefab: {fileID: 6482109374650192837, guid: 4d3e503be2b2419f8ce7856c64a3e976, type: 3}
 --- !u!114 &2887222517406463671
 MonoBehaviour:
   m_ObjectHideFlags: 0

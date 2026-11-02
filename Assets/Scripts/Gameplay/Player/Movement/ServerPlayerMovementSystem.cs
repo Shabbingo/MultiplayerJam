@@ -52,6 +52,7 @@ namespace Unity.MP_FPS
         private readonly RaycastHit[] m_HitscanCastResults = new RaycastHit[32];
         private readonly Dictionary<Entity, float> m_ForcedFullSizeTimers = new();
         private readonly List<Entity> m_ForcedFullSizeEntitiesScratch = new();
+        private readonly HashSet<Entity> m_PendingSelfGrowthChecks = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
@@ -93,6 +94,7 @@ namespace Unity.MP_FPS
             m_ProcessedClientInputCommands.Dispose();
             m_ForcedFullSizeTimers.Clear();
             m_ForcedFullSizeEntitiesScratch.Clear();
+            m_PendingSelfGrowthChecks.Clear();
 
             var query = GetEntityQuery(typeof(PlayerControllerLink));
             foreach (var entity in query.ToEntityArray(Allocator.Temp))
@@ -522,6 +524,8 @@ namespace Unity.MP_FPS
                     for (int i = 0; i < predictedClient.InputCount; i++)
                     {
                         var commandInput = commands[i + predictedClient.BeginInputIndex];
+                        bool wasManuallyShrunk =
+                            predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
                         if (commandInput.TryGetPlayerMovementInput(predictedPlayer.ValueRO.InputIndex, out var input))
                         {
                             controllerLink.Controller.ProcessShrinkInput(
@@ -533,8 +537,22 @@ namespace Unity.MP_FPS
                                 controllerConsts.ValueRO.ControllerConsts, movementDt);
                         }
 
+                        bool selfInstagibbed = TryHandleSelfGrowthInObstruction(
+                            entity, wasManuallyShrunk, ref predictedPlayer.ValueRW);
+                        if (selfInstagibbed)
+                        {
+                            break;
+                        }
+
+                        wasManuallyShrunk =
+                            predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
                         controllerLink.Controller.UpdateShrinkResource(
                             ref predictedPlayer.ValueRW, movementDt);
+                        if (TryHandleSelfGrowthInObstruction(
+                                entity, wasManuallyShrunk, ref predictedPlayer.ValueRW))
+                        {
+                            break;
+                        }
                     }
 
                     if (predictedPlayer.ValueRW.ControllerState.JumpTriggered)
@@ -551,7 +569,11 @@ namespace Unity.MP_FPS
                 }
                 else
                 {
+                    bool wasManuallyShrunk =
+                        predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
                     controllerLink.Controller.UpdateShrinkResource(ref predictedPlayer.ValueRW, deltaTime);
+                    TryHandleSelfGrowthInObstruction(
+                        entity, wasManuallyShrunk, ref predictedPlayer.ValueRW);
                 }
             }
 
@@ -575,6 +597,12 @@ namespace Unity.MP_FPS
                 }
 
                 predictedPlayer.ValueRW.AccumulatedMovement = float3.zero;
+
+                if (m_PendingSelfGrowthChecks.Remove(entity) &&
+                    TryInstagibBlockedGrowth(entity, ref predictedPlayer.ValueRW))
+                {
+                    RecordSelfCrushDeath(entity);
+                }
             }
 
             bool checkForPredictionErrors = PlayerPredictionSystem.CheckForPredictionErrors.IsEnabled;
@@ -688,9 +716,95 @@ namespace Unity.MP_FPS
                 return;
             }
 
+            if (TryInstagibBlockedGrowth(targetEntity, ref player))
+            {
+                return;
+            }
+
             player.ControllerState.IsManualShrinkActive = false;
             player.ControllerState.IsForcedFullSize = true;
             m_ForcedFullSizeTimers[targetEntity] = Mathf.Max(0.1f, weaponData.ResizeEffectDuration);
+        }
+
+        private bool TryHandleSelfGrowthInObstruction(Entity playerEntity,
+            bool wasManuallyShrunk, ref PredictedPlayerGhost player)
+        {
+            if (!wasManuallyShrunk ||
+                player.ControllerState.IsManualShrinkActive ||
+                player.ControllerState.IsForcedFullSize)
+            {
+                return false;
+            }
+
+            if (!TryInstagibBlockedGrowth(playerEntity, ref player))
+            {
+                // Movement is applied later in this tick. Check again afterwards so
+                // jumping into a low frame during the growth tick cannot clip through.
+                m_PendingSelfGrowthChecks.Add(playerEntity);
+                return false;
+            }
+
+            RecordSelfCrushDeath(playerEntity);
+
+            return true;
+        }
+
+        private void RecordSelfCrushDeath(Entity playerEntity)
+        {
+            if (LeaderboardManager.Instance == null || !ghostOwnerLookup.HasComponent(playerEntity))
+            {
+                return;
+            }
+
+            int playerNetworkId = ghostOwnerLookup[playerEntity].NetworkId;
+            LeaderboardManager.Instance.AddDeath(playerNetworkId);
+            Debug.Log($"[Server] Player {playerNetworkId} was crushed while returning to full size.");
+        }
+
+        private bool TryInstagibBlockedGrowth(Entity playerEntity,
+            ref PredictedPlayerGhost player)
+        {
+            if (player.CurrentHealth <= 0f ||
+                !EntityManager.HasComponent<PlayerControllerLink>(playerEntity))
+            {
+                return false;
+            }
+
+            var controllerLink = EntityManager.GetComponentObject<PlayerControllerLink>(playerEntity);
+            if (controllerLink?.Controller == null)
+            {
+                return false;
+            }
+
+            if (controllerLink.Controller.TryFindFullSizeClearance(
+                    (Vector3)player.ControllerState.CurrentPosition,
+                    (Quaternion)player.ControllerState.CurrentRotation,
+                    out var positionAdjustment))
+            {
+                if (positionAdjustment.sqrMagnitude > 0f)
+                {
+                    controllerLink.Controller.transform.position += positionAdjustment;
+                    player.ControllerState.CurrentPosition += (float3)positionAdjustment;
+                }
+
+                return false;
+            }
+
+            player.CurrentHealth = 0f;
+            player.ControllerState.IsManualShrinkActive = false;
+            player.ControllerState.IsForcedFullSize = false;
+            player.ControllerState.IsHit = true;
+            m_ForcedFullSizeTimers.Remove(playerEntity);
+
+            if (VisualEffectManager.ServerInstance != null)
+            {
+                var explosionPosition = controllerLink.Controller.transform.position +
+                                        controllerLink.Controller.transform.up;
+                VisualEffectManager.ServerInstance.Server_RequestPlayerExplosion(
+                    explosionPosition);
+            }
+
+            return true;
         }
 
         private void UpdateForcedFullSizeEffects(float deltaTime)
