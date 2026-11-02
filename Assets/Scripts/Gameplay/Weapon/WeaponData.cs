@@ -62,6 +62,30 @@ namespace Unity.MP_FPS
         public float AoeRadius = 5f;
         public float ProjectileSpeed = 30f;
 
+        [Header("Grenade Projectile")]
+        [Tooltip("Launches this projectile in an arc and allows it to bounce before impact detonation.")]
+        public bool IsLobbedProjectile;
+
+        [Min(0f)]
+        [Tooltip("Extra upward launch velocity added to the projectile.")]
+        public float LobUpwardSpeed = 8f;
+
+        [Min(0f)]
+        [Tooltip("Downward acceleration applied to a lobbed projectile.")]
+        public float ProjectileGravity = 20f;
+
+        [Min(0)]
+        [Tooltip("Number of map-geometry impacts that bounce before the next impact detonates.")]
+        public int ProjectileBounces = 1;
+
+        [Range(0f, 1f)]
+        [Tooltip("Percentage of projectile velocity retained after each bounce.")]
+        public float BounceVelocityRetention = 0.65f;
+
+        [Min(0.1f)]
+        [Tooltip("Maximum flight time before the projectile automatically detonates.")]
+        public float ProjectileFuseTime = 5f;
+
     }
 
     public enum ProjectileBehavior

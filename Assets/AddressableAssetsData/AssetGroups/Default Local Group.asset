@@ -15,6 +15,11 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: 92b6b833b5f846f45bbe32bd85d5ee8d
   m_SerializeEntries:
+  - m_GUID: 4f6a8c2d1e3b4a5c9d807162534bf0ae
+    m_Address: Assets/Prefabs/Effects/ResizeAoeExplosion.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 38ee40c188d217c4fbd0f86d3a8afe09
     m_Address: Assets/Prefabs/ActorGhosts/Projectile_Resize.prefab
     m_ReadOnly: 0

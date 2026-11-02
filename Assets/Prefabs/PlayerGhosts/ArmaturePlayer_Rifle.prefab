@@ -212,11 +212,47 @@ MonoBehaviour:
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
   m_ManualShrinkHealthMultiplier: 0.2
   m_MaxShrinkResource: 5
-  m_ShrinkActivationCost: 1
+  m_ShrinkActivationCost: 0.5
   m_ShrinkDrainRate: 1
-  m_ShrinkRefillRate: 0.2
+  m_ShrinkRefillRate: 0.05
   m_SizeMovementSpeedInfluence: 0.75
   m_SizeJumpHeightInfluence: 0.75
+  m_AirborneRecoilImpulse: 1
+  m_RecoilIntensityBySize:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0.15
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.7
+      value: 0.5
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 6
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  m_AirborneRecoilDamping: 0.35
+  m_MaxAirborneRecoilSpeed: 20
   m_ResizeObstructionLayers:
     serializedVersion: 2
     m_Bits: 129
@@ -310,6 +346,10 @@ MonoBehaviour:
   minIntensity: 0.4
   maxIntensity: 0.8
   fadeSpeed: 2
+  bloodHitEffectPrefab: {fileID: 7239146502817401001, guid: c6a58fcb036148ac9c0cb15ef18dd45d, type: 3}
+  bloodHitLocalOffset: {x: 0, y: 0.9, z: 0}
+  bloodHitEffectScale: 0.35
+  bloodHitEffectLifetime: 0.5
 --- !u!1 &4657941816999191273
 GameObject:
   m_ObjectHideFlags: 0

@@ -249,7 +249,12 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
                                 float3 eyePosition = playerGhost.CameraTarget.position;
                                 var aimDirection = math.mul(aimRotation, new float3(0, 0, 1));
-                                var shotOriginPosition = playerGhost.VisualShotOrigin1P.position;
+                                // Match the server's deterministic projectile origin. The rendered
+                                // weapon muzzle can be animation-offset and does not exist at the
+                                // same position in the server world.
+                                var shotOriginPosition = eyePosition + aimDirection * 0.5f;
+                                controllerLink.Controller.ApplyAirborneShotThrust(
+                                    ref predictedPlayer.ValueRW, aimDirection);
                                     
                                 if (VisualEffectManager.ClientInstance != null)
                                 {
@@ -281,7 +286,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         targetPoint = eyePosition + 1000f * aimDirection;
                                     }
 
-                                    var directionToTarget = (targetPoint - shotOriginPosition).normalized;
+                                    var directionToTarget = weaponData.IsLobbedProjectile
+                                        ? (Vector3)aimDirection
+                                        : (targetPoint - (Vector3)shotOriginPosition).normalized;
                                     var spawnRotation = Quaternion.LookRotation(directionToTarget);
 
                                     controllerLink.Controller.SpawnPredictedProjectile(
@@ -304,6 +311,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 speedMultiplier,
                                 jumpHeightMultiplier,
                                 accumulateDT);
+                            controllerLink.Controller.AccumulateAirborneThrust(
+                                ref predictedPlayer.ValueRW, accumulateDT);
                             
                             if (predictedPlayer.ValueRW.ControllerState.JumpTriggered)
                             {

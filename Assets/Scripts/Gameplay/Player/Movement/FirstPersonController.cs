@@ -30,6 +30,19 @@ public class FirstPersonController : MonoBehaviour
     [SerializeField, Range(0f, 1f), Tooltip("How strongly player size affects jump height. At 1, a 50% sized player jumps 50% as high; at 0, size has no effect.")]
     private float m_SizeJumpHeightInfluence = 1f;
 
+    [Header("Airborne Weapon Thruster")]
+    [SerializeField, Min(0f), Tooltip("Thrust velocity added opposite the firing direction for every shot while airborne. This does not depend on the shot hitting anything.")]
+    private float m_AirborneRecoilImpulse = 4f;
+    [SerializeField, Tooltip("Thrust multiplier by player size. X is 0 at full size and 1 at minimum size; Y is the thrust multiplier.")]
+    private AnimationCurve m_RecoilIntensityBySize = new(
+        new Keyframe(0f, 0.15f),
+        new Keyframe(0.7f, 0.5f),
+        new Keyframe(1f, 3f));
+    [SerializeField, Min(0f), Tooltip("Air resistance applied to airborne thrust momentum. Lower values allow the player to coast and fling farther.")]
+    private float m_AirborneRecoilDamping = 0.35f;
+    [SerializeField, Min(0.1f), Tooltip("Maximum thrust speed that can be accumulated by repeatedly firing while airborne.")]
+    private float m_MaxAirborneRecoilSpeed = 60f;
+
     [Header("Forced Resize Clearance")]
     [SerializeField, Tooltip("Map layers that can crush a player when they are forced to full size.")]
     private LayerMask m_ResizeObstructionLayers = 129;
@@ -567,6 +580,38 @@ public class FirstPersonController : MonoBehaviour
                 predictedPlayer.CurrentHealth / m_ManualShrinkHealthMultiplier);
     }
 
+    public bool CanRestoreHealth(in PredictedPlayerGhost predictedPlayer)
+    {
+        if (predictedPlayer.MaxHealth <= 0f || predictedPlayer.CurrentHealth <= 0f)
+        {
+            return false;
+        }
+
+        float healthScale = predictedPlayer.ControllerState.IsManualShrinkActive &&
+                            !predictedPlayer.ControllerState.IsForcedFullSize
+            ? m_ManualShrinkHealthMultiplier
+            : 1f;
+        return predictedPlayer.CurrentHealth < predictedPlayer.MaxHealth * healthScale;
+    }
+
+    public bool TryRestoreHealth(ref PredictedPlayerGhost predictedPlayer, float fullSizeHealAmount)
+    {
+        if (!CanRestoreHealth(in predictedPlayer) || fullSizeHealAmount <= 0f)
+        {
+            return false;
+        }
+
+        float healthScale = predictedPlayer.ControllerState.IsManualShrinkActive &&
+                            !predictedPlayer.ControllerState.IsForcedFullSize
+            ? m_ManualShrinkHealthMultiplier
+            : 1f;
+        float scaledMaxHealth = predictedPlayer.MaxHealth * healthScale;
+        predictedPlayer.CurrentHealth = Mathf.Min(
+            scaledMaxHealth,
+            predictedPlayer.CurrentHealth + fullSizeHealAmount * healthScale);
+        return true;
+    }
+
     public void InitializeShrinkResource(ref PredictedPlayerGhost predictedPlayer)
     {
         if (predictedPlayer.MaxShrinkResource > 0f)
@@ -673,6 +718,45 @@ public class FirstPersonController : MonoBehaviour
 
         speedMultiplier = Mathf.Lerp(1f, sizeMultiplier, m_SizeMovementSpeedInfluence);
         jumpHeightMultiplier = Mathf.Lerp(1f, sizeMultiplier, m_SizeJumpHeightInfluence);
+    }
+
+    public void ApplyAirborneShotThrust(ref PredictedPlayerGhost predictedPlayer,
+        float3 firingDirection)
+    {
+        float sizeMultiplier = m_PlayerGhost != null
+            ? m_PlayerGhost.GetTargetScaleMultiplier(in predictedPlayer)
+            : 1f;
+        float minimumScale = m_PlayerGhost != null ? m_PlayerGhost.MinimumPlayerScale : 0.2f;
+        float smallness = Mathf.InverseLerp(1f, minimumScale, sizeMultiplier);
+        float recoilMultiplier = m_RecoilIntensityBySize != null
+            ? Mathf.Max(0f, m_RecoilIntensityBySize.Evaluate(smallness))
+            : 1f;
+        float3 recoilDirection = -math.normalizesafe(firingDirection);
+
+        predictedPlayer.RecoilVelocity += recoilDirection *
+                                          (m_AirborneRecoilImpulse * recoilMultiplier);
+        float recoilSpeed = math.length(predictedPlayer.RecoilVelocity);
+        if (recoilSpeed > m_MaxAirborneRecoilSpeed)
+        {
+            predictedPlayer.RecoilVelocity = predictedPlayer.RecoilVelocity / recoilSpeed *
+                                             m_MaxAirborneRecoilSpeed;
+        }
+    }
+
+    public void AccumulateAirborneThrust(ref PredictedPlayerGhost predictedPlayer, float deltaTime)
+    {
+        if (predictedPlayer.ControllerState.MovementType == MovementType.Standing)
+        {
+            predictedPlayer.RecoilVelocity = float3.zero;
+            return;
+        }
+
+        predictedPlayer.AccumulatedMovement += predictedPlayer.RecoilVelocity * deltaTime;
+        predictedPlayer.RecoilVelocity *= math.exp(-m_AirborneRecoilDamping * deltaTime);
+        if (math.lengthsq(predictedPlayer.RecoilVelocity) < 0.0001f)
+        {
+            predictedPlayer.RecoilVelocity = float3.zero;
+        }
     }
 
     public void ApplyMovementUpdate(ref ControllerState state, in ControllerConsts consts,
@@ -993,6 +1077,11 @@ public class FirstPersonController : MonoBehaviour
         // Hit Reaction
         if (ghostState.LastHitTick > _lastProcessedHitTick)
         {
+            if (m_DamageVisualsController != null)
+            {
+                m_DamageVisualsController.SpawnBloodHitEffect();
+            }
+
             if (m_PlayerGhost.Role == MultiplayerRole.ClientOwned)
             {
                 if (m_EnableAnimationLogging)

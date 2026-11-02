@@ -18,6 +18,7 @@ namespace Unity.MP_FPS
         [SerializeField] private GameObject m_OtherPlayerVisuals;
         [SerializeField] private SoundDef m_SpawnSFX;
         [SerializeField, Range(0.1f, 1f)] private float m_MinimumPlayerScale = 0.5f;
+        public float MinimumPlayerScale => m_MinimumPlayerScale;
         [SerializeField, Min(0.01f)] private float m_ManualScaleTransitionSpeed = 4f;
         [field: SerializeField] public Transform CameraTarget { get; private set; }
         [field: SerializeField] public Transform ReticlePoint { get; private set; }

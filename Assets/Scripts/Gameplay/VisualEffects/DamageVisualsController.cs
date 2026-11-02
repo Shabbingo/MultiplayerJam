@@ -16,6 +16,14 @@ namespace Unity.MP_FPS
         [Header("Effect Parameters")] [SerializeField]
         private float fadeSpeed = 2f;
 
+        [Header("Blood Hit Effect")]
+        [SerializeField, Tooltip("Replaceable world-space effect spawned when this player is hit.")]
+        private GameObject bloodHitEffectPrefab;
+        [SerializeField, Tooltip("Local-space position of the blood effect on the player.")]
+        private Vector3 bloodHitLocalOffset = new(0f, 0.9f, 0f);
+        [SerializeField, Min(0.01f)] private float bloodHitEffectScale = 0.35f;
+        [SerializeField, Min(0.05f)] private float bloodHitEffectLifetime = 0.5f;
+
         private FullScreenPassWrapper _damagePass;
         private Material _runtimeDamageMaterial;
         private PlayerGhost _playerGhost; // To get a reference to this player's camera
@@ -80,6 +88,31 @@ namespace Unity.MP_FPS
             _currentIntensity = Mathf.Max(_currentIntensity, visualIntensity);
 
             UpdateVignetteMaterial();
+        }
+
+        public void SpawnBloodHitEffect()
+        {
+            if (bloodHitEffectPrefab == null)
+            {
+                return;
+            }
+
+            var instance = Instantiate(
+                bloodHitEffectPrefab,
+                transform.TransformPoint(bloodHitLocalOffset),
+                Random.rotation);
+            float playerScale = Mathf.Max(
+                Mathf.Abs(transform.lossyScale.x),
+                Mathf.Abs(transform.lossyScale.y),
+                Mathf.Abs(transform.lossyScale.z));
+            instance.transform.localScale *= bloodHitEffectScale * playerScale;
+
+            if (!instance.TryGetComponent(out DestroyAfterDelay destroyAfterDelay))
+            {
+                destroyAfterDelay = instance.AddComponent<DestroyAfterDelay>();
+            }
+
+            destroyAfterDelay.Lifetime = bloodHitEffectLifetime;
         }
 
         /// <summary>

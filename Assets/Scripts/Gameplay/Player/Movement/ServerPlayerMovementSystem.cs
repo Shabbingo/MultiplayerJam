@@ -423,6 +423,8 @@ namespace Unity.MP_FPS
                             float3 eyePosition = playerGhost.CameraTarget.position;
                             float3 aimDirection = math.mul(aimRotation, new float3(0, 0, 1));
                             float3 shotOriginPosition = eyePosition + aimDirection * 0.5f;
+                            playerGhost.Controller.ApplyAirborneShotThrust(
+                                ref predictedPlayer.ValueRW, aimDirection);
 
                             if (VisualEffectManager.ServerInstance != null)
                             {
@@ -517,8 +519,9 @@ namespace Unity.MP_FPS
                                         }
 
                                         // Use calculated shotOriginPosition for direction calculation
-                                        Vector3 directionToTarget =
-                                            (targetPoint - (Vector3)shotOriginPosition).normalized;
+                                        Vector3 directionToTarget = weaponData.IsLobbedProjectile
+                                            ? (Vector3)aimDirection
+                                            : (targetPoint - (Vector3)shotOriginPosition).normalized;
                                         Quaternion spawnRotation = Quaternion.LookRotation(directionToTarget);
 
                                         projectileSpawnList.Add(new ProjectileSpawnData
@@ -609,6 +612,8 @@ namespace Unity.MP_FPS
                                 speedMultiplier,
                                 jumpHeightMultiplier,
                                 movementDt);
+                            controllerLink.Controller.AccumulateAirborneThrust(
+                                ref predictedPlayer.ValueRW, movementDt);
                         }
 
                         bool selfInstagibbed = TryHandleSelfGrowthInObstruction(

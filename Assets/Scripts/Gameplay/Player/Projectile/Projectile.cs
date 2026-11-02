@@ -20,6 +20,14 @@ namespace Unity.MP_FPS
         private readonly Collider[] _overlapResults = new Collider[16];
         private readonly RaycastHit[] _castResults = new RaycastHit[16];
         private readonly HashSet<Entity> _aoeHitEntities = new HashSet<Entity>();
+        private const float ProjectileRadius = 0.2f;
+        private const float BounceSurfaceOffset = 0.025f;
+        private const float BounceCollisionGrace = 0.04f;
+
+        private Vector3 _velocity;
+        private bool _motionInitialized;
+        private int _bounceCount;
+        private float _collisionGraceTimer;
 
         // Holds the projectile's networked state
         public struct ProjectileData : IComponentData
@@ -45,13 +53,17 @@ namespace Unity.MP_FPS
             if (GhostGameObject == null || !GhostGameObject.IsGhostLinked())
             {
                 var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(_weaponId);
-                Move(Time.deltaTime, weaponData.ProjectileSpeed);
+                if (weaponData != null)
+                {
+                    SimulateCosmeticProjectile(Time.deltaTime, weaponData);
+                }
             }
         }
 
         public void SetWeaponId(uint weaponId)
         {
             _weaponId = weaponId;
+            _motionInitialized = false;
         }
 
         private float _localTime;
@@ -61,44 +73,122 @@ namespace Unity.MP_FPS
         {
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             _weaponId = projectileData.WeaponID;
+            _motionInitialized = false;
         }
 
         public void UpdateServer(float deltaTime)
         {
             var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(_weaponId);
-
-            // Test the segment the projectile is about to travel. The previous implementation
-            // moved first and cast forward from the new position, which skipped close targets.
-            if (CheckForCollision(weaponData, deltaTime))
+            if (weaponData == null)
             {
                 return;
             }
 
-            Move(deltaTime, weaponData.ProjectileSpeed);
+            EnsureMotionInitialized(weaponData);
+            UpdateVelocity(deltaTime, weaponData);
+            _collisionGraceTimer = Mathf.Max(0f, _collisionGraceTimer - deltaTime);
+            Vector3 displacement = _velocity * deltaTime;
+
+            // Test the segment the projectile is about to travel. The previous implementation
+            // moved first and cast forward from the new position, which skipped close targets.
+            if (CheckForCollision(weaponData, displacement))
+            {
+                return;
+            }
+
+            Move(displacement);
 
             _localTime += deltaTime;
-            if (_localTime > 5f)
+            if (_localTime > weaponData.ProjectileFuseTime)
             {
-                GhostGameObject.DestroyEntity();
+                DetonateFromFuse(weaponData);
                 return;
             }
         }
 
-        private void Move(float deltaTime, float speed)
+        private void EnsureMotionInitialized(WeaponData weaponData)
         {
-            transform.position += transform.forward * (speed * deltaTime);
+            if (_motionInitialized)
+            {
+                return;
+            }
+
+            _velocity = transform.forward * weaponData.ProjectileSpeed;
+            if (weaponData.IsLobbedProjectile)
+            {
+                _velocity += Vector3.up * weaponData.LobUpwardSpeed;
+            }
+
+            _motionInitialized = true;
+        }
+
+        private void UpdateVelocity(float deltaTime, WeaponData weaponData)
+        {
+            if (weaponData.IsLobbedProjectile)
+            {
+                _velocity += Vector3.down * (weaponData.ProjectileGravity * deltaTime);
+            }
+        }
+
+        private void Move(Vector3 displacement)
+        {
+            transform.position += displacement;
+            if (_velocity.sqrMagnitude > 0.0001f)
+            {
+                transform.rotation = Quaternion.LookRotation(_velocity.normalized);
+            }
         }
 
         public void UpdateClient(float deltaTime)
         {
             var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(_weaponId);
-            Move(deltaTime, weaponData.ProjectileSpeed);
+            if (weaponData != null)
+            {
+                SimulateCosmeticProjectile(deltaTime, weaponData);
+            }
         }
 
-        private bool CheckForCollision(WeaponData weaponData, float deltaTime)
+        private void SimulateCosmeticProjectile(float deltaTime, WeaponData weaponData)
         {
-            const float projectileRadius = 0.2f;
-            float distanceThisFrame = weaponData.ProjectileSpeed * deltaTime;
+            EnsureMotionInitialized(weaponData);
+            UpdateVelocity(deltaTime, weaponData);
+            _collisionGraceTimer = Mathf.Max(0f, _collisionGraceTimer - deltaTime);
+            Vector3 displacement = _velocity * deltaTime;
+
+            if (weaponData.IsLobbedProjectile && _collisionGraceTimer <= 0f &&
+                displacement.sqrMagnitude > 0.000001f &&
+                UnityEngine.Physics.SphereCast(
+                    transform.position,
+                    ProjectileRadius,
+                    displacement.normalized,
+                    out RaycastHit hit,
+                    displacement.magnitude,
+                    LayerMask.GetMask("Ground", "Default"),
+                    QueryTriggerInteraction.Ignore))
+            {
+                if (TryBounce(hit.point, hit.normal, weaponData))
+                {
+                    return;
+                }
+
+                transform.position = hit.point + hit.normal * BounceSurfaceOffset;
+                _velocity = Vector3.zero;
+                return;
+            }
+
+            Move(displacement);
+            _localTime += deltaTime;
+        }
+
+        private bool CheckForCollision(WeaponData weaponData, Vector3 displacement)
+        {
+            if (_collisionGraceTimer > 0f || displacement.sqrMagnitude <= 0.000001f)
+            {
+                return false;
+            }
+
+            Vector3 travelDirection = displacement.normalized;
+            float distanceThisFrame = displacement.magnitude;
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             var world = GhostGameObject.World;
             var movementSystem = world.GetExistingSystemManaged<ServerPlayerMovementSystem>();
@@ -109,7 +199,7 @@ namespace Unity.MP_FPS
             // Check initial overlaps first, skipping the shooter's own controller.
             int overlapCount = UnityEngine.Physics.OverlapSphereNonAlloc(
                 transform.position,
-                projectileRadius,
+                ProjectileRadius,
                 _overlapResults,
                 _hitLayerMask,
                 QueryTriggerInteraction.Ignore);
@@ -128,7 +218,7 @@ namespace Unity.MP_FPS
                 if (hitCollider.gameObject.layer == LayerMask.NameToLayer("ServerPlayer"))
                 {
                     var impactPosition = hitCollider.ClosestPoint(transform.position);
-                    HandleCollision(hitCollider, impactPosition, -transform.forward, weaponData,
+                    HandleCollision(hitCollider, impactPosition, -travelDirection, weaponData,
                         projectileData, world, playerGhostLookup, ghostOwnerLookup);
                     return true;
                 }
@@ -139,15 +229,21 @@ namespace Unity.MP_FPS
             if (overlappingGeometry != null)
             {
                 var impactPosition = overlappingGeometry.ClosestPoint(transform.position);
-                HandleCollision(overlappingGeometry, impactPosition, -transform.forward, weaponData,
+                Vector3 impactNormal = (transform.position - impactPosition).normalized;
+                if (TryBounce(impactPosition, impactNormal, weaponData))
+                {
+                    return true;
+                }
+
+                HandleCollision(overlappingGeometry, impactPosition, -travelDirection, weaponData,
                     projectileData, world, playerGhostLookup, ghostOwnerLookup);
                 return true;
             }
 
             int castCount = UnityEngine.Physics.SphereCastNonAlloc(
                 transform.position,
-                projectileRadius,
-                transform.forward,
+                ProjectileRadius,
+                travelDirection,
                 _castResults,
                 distanceThisFrame,
                 _hitLayerMask,
@@ -176,9 +272,67 @@ namespace Unity.MP_FPS
                 return false;
             }
 
+            if (closestHit.collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") &&
+                TryBounce(closestHit.point, closestHit.normal, weaponData))
+            {
+                return true;
+            }
+
             HandleCollision(closestHit.collider, closestHit.point, closestHit.normal, weaponData,
                 projectileData, world, playerGhostLookup, ghostOwnerLookup);
             return true;
+        }
+
+        private bool TryBounce(Vector3 impactPosition, Vector3 impactNormal, WeaponData weaponData)
+        {
+            if (!weaponData.IsLobbedProjectile || _bounceCount >= weaponData.ProjectileBounces)
+            {
+                return false;
+            }
+
+            Vector3 normal = impactNormal.sqrMagnitude > 0.0001f
+                ? impactNormal.normalized
+                : -_velocity.normalized;
+            transform.position = impactPosition + normal * (ProjectileRadius + BounceSurfaceOffset);
+            _velocity = Vector3.Reflect(_velocity, normal) * weaponData.BounceVelocityRetention;
+            _bounceCount++;
+            _collisionGraceTimer = BounceCollisionGrace;
+
+            if (_velocity.sqrMagnitude > 0.0001f)
+            {
+                transform.rotation = Quaternion.LookRotation(_velocity.normalized);
+            }
+
+            return true;
+        }
+
+        private void DetonateFromFuse(WeaponData weaponData)
+        {
+            var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+            var world = GhostGameObject.World;
+            var movementSystem = world.GetExistingSystemManaged<ServerPlayerMovementSystem>();
+            var playerGhostLookup = movementSystem.GetComponentLookup<PredictedPlayerGhost>();
+            var ghostOwnerLookup = movementSystem.GetComponentLookup<GhostOwner>();
+            Vector3 detonationPosition = transform.position;
+
+            if (weaponData.Behavior == ProjectileBehavior.AreaOfEffect)
+            {
+                HandleAreaOfEffectImpact(detonationPosition, weaponData, projectileData, world,
+                    playerGhostLookup, ghostOwnerLookup);
+            }
+            else
+            {
+                DrawGizmoAtPosition(detonationPosition);
+                GhostGameObject.DestroyEntity();
+            }
+
+            if (weaponData.ProjectileHitVfxPrefab != null)
+            {
+                Vector3 effectDirection = _velocity.sqrMagnitude > 0.0001f
+                    ? -_velocity.normalized
+                    : Vector3.up;
+                SpawnImpactEffect(weaponData, detonationPosition, effectDirection);
+            }
         }
 
         private static bool IsOwnerCollider(Collider collider, in ProjectileData projectileData,
@@ -218,9 +372,21 @@ namespace Unity.MP_FPS
             if (weaponData.ProjectileHitVfxPrefab != null)
             {
                 var normal = impactNormal.sqrMagnitude > 0.0001f ? impactNormal : -transform.forward;
-                GhostSpawner.SpawnGhostPrefab(weaponData.ProjectileHitVfxPrefab, impactPosition,
-                    Quaternion.LookRotation(normal), GhostGameObject.GenerateRandomHash());
+                SpawnImpactEffect(weaponData, impactPosition, normal);
             }
+        }
+
+        private static void SpawnImpactEffect(WeaponData weaponData, Vector3 position,
+            Vector3 effectDirection)
+        {
+            float effectScale = weaponData.Behavior == ProjectileBehavior.AreaOfEffect
+                ? Mathf.Max(0.01f, weaponData.AoeRadius)
+                : 1f;
+            GhostSpawner.SpawnGhostPrefab(weaponData.ProjectileHitVfxPrefab,
+                position,
+                Quaternion.LookRotation(effectDirection),
+                GhostGameObject.GenerateRandomHash(),
+                effectScale);
         }
 
         private void HandleAreaOfEffectImpact(Vector3 impactPosition, WeaponData weaponData,
