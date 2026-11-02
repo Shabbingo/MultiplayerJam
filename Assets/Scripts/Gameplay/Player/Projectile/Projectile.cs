@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System;
 using Gameplay.Leaderboard;
 using Unity.Entities;
+using Unity.Mathematics;
 using Unity.NetCode;
 using UnityEngine;
 
@@ -23,6 +24,7 @@ namespace Unity.MP_FPS
         private const float ProjectileRadius = 0.2f;
         private const float BounceSurfaceOffset = 0.025f;
         private const float BounceCollisionGrace = 0.04f;
+        private const float HardReconciliationDistance = 2f;
 
         private Vector3 _velocity;
         private bool _motionInitialized;
@@ -35,6 +37,11 @@ namespace Unity.MP_FPS
             [GhostField] public int OwnerNetworkId;
             [GhostField] public uint SpawnTick;
             [GhostField] public uint WeaponID;
+            [GhostField] public float3 Position;
+            [GhostField] public float3 Velocity;
+            [GhostField] public int BounceCount;
+            [GhostField] public float Age;
+            [GhostField] public uint MotionRevision;
         }
 
         public class PredictedProjectileInfo
@@ -68,12 +75,13 @@ namespace Unity.MP_FPS
 
         private float _localTime;
         private uint _weaponId;
+        private uint _lastServerMotionRevision;
 
         public override void OnGhostLinked()
         {
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             _weaponId = projectileData.WeaponID;
-            _motionInitialized = false;
+            ApplyServerMotionState(projectileData);
         }
 
         public void UpdateServer(float deltaTime)
@@ -99,6 +107,7 @@ namespace Unity.MP_FPS
             Move(displacement);
 
             _localTime += deltaTime;
+            PublishServerMotionState();
             if (_localTime > weaponData.ProjectileFuseTime)
             {
                 DetonateFromFuse(weaponData);
@@ -141,6 +150,12 @@ namespace Unity.MP_FPS
 
         public void UpdateClient(float deltaTime)
         {
+            if (GhostGameObject != null && GhostGameObject.IsGhostLinked())
+            {
+                var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+                ApplyServerMotionState(projectileData);
+            }
+
             var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(_weaponId);
             if (weaponData != null)
             {
@@ -171,7 +186,8 @@ namespace Unity.MP_FPS
                     return;
                 }
 
-                transform.position = hit.point + hit.normal * BounceSurfaceOffset;
+                transform.position = hit.point + hit.normal *
+                    (ProjectileRadius + BounceSurfaceOffset);
                 _velocity = Vector3.zero;
                 return;
             }
@@ -303,7 +319,75 @@ namespace Unity.MP_FPS
                 transform.rotation = Quaternion.LookRotation(_velocity.normalized);
             }
 
+            PublishServerMotionState();
+
             return true;
+        }
+
+        private void PublishServerMotionState()
+        {
+            if (GhostGameObject == null || !GhostGameObject.IsGhostLinked() ||
+                GhostGameObject.Role != MultiplayerRole.Server)
+            {
+                return;
+            }
+
+            var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+            projectileData.Position = transform.position;
+            projectileData.Velocity = _velocity;
+            projectileData.BounceCount = _bounceCount;
+            projectileData.Age = _localTime;
+            projectileData.MotionRevision++;
+            GhostGameObject.WriteGhostComponentData(projectileData);
+        }
+
+        private void ApplyServerMotionState(in ProjectileData projectileData)
+        {
+            if (GhostGameObject == null || GhostGameObject.Role == MultiplayerRole.Server ||
+                projectileData.MotionRevision == 0 ||
+                projectileData.MotionRevision == _lastServerMotionRevision)
+            {
+                return;
+            }
+
+            Vector3 serverPosition = projectileData.Position;
+            bool isFirstServerState = _lastServerMotionRevision == 0;
+            bool isLocallyPredicted = GhostGameObject.Role == MultiplayerRole.ClientOwned;
+
+            // The owning client is deliberately ahead of received snapshots by its
+            // network latency. Treating that lead as position error causes repeated
+            // backwards snaps at projectile speeds. Its launch data now matches the
+            // server, so let prediction remain continuous and use the server only for
+            // authoritative collision, damage, explosion and despawn.
+            if (isLocallyPredicted)
+            {
+                _lastServerMotionRevision = projectileData.MotionRevision;
+                return;
+            }
+
+            bool bounceStateChanged = projectileData.BounceCount != _bounceCount;
+            bool hasLargePositionError =
+                (transform.position - serverPosition).sqrMagnitude >
+                HardReconciliationDistance * HardReconciliationDistance;
+
+            // Normal snapshots are usually an interpolation tick or two behind the
+            // locally simulated visual. Applying every one causes visible backwards
+            // snaps. Only correct meaningful divergence or an authoritative bounce.
+            if (isFirstServerState || bounceStateChanged || hasLargePositionError)
+            {
+                transform.position = serverPosition;
+                _velocity = projectileData.Velocity;
+                _bounceCount = projectileData.BounceCount;
+                _localTime = projectileData.Age;
+                _motionInitialized = true;
+
+                if (_velocity.sqrMagnitude > 0.0001f)
+                {
+                    transform.rotation = Quaternion.LookRotation(_velocity.normalized);
+                }
+            }
+
+            _lastServerMotionRevision = projectileData.MotionRevision;
         }
 
         private void DetonateFromFuse(WeaponData weaponData)

@@ -71,4 +71,4 @@ MonoBehaviour:
   ProjectileGravity: 15.1
   ProjectileBounces: 1
   BounceVelocityRetention: 0.65
-  ProjectileFuseTime: 5
+  ProjectileFuseTime: 3

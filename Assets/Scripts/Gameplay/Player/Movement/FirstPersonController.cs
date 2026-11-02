@@ -2,6 +2,8 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using Unity.Collections;
+using Unity.Entities;
 using Unity.MP_FPS;
 using Unity.Mathematics;
 using Unity.NetCode;
@@ -1522,6 +1524,17 @@ public class FirstPersonController : MonoBehaviour
                 return;
             }
 
+            // Addressable instantiation is asynchronous. On a sufficiently fast
+            // connection the authoritative ghost can already have its GameObject by
+            // the time this predicted visual finishes loading. Keeping both produces
+            // a double image/jitter immediately after firing.
+            if (AuthoritativeProjectileAlreadyLinked(spawnTick, weaponId))
+            {
+                predictedProjectile.SetActive(false);
+                Destroy(predictedProjectile);
+                return;
+            }
+
             predictedProjectile.transform.parent =
                 GhostBridgeBootstrap.Instance.ClientGameObjectHierarchy.transform;
 
@@ -1540,6 +1553,41 @@ public class FirstPersonController : MonoBehaviour
         {
             Debug.LogException(e);
         }
+    }
+
+    private static bool AuthoritativeProjectileAlreadyLinked(uint spawnTick, uint weaponId)
+    {
+        var clientWorld = GhostBridgeBootstrap.Instance?.ClientWorld;
+        if (clientWorld == null || !clientWorld.IsCreated)
+        {
+            return false;
+        }
+
+        var entityManager = clientWorld.EntityManager;
+        using var networkIdQuery = entityManager.CreateEntityQuery(
+            ComponentType.ReadOnly<NetworkId>());
+        if (networkIdQuery.IsEmptyIgnoreFilter)
+        {
+            return false;
+        }
+
+        int localNetworkId = networkIdQuery.GetSingleton<NetworkId>().Value;
+        using var projectileQuery = entityManager.CreateEntityQuery(
+            ComponentType.ReadOnly<Projectile.ProjectileData>(),
+            ComponentType.ReadOnly<GhostGameObjectLink>());
+        using var projectileData = projectileQuery.ToComponentDataArray<Projectile.ProjectileData>(
+            Allocator.Temp);
+
+        foreach (var data in projectileData)
+        {
+            if (data.SpawnTick == spawnTick && data.WeaponID == weaponId &&
+                data.OwnerNetworkId == localNetworkId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool AccumulateJump(ref ControllerState state, in PlayerInput input, in ControllerConsts consts,
