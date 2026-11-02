@@ -219,7 +219,7 @@ MonoBehaviour:
   m_SizeJumpHeightInfluence: 0.75
   m_ResizeBounceInputWindow: 0.3
   m_ResizeBounceSpeed: 10
-  m_ResizeBounceFovKick: 6
+  m_ResizeBounceFovKick: 10.95
   m_ResizeBounceFovDuration: 0.25
   m_AirborneRecoilImpulse: 1
   m_RecoilIntensityBySize:

@@ -1,5 +1,7 @@
 ﻿using UnityEngine;
 
+using UnityEngine.Serialization;
+
 namespace Unity.MP_FPS
 {
     public enum WeaponType
@@ -78,13 +80,37 @@ namespace Unity.MP_FPS
         [Tooltip("Number of map-geometry impacts that bounce before the next impact detonates.")]
         public int ProjectileBounces = 1;
 
+        [FormerlySerializedAs("BounceVelocityRetention")]
         [Range(0f, 1f)]
-        [Tooltip("Percentage of projectile velocity retained after the first bounce. A value of 0.35 keeps 35% of its impact speed.")]
-        public float BounceVelocityRetention = 0.65f;
+        [Tooltip("Percentage of the projectile's current velocity retained after its first bounce.")]
+        public float FirstBounceVelocityRetention = 0.65f;
+
+        [Range(0f, 1f)]
+        [Tooltip("Per-bounce velocity retention starting at bounce 2. Element 0 controls bounce 2, element 1 controls bounce 3, and so on. Extra bounces reuse the final value.")]
+        public float[] ConsecutiveBounceVelocityRetentions = { 0.65f };
 
         [Min(0.1f)]
         [Tooltip("Maximum flight time before the projectile automatically detonates.")]
         public float ProjectileFuseTime = 5f;
+
+        public float GetBounceVelocityRetention(int completedBounceCount)
+        {
+            if (completedBounceCount <= 0)
+            {
+                return Mathf.Clamp01(FirstBounceVelocityRetention);
+            }
+
+            if (ConsecutiveBounceVelocityRetentions == null ||
+                ConsecutiveBounceVelocityRetentions.Length == 0)
+            {
+                return Mathf.Clamp01(FirstBounceVelocityRetention);
+            }
+
+            int retentionIndex = Mathf.Min(
+                completedBounceCount - 1,
+                ConsecutiveBounceVelocityRetentions.Length - 1);
+            return Mathf.Clamp01(ConsecutiveBounceVelocityRetentions[retentionIndex]);
+        }
 
     }
 
