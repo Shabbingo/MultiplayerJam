@@ -212,8 +212,11 @@ MonoBehaviour:
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
   m_ManualShrinkHealthMultiplier: 0.2
   m_MaxShrinkResource: 5
+  m_ShrinkActivationCost: 1
   m_ShrinkDrainRate: 1
   m_ShrinkRefillRate: 0.2
+  m_SizeMovementSpeedInfluence: 0.75
+  m_SizeJumpHeightInfluence: 0.75
   m_ResizeObstructionLayers:
     serializedVersion: 2
     m_Bits: 129

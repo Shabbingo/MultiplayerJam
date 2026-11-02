@@ -250,16 +250,7 @@ namespace Unity.MP_FPS
                 return;
             }
 
-            var healthRatio = Mathf.Clamp01(
-                predictedPlayerGhost.CurrentHealth / predictedPlayerGhost.MaxHealth);
-            var healthScaleMultiplier = Mathf.Lerp(m_MinimumPlayerScale, 1f, healthRatio);
-
-            var controllerState = predictedPlayerGhost.ControllerState;
-            var targetScaleMultiplier = controllerState.IsForcedFullSize
-                ? 1f
-                : controllerState.IsManualShrinkActive
-                    ? m_MinimumPlayerScale
-                    : healthScaleMultiplier;
+            var targetScaleMultiplier = GetTargetScaleMultiplier(in predictedPlayerGhost);
             m_ManualScaleMultiplier = Mathf.MoveTowards(
                 m_ManualScaleMultiplier,
                 targetScaleMultiplier,
@@ -272,6 +263,25 @@ namespace Unity.MP_FPS
             {
                 transform.localScale = targetScale;
             }
+        }
+
+        public float GetTargetScaleMultiplier(in PredictedPlayerGhost predictedPlayerGhost)
+        {
+            if (predictedPlayerGhost.MaxHealth <= 0f)
+            {
+                return 1f;
+            }
+
+            var healthRatio = Mathf.Clamp01(
+                predictedPlayerGhost.CurrentHealth / predictedPlayerGhost.MaxHealth);
+            var healthScaleMultiplier = Mathf.Lerp(m_MinimumPlayerScale, 1f, healthRatio);
+            var controllerState = predictedPlayerGhost.ControllerState;
+
+            return controllerState.IsForcedFullSize
+                ? 1f
+                : controllerState.IsManualShrinkActive
+                    ? m_MinimumPlayerScale
+                    : healthScaleMultiplier;
         }
 
         public bool SetPlayerPositionFromRPC(float3 rpcPosition, float positionErrorSq)

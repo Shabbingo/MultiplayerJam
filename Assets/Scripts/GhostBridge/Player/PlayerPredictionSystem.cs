@@ -293,10 +293,17 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             }
 
                             FirstPersonController.ProcessInputs(ref predictedPlayer.ValueRW.ControllerState, input, accumulateDT);
+                            controllerLink.Controller.GetSizeMovementMultipliers(
+                                in predictedPlayer.ValueRO,
+                                out float speedMultiplier,
+                                out float jumpHeightMultiplier);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
-                                controllerConsts.ValueRO.ControllerConsts, accumulateDT);
+                                controllerConsts.ValueRO.ControllerConsts,
+                                speedMultiplier,
+                                jumpHeightMultiplier,
+                                accumulateDT);
                             
                             if (predictedPlayer.ValueRW.ControllerState.JumpTriggered)
                             {

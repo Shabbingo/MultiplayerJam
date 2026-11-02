@@ -531,10 +531,17 @@ namespace Unity.MP_FPS
                             controllerLink.Controller.ProcessShrinkInput(
                                 ref predictedPlayer.ValueRW, input);
 
+                            controllerLink.Controller.GetSizeMovementMultipliers(
+                                in predictedPlayer.ValueRO,
+                                out float speedMultiplier,
+                                out float jumpHeightMultiplier);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
-                                controllerConsts.ValueRO.ControllerConsts, movementDt);
+                                controllerConsts.ValueRO.ControllerConsts,
+                                speedMultiplier,
+                                jumpHeightMultiplier,
+                                movementDt);
                         }
 
                         bool selfInstagibbed = TryHandleSelfGrowthInObstruction(

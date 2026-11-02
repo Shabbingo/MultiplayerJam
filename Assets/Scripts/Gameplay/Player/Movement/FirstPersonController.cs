@@ -17,10 +17,18 @@ public class FirstPersonController : MonoBehaviour
     [Header("Shrink Resource")]
     [SerializeField, Min(0.1f), Tooltip("Maximum shrink resource. At a drain rate of 1, this is the number of seconds the player can remain small.")]
     private float m_MaxShrinkResource = 5f;
+    [SerializeField, Min(0f), Tooltip("One-time shrink resource cost paid when shrinking is activated. The player must have at least this much resource to shrink.")]
+    private float m_ShrinkActivationCost = 1f;
     [SerializeField, Min(0f), Tooltip("Shrink resource consumed per second while the player is small.")]
     private float m_ShrinkDrainRate = 1f;
     [SerializeField, Min(0f), Tooltip("Shrink resource restored per second while the player is normal-sized.")]
     private float m_ShrinkRefillRate = 1f;
+
+    [Header("Size-Based Movement")]
+    [SerializeField, Range(0f, 1f), Tooltip("How strongly player size affects movement speed. At 1, a 50% sized player moves at 50% speed; at 0, size has no effect.")]
+    private float m_SizeMovementSpeedInfluence = 1f;
+    [SerializeField, Range(0f, 1f), Tooltip("How strongly player size affects jump height. At 1, a 50% sized player jumps 50% as high; at 0, size has no effect.")]
+    private float m_SizeJumpHeightInfluence = 1f;
 
     [Header("Forced Resize Clearance")]
     [SerializeField, Tooltip("Map layers that can crush a player when they are forced to full size.")]
@@ -308,6 +316,9 @@ public class FirstPersonController : MonoBehaviour
 
     private const int k_NumPhysicsResults = 8;
     private readonly RaycastHit[] m_GroundCheckRaycastResults = new RaycastHit[k_NumPhysicsResults];
+    private const int k_NumResizePhysicsResults = 32;
+    private readonly Collider[] m_ResizeOverlapResults = new Collider[k_NumResizePhysicsResults];
+    private readonly RaycastHit[] m_ResizeCastResults = new RaycastHit[k_NumResizePhysicsResults];
 
     private const float k_DefaultSpeedChange = 20f;
 
@@ -391,18 +402,31 @@ public class FirstPersonController : MonoBehaviour
         var currentCapsuleAxis = capsuleUp *
                                  Mathf.Max(0f, currentHeight * 0.5f - currentRadius);
 
-        if (IsFullSizeCapsuleClear(worldCenter, capsuleAxis, radius))
-        {
-            return true;
-        }
-
         var currentTop = currentCenter + currentCapsuleAxis + capsuleUp * currentRadius;
         var fullSizeTop = worldCenter + capsuleAxis + capsuleUp * radius;
         float headProbeRadius = Mathf.Max(0.02f,
             Mathf.Min(currentRadius, radius) * 0.75f);
-        if (IsHeadExpansionBlocked(currentTop, fullSizeTop, capsuleUp, headProbeRadius))
+
+        // A low ceiling or window frame directly above the player's current head
+        // must crush them rather than letting the horizontal clearance search push
+        // them out. Keep this probe vertical so a wall in front is not mistaken for
+        // an overhead obstruction as the scaled capsule center moves forward.
+        float verticalHeadExpansion = Mathf.Max(0f,
+            Vector3.Dot(fullSizeTop - currentTop, capsuleUp));
+        var verticalFullSizeTop = currentTop + capsuleUp * verticalHeadExpansion;
+        if (IsHeadExpansionBlocked(
+                currentTop,
+                verticalFullSizeTop,
+                capsuleUp,
+                headProbeRadius))
         {
             return false;
+        }
+
+        if (IsFullSizeCapsuleClear(worldCenter, capsuleAxis, radius) &&
+            !IsHeadExpansionBlocked(currentTop, fullSizeTop, capsuleUp, headProbeRadius))
+        {
+            return true;
         }
 
         int searchSteps = Mathf.Max(1, m_FullSizeClearanceSearchSteps);
@@ -419,7 +443,12 @@ public class FirstPersonController : MonoBehaviour
                 if (CanMoveCapsuleToAdjustment(currentCenter, currentCapsuleAxis,
                         currentRadius, candidateAdjustment) &&
                     IsFullSizeCapsuleClear(
-                        worldCenter + candidateAdjustment, capsuleAxis, radius))
+                        worldCenter + candidateAdjustment, capsuleAxis, radius) &&
+                    !IsHeadExpansionBlocked(
+                        currentTop,
+                        fullSizeTop + candidateAdjustment,
+                        capsuleUp,
+                        headProbeRadius))
                 {
                     positionAdjustment = candidateAdjustment;
                     return true;
@@ -436,12 +465,10 @@ public class FirstPersonController : MonoBehaviour
         var start = currentTop - capsuleUp * probeRadius;
         var end = fullSizeTop - capsuleUp * probeRadius;
 
-        return Physics.CheckCapsule(
+        return HasExternalCapsuleOverlap(
             start,
             end,
-            probeRadius,
-            m_ResizeObstructionLayers,
-            QueryTriggerInteraction.Ignore);
+            probeRadius);
     }
 
     private bool CanMoveCapsuleToAdjustment(Vector3 worldCenter, Vector3 capsuleAxis,
@@ -453,26 +480,61 @@ public class FirstPersonController : MonoBehaviour
             return true;
         }
 
-        return !Physics.CapsuleCast(
+        int hitCount = Physics.CapsuleCastNonAlloc(
             worldCenter - capsuleAxis,
             worldCenter + capsuleAxis,
             radius,
             adjustment / distance,
-            out _,
+            m_ResizeCastResults,
             distance,
             m_ResizeObstructionLayers,
             QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            if (!IsOwnResizeCollider(m_ResizeCastResults[i].collider))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private bool IsFullSizeCapsuleClear(Vector3 worldCenter, Vector3 capsuleAxis,
         float radius)
     {
-        return !Physics.CheckCapsule(
+        return !HasExternalCapsuleOverlap(
             worldCenter - capsuleAxis,
             worldCenter + capsuleAxis,
+            radius);
+    }
+
+    private bool HasExternalCapsuleOverlap(Vector3 point0, Vector3 point1, float radius)
+    {
+        int overlapCount = Physics.OverlapCapsuleNonAlloc(
+            point0,
+            point1,
             radius,
+            m_ResizeOverlapResults,
             m_ResizeObstructionLayers,
             QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < overlapCount; i++)
+        {
+            if (!IsOwnResizeCollider(m_ResizeOverlapResults[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsOwnResizeCollider(Collider candidate)
+    {
+        return candidate != null &&
+               (candidate.transform == transform || candidate.transform.IsChildOf(transform));
     }
 
     public void ApplyManualShrinkHealth(ref PredictedPlayerGhost predictedPlayer, bool shrinking)
@@ -514,12 +576,20 @@ public class FirstPersonController : MonoBehaviour
             return false;
         }
 
-        if (shrinking && predictedPlayer.CurrentShrinkResource <= 0f)
+        if (shrinking &&
+            (predictedPlayer.CurrentShrinkResource <= 0f ||
+             predictedPlayer.CurrentShrinkResource < m_ShrinkActivationCost))
         {
             return false;
         }
 
         predictedPlayer.ControllerState.IsManualShrinkActive = shrinking;
+        if (shrinking)
+        {
+            predictedPlayer.CurrentShrinkResource = Mathf.Max(0f,
+                predictedPlayer.CurrentShrinkResource - m_ShrinkActivationCost);
+        }
+
         ApplyManualShrinkHealth(ref predictedPlayer, shrinking);
         return true;
     }
@@ -575,6 +645,17 @@ public class FirstPersonController : MonoBehaviour
             predictedPlayer.CurrentShrinkResource = Mathf.Min(predictedPlayer.MaxShrinkResource,
                 predictedPlayer.CurrentShrinkResource + m_ShrinkRefillRate * deltaTime);
         }
+    }
+
+    public void GetSizeMovementMultipliers(in PredictedPlayerGhost predictedPlayer,
+        out float speedMultiplier, out float jumpHeightMultiplier)
+    {
+        float sizeMultiplier = m_PlayerGhost != null
+            ? m_PlayerGhost.GetTargetScaleMultiplier(in predictedPlayer)
+            : 1f;
+
+        speedMultiplier = Mathf.Lerp(1f, sizeMultiplier, m_SizeMovementSpeedInfluence);
+        jumpHeightMultiplier = Mathf.Lerp(1f, sizeMultiplier, m_SizeJumpHeightInfluence);
     }
 
     public void ApplyMovementUpdate(ref ControllerState state, in ControllerConsts consts,
@@ -1048,17 +1129,18 @@ public class FirstPersonController : MonoBehaviour
     }
 
     public static void AccumulateMovement(ref ControllerState state,
-        ref float3 accumulatedMovement, in PlayerInput input, in ControllerConsts consts, float deltaTime)
+        ref float3 accumulatedMovement, in PlayerInput input, in ControllerConsts consts,
+        float speedMultiplier, float jumpHeightMultiplier, float deltaTime)
     {
         state.TimeInState += deltaTime;
 
-        AccumulateJumpAndGravity(ref state, input, consts, deltaTime);
+        AccumulateJumpAndGravity(ref state, input, consts, jumpHeightMultiplier, deltaTime);
 
         GetStateConsts(out var stateConsts, ref state, in input, in consts, deltaTime);
 
         var updateRotation = true;
 
-        float modifiedTargetMoveSpeed = stateConsts.Speed;
+        float modifiedTargetMoveSpeed = stateConsts.Speed * Mathf.Max(0f, speedMultiplier);
 
         float inputMagnitude = math.length(input.MoveInput);
 
@@ -1070,7 +1152,7 @@ public class FirstPersonController : MonoBehaviour
 
         state.MovementSpeed = applyTargetSpeed;
         state.AnimatorTargetSpeedChangeRate = stateConsts.SpeedChangeRate;
-        state.AnimatorTargetSpeed = stateConsts.Speed * inputMagnitude;
+        state.AnimatorTargetSpeed = modifiedTargetMoveSpeed * inputMagnitude;
         state.AnimatorMotionSpeed = inputMagnitude > 0f ? state.MovementSpeed : 1f; //play the idle at 1x
 
         state.AnimatorMotion = float3.zero;
@@ -1210,7 +1292,7 @@ public class FirstPersonController : MonoBehaviour
 
 
     private static void AccumulateJumpAndGravity(ref ControllerState state, in PlayerInput input,
-        in ControllerConsts consts, float deltaTime)
+        in ControllerConsts consts, float jumpHeightMultiplier, float deltaTime)
     {
         switch (state.MovementType)
         {
@@ -1218,7 +1300,7 @@ public class FirstPersonController : MonoBehaviour
                 {
                     ClearFallingState(ref state);
 
-                    if (AccumulateJump(ref state, in input, in consts, deltaTime) ||
+                    if (AccumulateJump(ref state, in input, in consts, jumpHeightMultiplier, deltaTime) ||
                         state.TimeInState < consts.LandingTimeout)
                     {
                         //we've just started jumping or we're in the process of landing so apply gravity
@@ -1355,7 +1437,7 @@ public class FirstPersonController : MonoBehaviour
     }
 
     private static bool AccumulateJump(ref ControllerState state, in PlayerInput input, in ControllerConsts consts,
-        float deltaTime)
+        float jumpHeightMultiplier, float deltaTime)
     {
         bool jumped = false;
 
@@ -1363,7 +1445,8 @@ public class FirstPersonController : MonoBehaviour
             && state.JumpTimeoutDelta <= 0f)
         {
             // the square root of H * -2 * G = how much velocity needed to reach desired height
-            state.JumpFallSpeed = math.sqrt(consts.JumpHeight * -2f * consts.Gravity); // 6
+            float scaledJumpHeight = consts.JumpHeight * Mathf.Max(0f, jumpHeightMultiplier);
+            state.JumpFallSpeed = math.sqrt(scaledJumpHeight * -2f * consts.Gravity); // 6
             SetMovementType(ref state, MovementType.Jumping);
             state.Jump = true;
             state.JumpTriggered = true;
