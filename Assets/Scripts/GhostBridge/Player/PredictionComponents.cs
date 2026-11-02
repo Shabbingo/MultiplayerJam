@@ -52,6 +52,11 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public ControllerState ControllerState;
     [GhostField] public float CurrentHealth;
     [GhostField] public float MaxHealth;
+
+    // Replicated and predicted so each player owns an authoritative shrink resource
+    // while the local HUD can respond immediately.
+    [GhostField] public float CurrentShrinkResource;
+    [GhostField] public float MaxShrinkResource;
     
     [GhostField] public uint EquippedWeaponID;
     [GhostField] public float WeaponCooldown;   // Timer to control rate of fire

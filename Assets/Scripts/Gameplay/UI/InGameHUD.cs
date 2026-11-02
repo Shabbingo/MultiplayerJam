@@ -15,6 +15,7 @@ namespace Unity.MP_FPS
         private VisualElement m_RootElement;
         private ProgressBar m_HealthBar;
         private VisualElement m_PlayerHealthBarFill;
+        private ProgressBar m_ShrinkResourceBar;
         private ProgressBar m_AmmoBar;
         private Label m_AmmoLabel;
         private Label m_ReloadingLabel;
@@ -46,6 +47,8 @@ namespace Unity.MP_FPS
             {
                 m_PlayerHealthBarFill = m_HealthBar.Q<VisualElement>(null, "unity-progress-bar__progress");
             }
+
+            m_ShrinkResourceBar = m_RootElement.Q<ProgressBar>("player-stamina-bar");
 
             m_AmmoLabel = m_RootElement.Q<Label>("ammo-label");
             m_AmmoBar = m_RootElement.Q<ProgressBar>("player-ammo-bar");
@@ -116,6 +119,16 @@ namespace Unity.MP_FPS
 
                 // Apply the calculated color to the fill element's background
                 m_PlayerHealthBarFill.style.backgroundColor = healthColor;
+            }
+
+
+            // Update the per-player resource that limits time spent manually shrunk.
+            if (m_ShrinkResourceBar != null)
+            {
+                m_ShrinkResourceBar.highValue = playerData.MaxShrinkResource > 0f
+                    ? playerData.MaxShrinkResource
+                    : 1f;
+                m_ShrinkResourceBar.value = playerData.CurrentShrinkResource;
             }
 
             // Update Ammo Label

@@ -5,6 +5,8 @@ using UnityEngine;
 
 public class InputSystemManager : Singleton<InputSystemManager>
 {
+    private const string k_ShrinkBindingOverridesKey = "ShrinkBindingOverrides";
+
     protected override bool Persistent => true;
 
     private bool m_HasPairedInitialUserDevices;
@@ -33,6 +35,18 @@ public class InputSystemManager : Singleton<InputSystemManager>
     {
         var allPlayers = InputUser.all;
         return allPlayers[0];
+    }
+
+    public static bool TryGetFirstInputUser(out InputUser user)
+    {
+        if (InputUser.all.Count > 0)
+        {
+            user = InputUser.all[0];
+            return user.valid;
+        }
+
+        user = default;
+        return false;
     }
 
     public static bool TryGetUserById(int id, out InputUser user)
@@ -122,6 +136,7 @@ public class InputSystemManager : Singleton<InputSystemManager>
         Debug.Log($"[InputSystemManager]: Pairing device {device.name} user index {user.index} id {user.id}");
 
         var gameControls = new InputSystem_Actions();
+        ApplySavedShrinkBinding(gameControls);
         gameControls.Enable();
         user.AssociateActionsWithUser(gameControls);
 
@@ -136,6 +151,21 @@ public class InputSystemManager : Singleton<InputSystemManager>
         }
 
         return user;
+    }
+
+    public static void ApplySavedShrinkBinding(InputSystem_Actions controls)
+    {
+        string bindingOverrides = PlayerPrefs.GetString(k_ShrinkBindingOverridesKey, string.Empty);
+        if (!string.IsNullOrEmpty(bindingOverrides))
+        {
+            controls.UI.RightClick.LoadBindingOverridesFromJson(bindingOverrides);
+        }
+    }
+
+    public static void SaveShrinkBinding(InputSystem_Actions controls)
+    {
+        PlayerPrefs.SetString(k_ShrinkBindingOverridesKey,
+            controls.UI.RightClick.SaveBindingOverridesAsJson());
     }
 
     private bool TryFindUserWithLostDevice(InputDevice desiredDevice, out InputUser existingUser)

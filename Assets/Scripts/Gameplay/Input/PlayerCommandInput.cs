@@ -13,7 +13,9 @@ public struct PlayerInput
         Reload = 1 << 3,
         ToggleShrink = 1 << 4,
         SelectPrimaryWeapon = 1 << 5,
-        SelectSecondaryWeapon = 1 << 6
+        SelectSecondaryWeapon = 1 << 6,
+        ShrinkHeld = 1 << 7,
+        HoldShrinkMode = 1 << 8
     }
 
     public float2 MoveInput;
@@ -26,6 +28,8 @@ public struct PlayerInput
     public bool Sprint => (InputFlags & (uint)InputFlag.Sprint) != 0;
     public bool Reload => (InputFlags & (uint)InputFlag.Reload) != 0;
     public bool ToggleShrink => (InputFlags & (uint)InputFlag.ToggleShrink) != 0;
+    public bool ShrinkHeld => (InputFlags & (uint)InputFlag.ShrinkHeld) != 0;
+    public bool HoldShrinkMode => (InputFlags & (uint)InputFlag.HoldShrinkMode) != 0;
     public bool SelectPrimaryWeapon => (InputFlags & (uint)InputFlag.SelectPrimaryWeapon) != 0;
     public bool SelectSecondaryWeapon => (InputFlags & (uint)InputFlag.SelectSecondaryWeapon) != 0;
 
@@ -43,7 +47,13 @@ public struct PlayerInput
 
     public void UpdateFrom(in PlayerInput input)
     {
-        InputFlags |= input.InputFlags;
+        // Event flags accumulate within a network tick, but held-state flags must
+        // reflect the latest frame so releasing shrink is never lost.
+        const uint shrinkStateMask =
+            (uint)InputFlag.ShrinkHeld | (uint)InputFlag.HoldShrinkMode;
+        InputFlags = (InputFlags & ~shrinkStateMask) |
+                     (input.InputFlags & shrinkStateMask);
+        InputFlags |= input.InputFlags & ~shrinkStateMask;
     }
 }
 

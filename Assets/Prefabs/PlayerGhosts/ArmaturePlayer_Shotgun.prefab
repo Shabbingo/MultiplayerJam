@@ -211,6 +211,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FirstPersonController
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
   m_ManualShrinkHealthMultiplier: 0.2
+  m_MaxShrinkResource: 5
+  m_ShrinkDrainRate: 1
+  m_ShrinkRefillRate: 1
   <CinemachineCameraTarget>k__BackingField: {fileID: 0}
   GroundedOffset: 0.2
   <ControllerOffset>k__BackingField: {x: 0, y: 0, z: 0}

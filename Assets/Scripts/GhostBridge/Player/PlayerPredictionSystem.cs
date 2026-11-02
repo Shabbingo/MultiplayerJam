@@ -187,6 +187,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     .WithAll<Simulate, PlayerControllerLink>())
         {
             var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+            controllerLink.Controller.InitializeShrinkResource(ref predictedPlayer.ValueRW);
             // GameDebug.BurstLog("[PlayerPredictionSystem] PredictedPlayerGhost is Simulate");
 
             predictedPlayer.ValueRW.RequestApplyMovement = false;
@@ -214,16 +215,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 ref predictedPlayer.ValueRW, WeaponManager.SecondaryWeaponId);
                         }
 
-                        if (input.ToggleShrink &&
-                            !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed &&
-                            !predictedPlayer.ValueRO.ControllerState.IsForcedFullSize)
-                        {
-                            var shrinking = !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
-                            predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive = shrinking;
-                            controllerLink.Controller.ApplyManualShrinkHealth(
-                                ref predictedPlayer.ValueRW, shrinking);
-                        }
-                        predictedPlayer.ValueRW.ControllerState.ShrinkTogglePressed = input.ToggleShrink;
+                        controllerLink.Controller.ProcessShrinkInput(
+                            ref predictedPlayer.ValueRW, input);
 
                         var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(predictedPlayer.ValueRO.EquippedWeaponID);
                         if (weaponData != null)
@@ -317,6 +310,11 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             }
                         }
                     }
+
+                    // Advance once per replayed input tick so prediction stays in step
+                    // when multiple missed commands are processed together.
+                    controllerLink.Controller.UpdateShrinkResource(
+                        ref predictedPlayer.ValueRW, accumulateDT);
                 }
 
                 // apply
@@ -327,6 +325,11 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
             else if (logPredictionWarnings)
             {
                 Debug.LogWarning("[PlayerPredictionSystem] Player is simulated but there are no commands to process");
+            }
+
+            if (commands.Length == 0)
+            {
+                controllerLink.Controller.UpdateShrinkResource(ref predictedPlayer.ValueRW, dt);
             }
         }
 

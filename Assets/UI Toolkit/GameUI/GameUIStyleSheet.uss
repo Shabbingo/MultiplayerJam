@@ -152,6 +152,12 @@ Slider .unity-base-slider__tracker {
     margin-bottom: 20px;
 }
 
+.shrink-mode-toggle {
+    min-height: var(--height-element);
+    margin-top: var(--button-top-margin);
+    align-items: center;
+}
+
 Button {
     height: var(--height-element);
     margin-top: var(--button-top-margin);

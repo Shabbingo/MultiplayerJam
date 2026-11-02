@@ -42,6 +42,7 @@ namespace Unity.MP_FPS
         const string k_ConnectionModeKey = "ConnectionMode";
         const string k_SessionNameKey = "SessionName";
         const string k_MouseSensitivityKey = "MouseSensitivity";
+        const string k_HoldToShrinkKey = "HoldToShrink";
 
         GameSettings()
         {
@@ -52,6 +53,7 @@ namespace Unity.MP_FPS
             m_SessionName = PlayerPrefs.GetString(k_SessionNameKey, "default-session");
             m_MouseSensitivity = Mathf.Clamp(
                 PlayerPrefs.GetFloat(k_MouseSensitivityKey, 1.5f), 0.1f, 5f);
+            m_HoldToShrink = PlayerPrefs.GetInt(k_HoldToShrinkKey, 1) != 0;
         }
 
         public event EventHandler<BindablePropertyChangedEventArgs> propertyChanged;
@@ -260,6 +262,24 @@ namespace Unity.MP_FPS
 
                 m_MouseSensitivity = clampedValue;
                 PlayerPrefs.SetFloat(k_MouseSensitivityKey, clampedValue);
+                Notify();
+            }
+        }
+
+        bool m_HoldToShrink = true;
+        [CreateProperty]
+        public bool HoldToShrink
+        {
+            get => m_HoldToShrink;
+            set
+            {
+                if (m_HoldToShrink == value)
+                {
+                    return;
+                }
+
+                m_HoldToShrink = value;
+                PlayerPrefs.SetInt(k_HoldToShrinkKey, value ? 1 : 0);
                 Notify();
             }
         }

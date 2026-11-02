@@ -514,6 +514,7 @@ namespace Unity.MP_FPS
                          .WithEntityAccess())
             {
                 var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+                controllerLink.Controller.InitializeShrinkResource(ref predictedPlayer.ValueRW);
                 var predictedClient = predictedClientInputComponentLookup[inputLookup.ValueRO.ClientCommandInputEntity];
                 if (predictedClient.InputCount > 0)
                 {
@@ -523,22 +524,17 @@ namespace Unity.MP_FPS
                         var commandInput = commands[i + predictedClient.BeginInputIndex];
                         if (commandInput.TryGetPlayerMovementInput(predictedPlayer.ValueRO.InputIndex, out var input))
                         {
-                            if (input.ToggleShrink &&
-                                !predictedPlayer.ValueRO.ControllerState.ShrinkTogglePressed &&
-                                !predictedPlayer.ValueRO.ControllerState.IsForcedFullSize)
-                            {
-                                var shrinking = !predictedPlayer.ValueRO.ControllerState.IsManualShrinkActive;
-                                predictedPlayer.ValueRW.ControllerState.IsManualShrinkActive = shrinking;
-                                controllerLink.Controller.ApplyManualShrinkHealth(
-                                    ref predictedPlayer.ValueRW, shrinking);
-                            }
-                            predictedPlayer.ValueRW.ControllerState.ShrinkTogglePressed = input.ToggleShrink;
+                            controllerLink.Controller.ProcessShrinkInput(
+                                ref predictedPlayer.ValueRW, input);
 
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
                                 controllerConsts.ValueRO.ControllerConsts, movementDt);
                         }
+
+                        controllerLink.Controller.UpdateShrinkResource(
+                            ref predictedPlayer.ValueRW, movementDt);
                     }
 
                     if (predictedPlayer.ValueRW.ControllerState.JumpTriggered)
@@ -552,6 +548,10 @@ namespace Unity.MP_FPS
                         predictedPlayer.ValueRW.LastLandTick = serverTick;
                         predictedPlayer.ValueRW.ControllerState.LandTriggered = false;
                     }
+                }
+                else
+                {
+                    controllerLink.Controller.UpdateShrinkResource(ref predictedPlayer.ValueRW, deltaTime);
                 }
             }
 

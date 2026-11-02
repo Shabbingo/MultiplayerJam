@@ -14,6 +14,14 @@ public class FirstPersonController : MonoBehaviour
     public SoundDef PlayerHitSFX;
     [SerializeField, Range(0.05f, 1f)] private float m_ManualShrinkHealthMultiplier = 0.2f;
 
+    [Header("Shrink Resource")]
+    [SerializeField, Min(0.1f), Tooltip("Maximum shrink resource. At a drain rate of 1, this is the number of seconds the player can remain small.")]
+    private float m_MaxShrinkResource = 5f;
+    [SerializeField, Min(0f), Tooltip("Shrink resource consumed per second while the player is small.")]
+    private float m_ShrinkDrainRate = 1f;
+    [SerializeField, Min(0f), Tooltip("Shrink resource restored per second while the player is normal-sized.")]
+    private float m_ShrinkRefillRate = 1f;
+
     private static class AnimationParameters
     {
         //Speed, Strafe, Turn: float values
@@ -326,6 +334,95 @@ public class FirstPersonController : MonoBehaviour
             ? predictedPlayer.CurrentHealth * m_ManualShrinkHealthMultiplier
             : Mathf.Min(predictedPlayer.MaxHealth,
                 predictedPlayer.CurrentHealth / m_ManualShrinkHealthMultiplier);
+    }
+
+    public void InitializeShrinkResource(ref PredictedPlayerGhost predictedPlayer)
+    {
+        if (predictedPlayer.MaxShrinkResource > 0f)
+        {
+            return;
+        }
+
+        predictedPlayer.MaxShrinkResource = m_MaxShrinkResource;
+        predictedPlayer.CurrentShrinkResource = m_MaxShrinkResource;
+    }
+
+    public bool TryToggleManualShrink(ref PredictedPlayerGhost predictedPlayer)
+    {
+        bool shrinking = !predictedPlayer.ControllerState.IsManualShrinkActive;
+        return TrySetManualShrink(ref predictedPlayer, shrinking);
+    }
+
+    public bool TrySetManualShrink(ref PredictedPlayerGhost predictedPlayer, bool shrinking)
+    {
+        InitializeShrinkResource(ref predictedPlayer);
+
+        if (predictedPlayer.ControllerState.IsManualShrinkActive == shrinking)
+        {
+            return false;
+        }
+
+        if (shrinking && predictedPlayer.CurrentShrinkResource <= 0f)
+        {
+            return false;
+        }
+
+        predictedPlayer.ControllerState.IsManualShrinkActive = shrinking;
+        ApplyManualShrinkHealth(ref predictedPlayer, shrinking);
+        return true;
+    }
+
+    public void ProcessShrinkInput(ref PredictedPlayerGhost predictedPlayer, in PlayerInput input)
+    {
+        bool shrinkPressed = input.HoldShrinkMode ? input.ShrinkHeld : input.ToggleShrink;
+
+        if (input.HoldShrinkMode)
+        {
+            if (!predictedPlayer.ControllerState.IsForcedFullSize)
+            {
+                if (shrinkPressed && !predictedPlayer.ControllerState.ShrinkTogglePressed)
+                {
+                    TrySetManualShrink(ref predictedPlayer, true);
+                }
+                else if (!shrinkPressed && predictedPlayer.ControllerState.IsManualShrinkActive)
+                {
+                    TrySetManualShrink(ref predictedPlayer, false);
+                }
+            }
+        }
+        else if (shrinkPressed &&
+                 !predictedPlayer.ControllerState.ShrinkTogglePressed &&
+                 !predictedPlayer.ControllerState.IsForcedFullSize)
+        {
+            TryToggleManualShrink(ref predictedPlayer);
+        }
+
+        // Latching held input during a forced resize means it must be released
+        // before a subsequent press can shrink the player again.
+        predictedPlayer.ControllerState.ShrinkTogglePressed = shrinkPressed;
+    }
+
+    public void UpdateShrinkResource(ref PredictedPlayerGhost predictedPlayer, float deltaTime)
+    {
+        InitializeShrinkResource(ref predictedPlayer);
+
+        if (predictedPlayer.ControllerState.IsManualShrinkActive &&
+            !predictedPlayer.ControllerState.IsForcedFullSize)
+        {
+            predictedPlayer.CurrentShrinkResource = Mathf.Max(0f,
+                predictedPlayer.CurrentShrinkResource - m_ShrinkDrainRate * deltaTime);
+
+            if (predictedPlayer.CurrentShrinkResource <= 0f)
+            {
+                predictedPlayer.ControllerState.IsManualShrinkActive = false;
+                ApplyManualShrinkHealth(ref predictedPlayer, false);
+            }
+        }
+        else
+        {
+            predictedPlayer.CurrentShrinkResource = Mathf.Min(predictedPlayer.MaxShrinkResource,
+                predictedPlayer.CurrentShrinkResource + m_ShrinkRefillRate * deltaTime);
+        }
     }
 
     public void ApplyMovementUpdate(ref ControllerState state, in ControllerConsts consts,
