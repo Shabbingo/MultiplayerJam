@@ -33,6 +33,7 @@ namespace Unity.MP_FPS
 
     struct ShotCollision
     {
+        public Entity PlayerEntity;
         public Collider Collider;
         public Vector3 Point;
         public Vector3 Normal;
@@ -44,12 +45,11 @@ namespace Unity.MP_FPS
     {
         private const int k_NumHistoryTicks = 20;
         private static readonly int s_ShootableLayerMask = LayerMask.GetMask("Ground", "Default");
-        private static readonly int s_HitscanLayerMask = LayerMask.GetMask("ServerPlayer", "Default", "Ground");
         private NativeList<ClientCommandInput> m_ProcessedClientInputCommands;
         private ComponentLookup<PredictedClientInput> m_PredictedClientInputComponentLookup;
         private ComponentLookup<PredictedPlayerGhost> m_PlayerGhostLookup;
-        private readonly Collider[] m_HitscanOverlapResults = new Collider[16];
         private readonly RaycastHit[] m_HitscanCastResults = new RaycastHit[32];
+        private readonly Dictionary<Entity, LagCompensatedHitboxHistory> m_LagCompensatedHitboxes = new();
         private readonly Dictionary<Entity, float> m_ForcedFullSizeTimers = new();
         private readonly List<Entity> m_ForcedFullSizeEntitiesScratch = new();
         private readonly HashSet<Entity> m_PendingSelfGrowthChecks = new();
@@ -72,6 +72,74 @@ namespace Unity.MP_FPS
         public PlayerMovementHistory MovementHistory { get; private set; } =
             new PlayerMovementHistory(k_NumHistoryTicks);
 
+        private struct LagCompensatedHitbox
+        {
+            public uint Tick;
+            public Vector3 Point0;
+            public Vector3 Point1;
+            public float Radius;
+        }
+
+        private sealed class LagCompensatedHitboxHistory
+        {
+            private readonly LagCompensatedHitbox[] m_Buffer =
+                new LagCompensatedHitbox[k_NumHistoryTicks];
+            private int m_WriteIndex;
+            private int m_Count;
+
+            public void Add(in LagCompensatedHitbox hitbox)
+            {
+                for (int i = 0; i < m_Count; i++)
+                {
+                    if (m_Buffer[i].Tick == hitbox.Tick)
+                    {
+                        m_Buffer[i] = hitbox;
+                        return;
+                    }
+                }
+
+                m_Buffer[m_WriteIndex] = hitbox;
+                m_WriteIndex = (m_WriteIndex + 1) % m_Buffer.Length;
+                m_Count = Mathf.Min(m_Count + 1, m_Buffer.Length);
+            }
+
+            public bool TryGetAtOrBefore(uint tick, out LagCompensatedHitbox hitbox)
+            {
+                hitbox = default;
+                bool foundAtOrBefore = false;
+                bool foundAny = false;
+                uint newestTickAtOrBefore = 0;
+                uint oldestTick = uint.MaxValue;
+                LagCompensatedHitbox oldest = default;
+
+                for (int i = 0; i < m_Count; i++)
+                {
+                    var candidate = m_Buffer[i];
+                    if (!foundAny || candidate.Tick < oldestTick)
+                    {
+                        foundAny = true;
+                        oldestTick = candidate.Tick;
+                        oldest = candidate;
+                    }
+
+                    if (candidate.Tick <= tick &&
+                        (!foundAtOrBefore || candidate.Tick > newestTickAtOrBefore))
+                    {
+                        foundAtOrBefore = true;
+                        newestTickAtOrBefore = candidate.Tick;
+                        hitbox = candidate;
+                    }
+                }
+
+                if (!foundAtOrBefore && foundAny)
+                {
+                    hitbox = oldest;
+                }
+
+                return foundAtOrBefore || foundAny;
+            }
+        }
+
         protected override void OnCreate()
         {
             base.OnCreate();
@@ -92,6 +160,7 @@ namespace Unity.MP_FPS
         protected override void OnDestroy()
         {
             m_ProcessedClientInputCommands.Dispose();
+            m_LagCompensatedHitboxes.Clear();
             m_ForcedFullSizeTimers.Clear();
             m_ForcedFullSizeEntitiesScratch.Clear();
             m_PendingSelfGrowthChecks.Clear();
@@ -365,52 +434,50 @@ namespace Unity.MP_FPS
                             {
                                 case WeaponType.Hitscan:
                                 {
-                                    // Use the calculated eyePosition and aimDirection
+                                    uint rewindTick = commandInput.ClientInterpolationTick.IsValid
+                                        ? commandInput.ClientInterpolationTick.TickIndexForValidTick
+                                        : serverTick;
                                     if (TryGetClosestHitscanCollision(eyePosition, aimDirection,
-                                            weaponData.HitscanRange, shooterNetworkId, out var hit))
+                                            weaponData.HitscanRange, shooterNetworkId, rewindTick,
+                                            out var hit))
                                     {
-                                        if (hit.Collider.gameObject.layer == LayerMask.NameToLayer("ServerPlayer"))
+                                        if (hit.PlayerEntity != Entity.Null &&
+                                            playerGhostLookup.HasComponent(hit.PlayerEntity))
                                         {
-                                            if (GhostGameObject.TryFindGhostGameObject(hit.Collider.gameObject,
-                                                    out var hitGhostObject) &&
-                                                playerGhostLookup.HasComponent(hitGhostObject.LinkedEntity))
+                                            var targetPredictedPlayer =
+                                                playerGhostLookup.GetRefRW(hit.PlayerEntity);
+                                            var targetNetworkId = ghostOwnerLookup[hit.PlayerEntity].NetworkId;
+
+                                            if (shooterNetworkId == targetNetworkId)
                                             {
-                                                var targetPredictedPlayer =
-                                                    playerGhostLookup.GetRefRW(hitGhostObject.LinkedEntity);
-                                                var targetNetworkId = ghostOwnerLookup[hitGhostObject.LinkedEntity]
-                                                    .NetworkId;
+                                                //skip hitting self
+                                                continue;
+                                            }
 
-                                                if (shooterNetworkId == targetNetworkId)
+                                            var healthBeforeDamage = targetPredictedPlayer.ValueRO.CurrentHealth;
+                                            var appliedDamage = weaponData.PlayerDamage;
+                                            targetPredictedPlayer.ValueRW.CurrentHealth -= appliedDamage;
+                                            ApplyWeaponResizeEffect(hit.PlayerEntity, weaponData,
+                                                ref targetPredictedPlayer.ValueRW);
+                                            targetPredictedPlayer.ValueRW.ControllerState.IsHit = true;
+
+                                            targetPredictedPlayer.ValueRW.LastDamageAmount = appliedDamage;
+                                            targetPredictedPlayer.ValueRW.LastHitTick = serverTick;
+
+                                            if (healthBeforeDamage > 0 &&
+                                                targetPredictedPlayer.ValueRO.CurrentHealth <= 0)
+                                            {
+                                                if (LeaderboardManager.Instance != null)
                                                 {
-                                                    //skip hitting self
-                                                    continue;
+                                                    LeaderboardManager.Instance.AddKill(shooterNetworkId,
+                                                        targetNetworkId);
+                                                    Debug.Log(
+                                                        $"[Server] Player {shooterNetworkId.ToString()} killed player {targetNetworkId.ToString()}.");
                                                 }
-
-                                                var healthBeforeDamage = targetPredictedPlayer.ValueRO.CurrentHealth;
-                                                var appliedDamage = weaponData.PlayerDamage;
-                                                targetPredictedPlayer.ValueRW.CurrentHealth -= appliedDamage;
-                                                ApplyWeaponResizeEffect(hitGhostObject.LinkedEntity, weaponData,
-                                                    ref targetPredictedPlayer.ValueRW);
-                                                targetPredictedPlayer.ValueRW.ControllerState.IsHit = true;
-
-                                                targetPredictedPlayer.ValueRW.LastDamageAmount = appliedDamage;
-                                                targetPredictedPlayer.ValueRW.LastHitTick = serverTick;
-
-                                                if (healthBeforeDamage > 0 &&
-                                                    targetPredictedPlayer.ValueRO.CurrentHealth <= 0)
+                                                else
                                                 {
-                                                    if (LeaderboardManager.Instance != null)
-                                                    {
-                                                        LeaderboardManager.Instance.AddKill(shooterNetworkId,
-                                                            targetNetworkId);
-                                                        Debug.Log(
-                                                            $"[Server] Player {shooterNetworkId.ToString()} killed player {targetNetworkId.ToString()}.");
-                                                    }
-                                                    else
-                                                    {
-                                                        Debug.LogWarning(
-                                                            "[Server] LeaderboardManager instance not found. Cannot add kill.");
-                                                    }
+                                                    Debug.LogWarning(
+                                                        "[Server] LeaderboardManager instance not found. Cannot add kill.");
                                                 }
                                             }
                                         }
@@ -624,6 +691,27 @@ namespace Unity.MP_FPS
                 transform.ValueRW.Position = predictedPlayer.ValueRO.ControllerState.CurrentPosition;
                 transform.ValueRW.Rotation = predictedPlayer.ValueRO.ControllerState.CurrentRotation;
 
+                var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+                controllerLink.Controller.GetCurrentHitboxCapsule(
+                    (Vector3)predictedPlayer.ValueRO.ControllerState.CurrentPosition,
+                    (Quaternion)predictedPlayer.ValueRO.ControllerState.CurrentRotation,
+                    out Vector3 hitboxPoint0,
+                    out Vector3 hitboxPoint1,
+                    out float hitboxRadius);
+                if (!m_LagCompensatedHitboxes.TryGetValue(entity, out var hitboxHistory))
+                {
+                    hitboxHistory = new LagCompensatedHitboxHistory();
+                    m_LagCompensatedHitboxes.Add(entity, hitboxHistory);
+                }
+
+                hitboxHistory.Add(new LagCompensatedHitbox
+                {
+                    Tick = serverTick,
+                    Point0 = hitboxPoint0,
+                    Point1 = hitboxPoint1,
+                    Radius = hitboxRadius
+                });
+
                 if (checkForPredictionErrors)
                 {
                     if (MovementHistory.TryGetTick(serverTick, out var pos, out var rot))
@@ -652,40 +740,14 @@ namespace Unity.MP_FPS
         }
 
         private bool TryGetClosestHitscanCollision(Vector3 origin, Vector3 direction, float range,
-            int shooterNetworkId, out ShotCollision collision)
+            int shooterNetworkId, uint rewindTick, out ShotCollision collision)
         {
-            // Raycasts do not report a collider when their origin is already inside it. This
-            // overlap catches point-blank targets, which is especially important for small players.
-            int overlapCount = UnityEngine.Physics.OverlapSphereNonAlloc(
-                origin,
-                0.05f,
-                m_HitscanOverlapResults,
-                LayerMask.GetMask("ServerPlayer"),
-                QueryTriggerInteraction.Ignore);
-
-            for (int i = 0; i < overlapCount; i++)
-            {
-                var candidate = m_HitscanOverlapResults[i];
-                if (candidate == null || IsShooterCollider(candidate, shooterNetworkId))
-                {
-                    continue;
-                }
-
-                collision = new ShotCollision
-                {
-                    Collider = candidate,
-                    Point = candidate.ClosestPoint(origin),
-                    Normal = -direction
-                };
-                return true;
-            }
-
             int hitCount = UnityEngine.Physics.RaycastNonAlloc(
                 origin,
                 direction,
                 m_HitscanCastResults,
                 range,
-                s_HitscanLayerMask,
+                s_ShootableLayerMask,
                 QueryTriggerInteraction.Ignore);
 
             float closestDistance = float.MaxValue;
@@ -695,7 +757,7 @@ namespace Unity.MP_FPS
             {
                 var candidate = m_HitscanCastResults[i];
                 if (candidate.collider == null ||
-                    IsShooterCollider(candidate.collider, shooterNetworkId) ||
+                    candidate.collider.GetComponentInParent<PlayerGhost>() != null ||
                     candidate.distance >= closestDistance)
                 {
                     continue;
@@ -704,6 +766,7 @@ namespace Unity.MP_FPS
                 closestDistance = candidate.distance;
                 collision = new ShotCollision
                 {
+                    PlayerEntity = Entity.Null,
                     Collider = candidate.collider,
                     Point = candidate.point,
                     Normal = candidate.normal
@@ -711,7 +774,133 @@ namespace Unity.MP_FPS
                 foundCollision = true;
             }
 
+            foreach (var pair in m_LagCompensatedHitboxes)
+            {
+                Entity targetEntity = pair.Key;
+                if (!EntityManager.Exists(targetEntity) ||
+                    !ghostOwnerLookup.HasComponent(targetEntity) ||
+                    !m_PlayerGhostLookup.HasComponent(targetEntity) ||
+                    ghostOwnerLookup[targetEntity].NetworkId == shooterNetworkId ||
+                    m_PlayerGhostLookup[targetEntity].CurrentHealth <= 0f ||
+                    !pair.Value.TryGetAtOrBefore(rewindTick, out var hitbox) ||
+                    !RayIntersectsCapsule(origin, direction, hitbox.Point0, hitbox.Point1,
+                        hitbox.Radius, out float distance, out Vector3 normal) ||
+                    distance > range || distance >= closestDistance)
+                {
+                    continue;
+                }
+
+                closestDistance = distance;
+                collision = new ShotCollision
+                {
+                    PlayerEntity = targetEntity,
+                    Collider = null,
+                    Point = origin + direction * distance,
+                    Normal = normal
+                };
+                foundCollision = true;
+            }
+
             return foundCollision;
+        }
+
+        private static bool RayIntersectsCapsule(Vector3 origin, Vector3 direction,
+            Vector3 point0, Vector3 point1, float radius, out float distance, out Vector3 normal)
+        {
+            direction.Normalize();
+            var capsuleAxis = point1 - point0;
+            float axisLengthSq = Vector3.Dot(capsuleAxis, capsuleAxis);
+            Vector3 closestAtOrigin = axisLengthSq > Mathf.Epsilon
+                ? point0 + capsuleAxis * Mathf.Clamp01(
+                    Vector3.Dot(origin - point0, capsuleAxis) / axisLengthSq)
+                : point0;
+
+            if ((origin - closestAtOrigin).sqrMagnitude <= radius * radius)
+            {
+                distance = 0f;
+                normal = -direction;
+                return true;
+            }
+
+            distance = float.MaxValue;
+            bool found = false;
+
+            if (axisLengthSq > Mathf.Epsilon)
+            {
+                var originFromPoint0 = origin - point0;
+                float axisDotDirection = Vector3.Dot(capsuleAxis, direction);
+                float axisDotOrigin = Vector3.Dot(capsuleAxis, originFromPoint0);
+                float directionDotOrigin = Vector3.Dot(direction, originFromPoint0);
+                float originLengthSq = Vector3.Dot(originFromPoint0, originFromPoint0);
+                float a = axisLengthSq - axisDotDirection * axisDotDirection;
+                float b = axisLengthSq * directionDotOrigin -
+                          axisDotOrigin * axisDotDirection;
+                float c = axisLengthSq * originLengthSq -
+                          axisDotOrigin * axisDotOrigin - radius * radius * axisLengthSq;
+                float discriminant = b * b - a * c;
+
+                if (Mathf.Abs(a) > Mathf.Epsilon && discriminant >= 0f)
+                {
+                    float cylinderDistance = (-b - Mathf.Sqrt(discriminant)) / a;
+                    float axisPosition = axisDotOrigin + cylinderDistance * axisDotDirection;
+                    if (cylinderDistance >= 0f && axisPosition >= 0f &&
+                        axisPosition <= axisLengthSq)
+                    {
+                        distance = cylinderDistance;
+                        found = true;
+                    }
+                }
+            }
+
+            if (TryRaySphere(origin, direction, point0, radius, out float capDistance0) &&
+                capDistance0 < distance)
+            {
+                distance = capDistance0;
+                found = true;
+            }
+
+            if (TryRaySphere(origin, direction, point1, radius, out float capDistance1) &&
+                capDistance1 < distance)
+            {
+                distance = capDistance1;
+                found = true;
+            }
+
+            if (!found)
+            {
+                normal = Vector3.zero;
+                return false;
+            }
+
+            var hitPoint = origin + direction * distance;
+            Vector3 closestOnAxis = axisLengthSq > Mathf.Epsilon
+                ? point0 + capsuleAxis * Mathf.Clamp01(
+                    Vector3.Dot(hitPoint - point0, capsuleAxis) / axisLengthSq)
+                : point0;
+            normal = (hitPoint - closestOnAxis).normalized;
+            if (normal.sqrMagnitude <= Mathf.Epsilon)
+            {
+                normal = -direction;
+            }
+
+            return true;
+        }
+
+        private static bool TryRaySphere(Vector3 origin, Vector3 direction, Vector3 center,
+            float radius, out float distance)
+        {
+            var offset = origin - center;
+            float projected = Vector3.Dot(offset, direction);
+            float discriminant = projected * projected -
+                                 (Vector3.Dot(offset, offset) - radius * radius);
+            if (discriminant < 0f)
+            {
+                distance = 0f;
+                return false;
+            }
+
+            distance = -projected - Mathf.Sqrt(discriminant);
+            return distance >= 0f;
         }
 
         public void ApplyWeaponResizeEffect(Entity targetEntity, WeaponData weaponData,
@@ -854,16 +1043,5 @@ namespace Unity.MP_FPS
             }
         }
 
-        private bool IsShooterCollider(Collider collider, int shooterNetworkId)
-        {
-            if (collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") ||
-                !GhostGameObject.TryFindGhostGameObject(collider.gameObject, out var hitGhostObject) ||
-                !ghostOwnerLookup.HasComponent(hitGhostObject.LinkedEntity))
-            {
-                return false;
-            }
-
-            return ghostOwnerLookup[hitGhostObject.LinkedEntity].NetworkId == shooterNetworkId;
-        }
     }
 }

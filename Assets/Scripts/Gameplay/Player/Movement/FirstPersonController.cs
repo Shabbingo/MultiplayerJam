@@ -358,6 +358,23 @@ public class FirstPersonController : MonoBehaviour
         m_Controller.excludeLayers = excludeLayers;
     }
 
+    public void GetCurrentHitboxCapsule(Vector3 playerPosition, Quaternion playerRotation,
+        out Vector3 point0, out Vector3 point1, out float radius)
+    {
+        var currentScale = new Vector3(
+            Mathf.Abs(transform.lossyScale.x),
+            Mathf.Abs(transform.lossyScale.y),
+            Mathf.Abs(transform.lossyScale.z));
+        var capsuleUp = playerRotation * Vector3.up;
+        var worldCenter = playerPosition + playerRotation *
+            Vector3.Scale(m_Controller.center, currentScale);
+        radius = m_Controller.radius * Mathf.Max(currentScale.x, currentScale.z);
+        float height = Mathf.Max(m_Controller.height * currentScale.y, radius * 2f);
+        var capsuleAxis = capsuleUp * Mathf.Max(0f, height * 0.5f - radius);
+        point0 = worldCenter - capsuleAxis;
+        point1 = worldCenter + capsuleAxis;
+    }
+
     public bool TryFindFullSizeClearance(Vector3 playerPosition,
         Quaternion playerRotation, out Vector3 positionAdjustment)
     {
