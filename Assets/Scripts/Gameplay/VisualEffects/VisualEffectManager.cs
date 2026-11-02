@@ -23,6 +23,9 @@ namespace Unity.MP_FPS
         private Queue<ClientSpawnPlayerExplosionRpc> m_PlayerExplosionQueue = new();
 
         [SerializeField] private GameObject m_PlayerExplosionPrefab;
+        [SerializeField, Range(0.1f, 1f),
+         Tooltip("Base muzzle flash size before it is scaled by the firing player's size.")]
+        private float m_MuzzleFlashScale = 0.5f;
 
         public void Server_RequestVfx(int ownerNetworkId, uint weaponId)
         {
@@ -134,6 +137,7 @@ namespace Unity.MP_FPS
                         return;
                     }
 
+                    vfxInstance.transform.localScale *= m_MuzzleFlashScale;
                     vfxInstance.AddComponent<DestroyAfterDelay>().Lifetime = 0.5f;
 
                     vfxInstance.SetActive(true);
