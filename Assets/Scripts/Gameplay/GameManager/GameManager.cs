@@ -19,6 +19,7 @@ namespace Unity.MP_FPS
         public const int MaxPlayer = 32;
         public const string MainMenuSceneName = "MainMenu";
         public const string GameSceneName = "GameScene";
+        public static string ActiveServerMapSceneName { get; private set; } = GameSceneName;
         static public GameConnection GameConnection { get; private set; }
 
         Task m_LoadingGame;
@@ -29,6 +30,9 @@ namespace Unity.MP_FPS
         public UnityEngine.Audio.AudioMixer AudioMixer;
         public int MaxSoundEmitters;
         public int MaxSoundGameObjects;
+        [SerializeField, Tooltip("Gameplay scene names available in the host's map selector. Each scene must be included in the Build Profile and contain the required gameplay subscenes.")]
+        private string[] m_AvailableMapScenes = { GameSceneName, "Tom_Map1" };
+        public IReadOnlyList<string> AvailableMapScenes => m_AvailableMapScenes;
         [System.NonSerialized]
         public SoundGameObjectPool SoundGameObjects;
 
@@ -218,6 +222,8 @@ namespace Unity.MP_FPS
 
         async Task StartGameAsync(CreationType creationType, CancellationToken cancellationToken)
         {
+            ActiveServerMapSceneName = GetValidatedMapScene(
+                GameSettings.Instance.SelectedMapScene);
             if (m_LoadingMainMenuCancel != null || GameSettings.Instance.MainMenuSceneLoaded)
             {
                 // Unload already created MainMenu world 
@@ -286,7 +292,8 @@ namespace Unity.MP_FPS
                 GhostBridgeManager.Instance.SetServerNetworkStreamDriver(serverDriver);
 
                 serverDriver.Listen(GameConnection.ListenEndpoint);
-                await ScenesLoader.LoadGameplayAsync(server, null);
+                await ScenesLoader.LoadGameplayAsync(
+                    server, null, ActiveServerMapSceneName);
             }
 
             //The the client world was created, connect to the server
@@ -294,7 +301,9 @@ namespace Unity.MP_FPS
             {
                 ConnectionSettings.Instance.ConnectionEndpoint = GameConnection.ConnectEndpoint;
                 await WaitForPlayerConnectionAsync(cancellationToken);
-                await ScenesLoader.LoadGameplayAsync(null, client);
+                string serverMapScene = await RequestServerMapSceneAsync(
+                    client, cancellationToken);
+                await ScenesLoader.LoadGameplayAsync(null, client, serverMapScene);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -303,6 +312,56 @@ namespace Unity.MP_FPS
             {
                 await WaitForGhostReplicationAsync(client, cancellationToken);
             }
+        }
+
+        public string GetValidatedMapScene(string requestedScene)
+        {
+            if (m_AvailableMapScenes != null)
+            {
+                foreach (string sceneName in m_AvailableMapScenes)
+                {
+                    if (!string.IsNullOrWhiteSpace(sceneName) && sceneName == requestedScene)
+                    {
+                        return sceneName;
+                    }
+                }
+            }
+
+            return GameSceneName;
+        }
+
+        static async Task<string> RequestServerMapSceneAsync(
+            World clientWorld, CancellationToken cancellationToken)
+        {
+            var entityManager = clientWorld.EntityManager;
+            Entity requestEntity = entityManager.CreateEntity();
+            entityManager.AddComponentData(requestEntity, new MapSelectionRequestRpc());
+            entityManager.AddComponentData(requestEntity, new SendRpcCommandRequest());
+
+            using var responseQuery = entityManager.CreateEntityQuery(
+                ComponentType.ReadOnly<MapSelectionResponseRpc>(),
+                ComponentType.ReadOnly<ReceiveRpcCommandRequest>());
+            float timeoutAt = Time.realtimeSinceStartup + 10f;
+            while (Time.realtimeSinceStartup < timeoutAt)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (responseQuery.TryGetSingletonEntity<MapSelectionResponseRpc>(
+                        out Entity responseEntity))
+                {
+                    var response = entityManager.GetComponentData<MapSelectionResponseRpc>(
+                        responseEntity);
+                    entityManager.DestroyEntity(responseEntity);
+                    string sceneName = response.SceneName.ToString();
+                    return Instance != null
+                        ? Instance.GetValidatedMapScene(sceneName)
+                        : sceneName;
+                }
+
+                await Awaitable.NextFrameAsync(cancellationToken);
+            }
+
+            Debug.LogWarning("Timed out waiting for the server's map selection. Loading GameScene.");
+            return GameSceneName;
         }
 
         /// <summary>

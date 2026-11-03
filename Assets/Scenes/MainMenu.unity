@@ -489,6 +489,9 @@ MonoBehaviour:
   AudioMixer: {fileID: 24100000, guid: fddb343a82968524eb1e9a6f65433d7e, type: 2}
   MaxSoundEmitters: 32
   MaxSoundGameObjects: 64
+  m_AvailableMapScenes:
+  - GameScene
+  - Tom_Map1
 --- !u!4 &985785698
 Transform:
   m_ObjectHideFlags: 0

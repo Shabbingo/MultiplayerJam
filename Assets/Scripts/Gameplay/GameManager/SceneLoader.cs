@@ -12,9 +12,12 @@ namespace Unity.MP_FPS
     /// </summary>
     static class ScenesLoader
     {
-        public static async Task LoadGameplayAsync(World server, World client)
+        private static string s_LoadedGameplayScene = GameManager.GameSceneName;
+
+        public static async Task LoadGameplayAsync(World server, World client,
+            string sceneName = GameManager.GameSceneName)
         {
-            await LoadGameplayScenesAsync();
+            await LoadGameplayScenesAsync(sceneName);
             if (server != null)
                 await WaitForAllSubScenesToLoadAsync(server, LoadingData.LoadingSteps.LoadServer);
             if (client != null)
@@ -25,7 +28,7 @@ namespace Unity.MP_FPS
         {
             LoadingData.Instance.UpdateLoading(LoadingData.LoadingSteps.UnloadingWorld);
 
-            var gameplay = SceneManager.GetSceneByName(GameManager.GameSceneName);
+            var gameplay = SceneManager.GetSceneByName(s_LoadedGameplayScene);
             if (gameplay.IsValid() && gameplay != SceneManager.GetActiveScene())
             {
                 var unloadScene = SceneManager.UnloadSceneAsync(gameplay);
@@ -34,9 +37,13 @@ namespace Unity.MP_FPS
             }
         }
 
-        static async Task LoadGameplayScenesAsync()
+        static async Task LoadGameplayScenesAsync(string sceneName)
         {
-            await LoadSceneAsync(GameManager.GameSceneName, LoadingData.LoadingSteps.LoadGameScene);
+            s_LoadedGameplayScene = string.IsNullOrWhiteSpace(sceneName)
+                ? GameManager.GameSceneName
+                : sceneName;
+            await LoadSceneAsync(s_LoadedGameplayScene,
+                LoadingData.LoadingSteps.LoadGameScene);
         }
 
         static async Task LoadSceneAsync(string sceneName, LoadingData.LoadingSteps step)
