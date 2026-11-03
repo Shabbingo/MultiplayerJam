@@ -151,7 +151,7 @@ Material:
     - _Use_Emissive_ColorMap: 0
     - _WorkflowMode: 1
     - _WorldSpace_UV: 1
-    - _WorldSpace_UV_XAxis_Only: 0
+    - _WorldSpace_UV_XAxis_Only: 1
     - _WorldSpace_UV_YAxis_Only: 0
     - _ZTest: 4
     - _ZWrite: 1
