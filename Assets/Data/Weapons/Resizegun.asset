@@ -67,11 +67,11 @@ MonoBehaviour:
   AoeRadius: 2.5
   ProjectileSpeed: 30
   IsLobbedProjectile: 1
-  LobUpwardSpeed: 1
+  LobUpwardSpeed: 3
   ProjectileGravity: 20
-  ProjectileBounces: 3
+  ProjectileBounces: 2
   FirstBounceVelocityRetention: 0.3
   ConsecutiveBounceVelocityRetentions:
-  - 0.7
-  - 0.4
-  ProjectileFuseTime: 3
+  - 0.6
+  - 0.2
+  ProjectileFuseTime: 2
