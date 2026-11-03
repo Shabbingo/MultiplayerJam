@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Properties;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -26,6 +27,7 @@ namespace Unity.MP_FPS.Client
             public const string CameraFovSlider = "CameraFovSlider";
             public const string KillLimitSlider = "KillLimitSlider";
             public const string TimeLimitSlider = "TimeLimitSlider";
+            public const string MapDropdown = "MapDropdown";
             public const string QuitGame = "QuitButton";
         }
 
@@ -45,6 +47,7 @@ namespace Unity.MP_FPS.Client
         Slider m_CameraFovSlider;
         SliderInt m_KillLimitSlider;
         SliderInt m_TimeLimitSlider;
+        DropdownField m_MapDropdown;
         Button m_QuitButton;
 
         void OnEnable()
@@ -123,7 +126,10 @@ namespace Unity.MP_FPS.Client
             m_KillLimitSlider.RegisterValueChangedCallback(OnKillLimitChanged);
             m_TimeLimitSlider = m_MainMenu.Q<SliderInt>(UIElementNames.TimeLimitSlider);
             m_TimeLimitSlider.RegisterValueChangedCallback(OnTimeLimitChanged);
+            m_MapDropdown = m_MainMenu.Q<DropdownField>(UIElementNames.MapDropdown);
+            m_MapDropdown.RegisterValueChangedCallback(OnMapChanged);
             RefreshMatchSettings();
+            RefreshMapChoices();
 
             m_QuitButton = m_MainMenu.Q<Button>(UIElementNames.QuitGame);
             m_QuitButton.clicked += OnQuitPressed;
@@ -150,6 +156,7 @@ namespace Unity.MP_FPS.Client
             m_CameraFovSlider.UnregisterValueChangedCallback(OnCameraFovChanged);
             m_KillLimitSlider.UnregisterValueChangedCallback(OnKillLimitChanged);
             m_TimeLimitSlider.UnregisterValueChangedCallback(OnTimeLimitChanged);
+            m_MapDropdown.UnregisterValueChangedCallback(OnMapChanged);
             m_QuitButton.clicked -= OnQuitPressed;
         }
 
@@ -192,6 +199,7 @@ namespace Unity.MP_FPS.Client
             UpdateSensitivityLabel(m_SensitivitySlider.value);
             RefreshCameraFovSlider();
             RefreshMatchSettings();
+            RefreshMapChoices();
             m_ConnectionPanel.style.display = DisplayStyle.None;
             m_OptionsPanel.style.display = DisplayStyle.Flex;
         }
@@ -247,6 +255,42 @@ namespace Unity.MP_FPS.Client
             GameSettings.Instance.MatchTimeLimitMinutes = evt.newValue;
             m_TimeLimitSlider.label =
                 $"Time Limit: {GameSettings.Instance.MatchTimeLimitMinutes} Minutes";
+        }
+
+        void RefreshMapChoices()
+        {
+            var choices = new List<string>();
+            if (GameManager.Instance != null)
+            {
+                foreach (string sceneName in GameManager.Instance.AvailableMapScenes)
+                {
+                    if (!string.IsNullOrWhiteSpace(sceneName))
+                    {
+                        choices.Add(sceneName);
+                    }
+                }
+            }
+
+            if (choices.Count == 0)
+            {
+                choices.Add(GameManager.GameSceneName);
+            }
+
+            m_MapDropdown.choices = choices;
+            string selectedMap = GameManager.Instance != null
+                ? GameManager.Instance.GetValidatedMapScene(
+                    GameSettings.Instance.SelectedMapScene)
+                : GameManager.GameSceneName;
+            GameSettings.Instance.SelectedMapScene = selectedMap;
+            m_MapDropdown.SetValueWithoutNotify(selectedMap);
+        }
+
+        void OnMapChanged(ChangeEvent<string> evt)
+        {
+            if (!string.IsNullOrWhiteSpace(evt.newValue))
+            {
+                GameSettings.Instance.SelectedMapScene = evt.newValue;
+            }
         }
 
         static void OnQuitPressed() => GameManager.Instance.QuitAsync();

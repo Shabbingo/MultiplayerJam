@@ -46,6 +46,7 @@ namespace Unity.MP_FPS
         const string k_HoldToShrinkKey = "HoldToShrink";
         const string k_KillLimitKey = "MatchKillLimit";
         const string k_TimeLimitMinutesKey = "MatchTimeLimitMinutes";
+        const string k_SelectedMapSceneKey = "SelectedMapScene";
 
         GameSettings()
         {
@@ -62,6 +63,8 @@ namespace Unity.MP_FPS
             m_MatchKillLimit = Mathf.Clamp(PlayerPrefs.GetInt(k_KillLimitKey, 20), 1, 100);
             m_MatchTimeLimitMinutes = Mathf.Clamp(
                 PlayerPrefs.GetInt(k_TimeLimitMinutesKey, 10), 1, 60);
+            m_SelectedMapScene = PlayerPrefs.GetString(
+                k_SelectedMapSceneKey, GameManager.GameSceneName);
         }
 
         public event EventHandler<BindablePropertyChangedEventArgs> propertyChanged;
@@ -345,6 +348,27 @@ namespace Unity.MP_FPS
 
                 m_MatchTimeLimitMinutes = clampedValue;
                 PlayerPrefs.SetInt(k_TimeLimitMinutesKey, clampedValue);
+                Notify();
+            }
+        }
+
+        string m_SelectedMapScene = GameManager.GameSceneName;
+        [CreateProperty]
+        public string SelectedMapScene
+        {
+            get => m_SelectedMapScene;
+            set
+            {
+                string selectedScene = string.IsNullOrWhiteSpace(value)
+                    ? GameManager.GameSceneName
+                    : value;
+                if (m_SelectedMapScene == selectedScene)
+                {
+                    return;
+                }
+
+                m_SelectedMapScene = selectedScene;
+                PlayerPrefs.SetString(k_SelectedMapSceneKey, selectedScene);
                 Notify();
             }
         }

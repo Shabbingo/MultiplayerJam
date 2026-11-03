@@ -12,6 +12,9 @@ EditorBuildSettings:
     path: Assets/Scenes/GameScene.unity
     guid: 6f586e48034994544a0532cc6f28cfdf
   - enabled: 1
+    path: Assets/Scenes/Tom_Map1.unity
+    guid: d8a1562d328bcdb4db51718af1e938c5
+  - enabled: 1
     path: Assets/Scenes/GameResourcesSubScene.unity
     guid: 61e4dafa831829f41ac2fd6c36bacab8
   - enabled: 1
