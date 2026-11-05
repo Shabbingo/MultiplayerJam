@@ -99,6 +99,20 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                 predictedPlayer.ValueRW.SecondaryWeaponCooldown += dt;
             }
 
+            if (predictedPlayer.ValueRO.SecondaryIsReloading)
+            {
+                predictedPlayer.ValueRW.SecondaryReloadTimer -= dt;
+                if (predictedPlayer.ValueRO.SecondaryReloadTimer <= 0f)
+                {
+                    var secondaryWeapon = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
+                        WeaponManager.SecondaryWeaponId);
+                    predictedPlayer.ValueRW.ControllerState.SecondaryWeaponAmmo =
+                        secondaryWeapon != null ? secondaryWeapon.MagazineSize : 0;
+                    predictedPlayer.ValueRW.SecondaryReloadTimer = 0f;
+                    predictedPlayer.ValueRW.SecondaryIsReloading = false;
+                }
+            }
+
             if (predictedPlayer.ValueRO.ControllerState.IsReloadingState)
             {
                 predictedPlayer.ValueRW.ReloadTimer -= dt;
@@ -193,7 +207,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     .WithAll<Simulate, PlayerControllerLink>())
         {
             var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
-            controllerLink.Controller.InitializeShrinkResource(ref predictedPlayer.ValueRW);
+            controllerLink.Controller.UpdateSelfResizeAmmo(
+                ref predictedPlayer.ValueRW, dt);
             // GameDebug.BurstLog("[PlayerPredictionSystem] PredictedPlayerGhost is Simulate");
 
             predictedPlayer.ValueRW.RequestApplyMovement = false;
@@ -210,32 +225,22 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     {
                         predictedPlayer.ValueRW.LocalLookYawPitchDegrees = input.LookYawPitchDegrees;
 
-                        if (input.SelectPrimaryWeapon)
-                        {
-                            WeaponManager.Instance.TryEquipWeapon(
-                                ref predictedPlayer.ValueRW, WeaponManager.PrimaryWeaponId);
-                        }
-                        else if (input.SelectSecondaryWeapon)
-                        {
-                            WeaponManager.Instance.TryEquipWeapon(
-                                ref predictedPlayer.ValueRW, WeaponManager.SecondaryWeaponId);
-                        }
-
-                        var weaponBeforeGrenade = default(WeaponManager.TemporaryWeaponState);
-                        bool restoreWeaponAfterGrenade = input.TossGrenade &&
+                        bool useGrowthProjectile = input.GrowShot || input.TossGrenade;
+                        var weaponBeforeAbility = default(WeaponManager.TemporaryWeaponState);
+                        uint abilityWeaponId = useGrowthProjectile
+                            ? WeaponManager.SecondaryWeaponId
+                            : WeaponManager.PrimaryWeaponId;
+                        bool restoreWeaponAfterAbility = (input.Shoot || useGrowthProjectile) &&
                             WeaponManager.Instance.TryBeginTemporaryWeapon(
                                 ref predictedPlayer.ValueRW,
-                                WeaponManager.SecondaryWeaponId,
-                                out weaponBeforeGrenade);
-
-                        controllerLink.Controller.ProcessShrinkInput(
-                            ref predictedPlayer.ValueRW, input);
+                                abilityWeaponId,
+                                out weaponBeforeAbility);
 
                         var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(predictedPlayer.ValueRO.EquippedWeaponID);
                         if (weaponData != null)
                         {
                             bool wantsToReload = input.Reload;
-                            bool wantsToShoot = input.Shoot || input.TossGrenade;
+                            bool wantsToShoot = input.Shoot || useGrowthProjectile;
                             bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
                             if ((wantsToReload || mustReload) &&
@@ -290,13 +295,17 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 else if (weaponData.Type == WeaponType.Projectile)
                                 {
                                     Vector3 targetPoint;
-                                    if (Physics.Raycast(eyePosition, aimDirection, out RaycastHit aimHit, 1000f, s_ProjectileTargetLayerMask))
+                                    float targetRange = weaponData.IsGuidedProjectile
+                                        ? weaponData.GuidedTargetRange
+                                        : 1000f;
+                                    if (Physics.Raycast(eyePosition, aimDirection, out RaycastHit aimHit,
+                                            targetRange, s_ProjectileTargetLayerMask))
                                     {
                                         targetPoint = aimHit.point;
                                     }
                                     else
                                     {
-                                        targetPoint = eyePosition + 1000f * aimDirection;
+                                        targetPoint = eyePosition + targetRange * aimDirection;
                                     }
 
                                     var directionToTarget = weaponData.IsLobbedProjectile
@@ -308,18 +317,21 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         commandInput.Tick.TickIndexForValidTick,
                                         predictedPlayer.ValueRO.EquippedWeaponID,
                                         shotOriginPosition,
-                                        spawnRotation);
+                                        spawnRotation,
+                                        targetPoint);
                                 }
                             }
 
-                            if (restoreWeaponAfterGrenade)
+                            if (restoreWeaponAfterAbility)
                             {
                                 WeaponManager.Instance.EndTemporaryWeapon(
                                     ref predictedPlayer.ValueRW,
-                                    in weaponBeforeGrenade);
+                                    in weaponBeforeAbility);
                             }
 
                             FirstPersonController.ProcessInputs(ref predictedPlayer.ValueRW.ControllerState, input, accumulateDT);
+                            controllerLink.Controller.ProcessSelfResize(
+                                ref predictedPlayer.ValueRW, input, accumulateDT);
                             controllerLink.Controller.GetSizeMovementMultipliers(
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,
@@ -351,10 +363,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         }
                     }
 
-                    // Advance once per replayed input tick so prediction stays in step
-                    // when multiple missed commands are processed together.
-                    controllerLink.Controller.UpdateShrinkResource(
-                        ref predictedPlayer.ValueRW, accumulateDT);
+                    // Size is controlled by weapon hits; right click no longer self-resizes.
                 }
 
                 // apply
@@ -367,10 +376,6 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                 Debug.LogWarning("[PlayerPredictionSystem] Player is simulated but there are no commands to process");
             }
 
-            if (commands.Length == 0)
-            {
-                controllerLink.Controller.UpdateShrinkResource(ref predictedPlayer.ValueRW, dt);
-            }
         }
 
         var applyDT = allowTickBatching ? frameDT : dt;

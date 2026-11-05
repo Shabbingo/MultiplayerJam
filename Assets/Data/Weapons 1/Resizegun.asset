@@ -1,0 +1,77 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 600e1b9bafb249d0907133f228c0a442, type: 3}
+  m_Name: Resizegun
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponData
+  WeaponName: Resizegun
+  Type: 1
+  ReticleType: 2
+  CooldownInMs: 1
+  Damage: 20
+  HitscanRange: 1
+  MagazineSize: 10
+  ReloadTime: 3
+  ProjectileGhostPrefab:
+    <GhostPrefab>k__BackingField:
+      m_AssetGUID: 38ee40c188d217c4fbd0f86d3a8afe09
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    m_GhostGuid:
+      Value:
+        x: 470085251
+        y: 1282485640
+        z: 3599699391
+        w: 2431625379
+  ProjectileHitVfxPrefab:
+    <GhostPrefab>k__BackingField:
+      m_AssetGUID: 4f6a8c2d1e3b4a5c9d807162534bf0ae
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    m_GhostGuid:
+      Value:
+        x: 3536365300
+        y: 3315905505
+        z: 639043801
+        w: 3926897717
+  MuzzleFlashVfxPrefab:
+    <GhostPrefab>k__BackingField:
+      m_AssetGUID: d5370334ebfc741919094c943fa694ee
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    m_GhostGuid:
+      Value:
+        x: 1127248733
+        y: 2437402558
+        z: 1237618833
+        w: 3997788915
+  WeaponFireSfx: {fileID: 11400000, guid: efa46b087affc004e90934acb0e499bb, type: 2}
+  WeaponReloadSfx: {fileID: 11400000, guid: 787dd818efa43da4f969b63e44de56b7, type: 2}
+  ResizeEffect: 1
+  ResizeEffectDuration: 3
+  Behavior: 1
+  AoeRadius: 2.5
+  ProjectileSpeed: 30
+  IsLobbedProjectile: 1
+  LobUpwardSpeed: 3
+  ProjectileGravity: 20
+  ProjectileBounces: 2
+  FirstBounceVelocityRetention: 0.3
+  ConsecutiveBounceVelocityRetentions:
+  - 0.6
+  - 0.2
+  ProjectileFuseTime: 2

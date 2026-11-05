@@ -39,6 +39,7 @@ namespace Unity.MP_FPS
             [GhostField] public uint WeaponID;
             [GhostField] public float3 Position;
             [GhostField] public float3 Velocity;
+            [GhostField] public float3 TargetPosition;
             [GhostField] public int BounceCount;
             [GhostField] public float Age;
             [GhostField] public uint MotionRevision;
@@ -76,11 +77,20 @@ namespace Unity.MP_FPS
         private float _localTime;
         private uint _weaponId;
         private uint _lastServerMotionRevision;
+        private Vector3 _guidedTarget;
+        private bool _hasGuidedTarget;
+
+        public void SetGuidedTarget(Vector3 targetPosition)
+        {
+            _guidedTarget = targetPosition;
+            _hasGuidedTarget = true;
+        }
 
         public override void OnGhostLinked()
         {
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             _weaponId = projectileData.WeaponID;
+            SetGuidedTarget(projectileData.TargetPosition);
             ApplyServerMotionState(projectileData);
         }
 
@@ -93,6 +103,19 @@ namespace Unity.MP_FPS
             }
 
             EnsureMotionInitialized(weaponData);
+            if (weaponData.IsGuidedProjectile)
+            {
+                var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+                var movementSystem = GhostGameObject.World
+                    .GetExistingSystemManaged<ServerPlayerMovementSystem>();
+                if (movementSystem != null && movementSystem.TryGetGuidedAimPoint(
+                        projectileData.OwnerNetworkId,
+                        weaponData.GuidedTargetRange,
+                        out Vector3 liveAimPoint))
+                {
+                    SetGuidedTarget(liveAimPoint);
+                }
+            }
             UpdateVelocity(deltaTime, weaponData);
             _collisionGraceTimer = Mathf.Max(0f, _collisionGraceTimer - deltaTime);
             Vector3 displacement = _velocity * deltaTime;
@@ -123,7 +146,11 @@ namespace Unity.MP_FPS
             }
 
             _velocity = transform.forward * weaponData.ProjectileSpeed;
-            if (weaponData.IsLobbedProjectile)
+            if (weaponData.IsGuidedProjectile)
+            {
+                _velocity += Vector3.up * weaponData.GuidedLaunchUpwardSpeed;
+            }
+            else if (weaponData.IsLobbedProjectile)
             {
                 _velocity += Vector3.up * weaponData.LobUpwardSpeed;
             }
@@ -133,7 +160,29 @@ namespace Unity.MP_FPS
 
         private void UpdateVelocity(float deltaTime, WeaponData weaponData)
         {
-            if (weaponData.IsLobbedProjectile)
+            if (weaponData.IsGuidedProjectile && _hasGuidedTarget)
+            {
+                Vector3 toTarget = _guidedTarget - transform.position;
+                if (toTarget.sqrMagnitude > 0.0001f)
+                {
+                    Vector3 currentDirection = _velocity.sqrMagnitude > 0.0001f
+                        ? _velocity.normalized
+                        : transform.forward;
+                    Vector3 steeredDirection = Vector3.RotateTowards(
+                        currentDirection,
+                        toTarget.normalized,
+                        Mathf.Deg2Rad * weaponData.GuidedTurnSpeed * deltaTime,
+                        0f);
+                    float currentSpeed = Mathf.Max(_velocity.magnitude, 0.01f);
+                    float targetSpeed = Mathf.Max(0.01f, weaponData.ProjectileSpeed);
+                    float speed = weaponData.GuidedAcceleration > 0f
+                        ? Mathf.MoveTowards(currentSpeed, targetSpeed,
+                            weaponData.GuidedAcceleration * deltaTime)
+                        : currentSpeed;
+                    _velocity = steeredDirection * speed;
+                }
+            }
+            else if (weaponData.IsLobbedProjectile)
             {
                 _velocity += Vector3.down * (weaponData.ProjectileGravity * deltaTime);
             }
@@ -336,6 +385,7 @@ namespace Unity.MP_FPS
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             projectileData.Position = transform.position;
             projectileData.Velocity = _velocity;
+            projectileData.TargetPosition = _guidedTarget;
             projectileData.BounceCount = _bounceCount;
             projectileData.Age = _localTime;
             projectileData.MotionRevision++;
@@ -344,6 +394,8 @@ namespace Unity.MP_FPS
 
         private void ApplyServerMotionState(in ProjectileData projectileData)
         {
+            SetGuidedTarget(projectileData.TargetPosition);
+
             if (GhostGameObject == null || GhostGameObject.Role == MultiplayerRole.Server ||
                 projectileData.MotionRevision == 0 ||
                 projectileData.MotionRevision == _lastServerMotionRevision)
@@ -512,14 +564,18 @@ namespace Unity.MP_FPS
 
                 var targetPlayer = playerGhostLookup.GetRefRW(targetEntity);
                 float healthBeforeDamage = targetPlayer.ValueRO.CurrentHealth;
-                float appliedDamage = weaponData.PlayerDamage;
-                targetPlayer.ValueRW.CurrentHealth -= appliedDamage;
+                float appliedDelta = weaponData.PlayerSizeDelta;
+                targetPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
+                    targetPlayer.ValueRO.CurrentHealth + appliedDelta,
+                    0f,
+                    targetPlayer.ValueRO.MaxHealth);
                 movementSystem.ApplyWeaponResizeEffect(targetEntity, weaponData, ref targetPlayer.ValueRW);
                 targetPlayer.ValueRW.ControllerState.IsHit = true;
-                targetPlayer.ValueRW.LastDamageAmount = appliedDamage;
+                targetPlayer.ValueRW.LastDamageAmount = Mathf.Abs(appliedDelta);
                 targetPlayer.ValueRW.LastHitTick = serverCurrentTick;
 
-                if (healthBeforeDamage > 0f && targetPlayer.ValueRO.CurrentHealth <= 0f &&
+                if (CrossedLethalSizeBoundary(healthBeforeDamage,
+                        targetPlayer.ValueRO.CurrentHealth, targetPlayer.ValueRO.MaxHealth) &&
                     LeaderboardManager.Instance != null)
                 {
                     LeaderboardManager.Instance.AddKill(projectileData.OwnerNetworkId, targetNetworkId);
@@ -558,16 +614,21 @@ namespace Unity.MP_FPS
                         $"2 hitPlayerOwner.NetworkId: {hitPlayerOwner.NetworkId.ToString()}, projectileData.OwnerNetworkId: {projectileData.OwnerNetworkId.ToString()}");
                     var targetPredictedPlayer = playerGhostLookup.GetRefRW(hitGhostObject.LinkedEntity);
                     var healthBeforeDamage = targetPredictedPlayer.ValueRO.CurrentHealth;
-                    var appliedDamage = weaponData.PlayerDamage;
-                    targetPredictedPlayer.ValueRW.CurrentHealth -= appliedDamage;
+                    var appliedDelta = weaponData.PlayerSizeDelta;
+                    targetPredictedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
+                        targetPredictedPlayer.ValueRO.CurrentHealth + appliedDelta,
+                        0f,
+                        targetPredictedPlayer.ValueRO.MaxHealth);
                     world.GetExistingSystemManaged<ServerPlayerMovementSystem>()
                         .ApplyWeaponResizeEffect(hitGhostObject.LinkedEntity, weaponData,
                             ref targetPredictedPlayer.ValueRW);
                     targetPredictedPlayer.ValueRW.ControllerState.IsHit = true;
-                    targetPredictedPlayer.ValueRW.LastDamageAmount = appliedDamage;
+                    targetPredictedPlayer.ValueRW.LastDamageAmount = Mathf.Abs(appliedDelta);
                     targetPredictedPlayer.ValueRW.LastHitTick = serverCurrentTick;
 
-                    if (healthBeforeDamage > 0 && targetPredictedPlayer.ValueRO.CurrentHealth <= 0)
+                    if (CrossedLethalSizeBoundary(healthBeforeDamage,
+                            targetPredictedPlayer.ValueRO.CurrentHealth,
+                            targetPredictedPlayer.ValueRO.MaxHealth))
                     {
                         if (LeaderboardManager.Instance != null)
                         {
@@ -596,6 +657,12 @@ namespace Unity.MP_FPS
             Debug.DrawRay(position - Vector3.up * size, Vector3.up * size * 2, color, duration);
             Debug.DrawRay(position - Vector3.right * size, Vector3.right * size * 2, color, duration);
             Debug.DrawRay(position - Vector3.forward * size, Vector3.forward * size * 2, color, duration);
+        }
+
+        private static bool CrossedLethalSizeBoundary(float previous, float current, float maximum)
+        {
+            bool wasAlive = previous > 0f && previous < maximum;
+            return wasAlive && (current <= 0f || current >= maximum);
         }
     }
 }

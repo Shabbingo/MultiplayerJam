@@ -15,9 +15,13 @@ namespace Unity.MP_FPS
         private VisualElement m_RootElement;
         private ProgressBar m_HealthBar;
         private VisualElement m_PlayerHealthBarFill;
-        private ProgressBar m_ShrinkResourceBar;
-        private ProgressBar m_AmmoBar;
-        private Label m_AmmoLabel;
+        private ProgressBar m_SelfResizeChargeBar;
+        private ProgressBar m_ShrinkAmmoBar;
+        private ProgressBar m_GrowAmmoBar;
+        private Label m_ShrinkAmmoLabel;
+        private Label m_GrowAmmoLabel;
+        private Label m_SelfShrinkUsesLabel;
+        private Label m_SelfGrowUsesLabel;
         private Label m_ReloadingLabel;
         private VisualElement m_Reticle;
 
@@ -48,10 +52,18 @@ namespace Unity.MP_FPS
                 m_PlayerHealthBarFill = m_HealthBar.Q<VisualElement>(null, "unity-progress-bar__progress");
             }
 
-            m_ShrinkResourceBar = m_RootElement.Q<ProgressBar>("player-stamina-bar");
+            m_SelfResizeChargeBar = m_RootElement.Q<ProgressBar>("player-stamina-bar");
+            if (m_SelfResizeChargeBar != null)
+            {
+                m_SelfResizeChargeBar.style.display = DisplayStyle.None;
+            }
 
-            m_AmmoLabel = m_RootElement.Q<Label>("ammo-label");
-            m_AmmoBar = m_RootElement.Q<ProgressBar>("player-ammo-bar");
+            m_ShrinkAmmoLabel = m_RootElement.Q<Label>("shrink-ammo-label");
+            m_GrowAmmoLabel = m_RootElement.Q<Label>("grow-ammo-label");
+            m_ShrinkAmmoBar = m_RootElement.Q<ProgressBar>("shrink-ammo-bar");
+            m_GrowAmmoBar = m_RootElement.Q<ProgressBar>("grow-ammo-bar");
+            m_SelfShrinkUsesLabel = m_RootElement.Q<Label>("self-shrink-uses-label");
+            m_SelfGrowUsesLabel = m_RootElement.Q<Label>("self-grow-uses-label");
             m_ReloadingLabel = m_RootElement.Q<Label>("reloading-label");
             m_Reticle = m_RootElement.Q<VisualElement>("player-reticle");
         }
@@ -114,37 +126,56 @@ namespace Unity.MP_FPS
                 m_HealthBar.highValue = playerData.MaxHealth > 0 ? playerData.MaxHealth : 100;
                 m_HealthBar.value = playerData.CurrentHealth;
 
-                float healthPercent = playerData.CurrentHealth / 100f;
-                Color healthColor = Color.Lerp(Color.red, k_HealthBarColor, healthPercent);
+                float sizeHealth = playerData.CurrentHealth;
+                Color healthColor = sizeHealth <= 100f
+                    ? Color.Lerp(Color.red, k_HealthBarColor, Mathf.Clamp01(sizeHealth / 100f))
+                    : Color.Lerp(k_HealthBarColor, new Color(1f, 0.35f, 0.05f, 0.9f),
+                        Mathf.Clamp01((sizeHealth - 100f) / 100f));
 
                 // Apply the calculated color to the fill element's background
                 m_PlayerHealthBarFill.style.backgroundColor = healthColor;
             }
 
-
-            // Update the per-player resource that limits time spent manually shrunk.
-            if (m_ShrinkResourceBar != null)
+            if (m_SelfResizeChargeBar != null)
             {
-                m_ShrinkResourceBar.highValue = playerData.MaxShrinkResource > 0f
-                    ? playerData.MaxShrinkResource
-                    : 1f;
-                m_ShrinkResourceBar.value = playerData.CurrentShrinkResource;
+                m_SelfResizeChargeBar.style.display = DisplayStyle.None;
             }
 
-            // Update Ammo Label
-            if (m_AmmoLabel != null)
+            if (m_SelfShrinkUsesLabel != null && m_SelfGrowUsesLabel != null)
             {
-                var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(playerData.EquippedWeaponID);
-                int magazineSize = weaponData != null ? weaponData.MagazineSize : 0;
+                m_SelfShrinkUsesLabel.text =
+                    $"CTRL SELF SHRINK: {playerData.SelfShrinkCharges} / {playerData.MaxSelfShrinkCharges}";
+                m_SelfGrowUsesLabel.text =
+                    $"SHIFT SELF GROW: {playerData.SelfGrowCharges} / {playerData.MaxSelfGrowCharges}";
+                m_SelfShrinkUsesLabel.style.color = playerData.SelfShrinkCharges > 0
+                    ? Color.white
+                    : Color.red;
+                m_SelfGrowUsesLabel.style.color = playerData.SelfGrowCharges > 0
+                    ? Color.white
+                    : Color.red;
+            }
 
-                // Update Ammo Text and Color
-                m_AmmoLabel.text = $"{playerData.CurrentAmmo.ToString()} / {magazineSize.ToString()}";
-                if (playerData.CurrentAmmo == 0) m_AmmoLabel.style.color = Color.red;
-                else if (playerData.CurrentAmmo <= magazineSize * 0.3f) m_AmmoLabel.style.color = Color.yellow;
-                else m_AmmoLabel.style.color = Color.white;
 
-                m_AmmoBar.highValue = magazineSize;
-                m_AmmoBar.value = playerData.CurrentAmmo;
+            // Both abilities are always available, so show both persistent magazines.
+            if (m_ShrinkAmmoLabel != null && m_GrowAmmoLabel != null)
+            {
+                var shrinkWeapon = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
+                    WeaponManager.PrimaryWeaponId);
+                var growWeapon = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
+                    WeaponManager.SecondaryWeaponId);
+                int shrinkCapacity = shrinkWeapon != null ? shrinkWeapon.MagazineSize : 0;
+                int growCapacity = growWeapon != null ? growWeapon.MagazineSize : 0;
+                int shrinkAmmo = playerData.EquippedWeaponID == WeaponManager.PrimaryWeaponId
+                    ? playerData.CurrentAmmo
+                    : playerData.ControllerState.PrimaryWeaponAmmo;
+                int growAmmo = playerData.EquippedWeaponID == WeaponManager.SecondaryWeaponId
+                    ? playerData.CurrentAmmo
+                    : playerData.ControllerState.SecondaryWeaponAmmo;
+
+                UpdateAbilityAmmoDisplay(m_ShrinkAmmoLabel, m_ShrinkAmmoBar,
+                    "LMB SHRINK", shrinkAmmo, shrinkCapacity);
+                UpdateAbilityAmmoDisplay(m_GrowAmmoLabel, m_GrowAmmoBar,
+                    "RMB GROW", growAmmo, growCapacity);
             }
 
             // Update Reloading Indicator
@@ -156,6 +187,23 @@ namespace Unity.MP_FPS
 
             // Update Reticle
             UpdateReticleVisual(playerData);
+        }
+
+        private static void UpdateAbilityAmmoDisplay(Label label, ProgressBar bar,
+            string abilityName, int ammo, int capacity)
+        {
+            label.text = $"{abilityName}  {ammo} / {capacity}";
+            label.style.color = ammo <= 0
+                ? Color.red
+                : ammo <= capacity * 0.3f
+                    ? Color.yellow
+                    : Color.white;
+
+            if (bar != null)
+            {
+                bar.highValue = Mathf.Max(1, capacity);
+                bar.value = ammo;
+            }
         }
 
         private void UpdateReticleVisual(PredictedPlayerGhost playerData)

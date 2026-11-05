@@ -211,6 +211,52 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FirstPersonController
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
   m_ManualShrinkHealthMultiplier: 0.2
+  m_SelfShrinkUses: 3
+  m_SelfGrowUses: 3
+  m_SelfShrinkRechargeSeconds: 2
+  m_SelfGrowRechargeSeconds: 2
+  m_SelfResizeChunkSize: 25
+  m_SelfResizeSafetyMargin: 1
+  m_AirGrowJumpSpeed: 5
+  m_AirShrinkPushSpeed: 7
+  m_SelfResizeLensDistortion: 0.8
+  m_InvertSelfResizeLensDirection: 1
+  m_SelfResizeLensPulseDuration: 0.2
+  m_SelfShrinkLensCenterY: 0.3
+  m_SelfGrowLensCenterY: 0.6
+  m_SelfResizeLensPulseCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.12
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   m_MaxShrinkResource: 5
   m_ShrinkActivationCost: 0.5
   m_ShrinkDrainRate: 1
@@ -292,7 +338,9 @@ MonoBehaviour:
   m_OtherPlayerVisuals: {fileID: 2363139590035842310}
   m_SpawnSFX: {fileID: 11400000, guid: bfec68d58a412fa4fb63e149caa5b3e5, type: 2}
   m_MinimumPlayerScale: 0.2
-  m_ManualScaleTransitionSpeed: 4
+  m_MaximumPlayerScale: 2
+  m_ShrinkScaleResponseSpeed: 16
+  m_GrowScaleResponseSpeed: 32
   <CameraTarget>k__BackingField: {fileID: 1666222585322407308}
   <ReticlePoint>k__BackingField: {fileID: 912756953968078347}
   <ShotOrigin>k__BackingField: {fileID: 429955562769033583}
@@ -312,7 +360,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d6eb1f3325185fc43a4bb6f3d95ff636, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PredictedPlayerControllerConstsAuthoring
-  <WalkSpeed>k__BackingField: 4.7
+  <WalkSpeed>k__BackingField: 9
   <SprintSpeed>k__BackingField: 7
   <WalkRotationSmoothTime>k__BackingField: 0.1
   <WalkAnimationMotionScale>k__BackingField: 0.4
@@ -322,7 +370,7 @@ MonoBehaviour:
   <SprintLandingSpeedMultiplier>k__BackingField: 10
   <SprintAnimationMotionScale>k__BackingField: 0.25
   <JumpHeight>k__BackingField: 1.2
-  <Gravity>k__BackingField: -18
+  <Gravity>k__BackingField: -16
   <TerminalVelocity>k__BackingField: -53
   <StandingFallSpeed>k__BackingField: -3.75
   <JumpTimeout>k__BackingField: 0

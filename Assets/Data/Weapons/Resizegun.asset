@@ -61,12 +61,17 @@ MonoBehaviour:
         w: 3997788915
   WeaponFireSfx: {fileID: 11400000, guid: efa46b087affc004e90934acb0e499bb, type: 2}
   WeaponReloadSfx: {fileID: 11400000, guid: 787dd818efa43da4f969b63e44de56b7, type: 2}
-  ResizeEffect: 1
+  ResizeEffect: 3
   ResizeEffectDuration: 3
-  Behavior: 1
+  Behavior: 0
   AoeRadius: 2.5
-  ProjectileSpeed: 30
-  IsLobbedProjectile: 1
+  ProjectileSpeed: 24
+  IsGuidedProjectile: 1
+  GuidedTurnSpeed: 100
+  GuidedAcceleration: 35
+  GuidedLaunchUpwardSpeed: 8
+  GuidedTargetRange: 250
+  IsLobbedProjectile: 0
   LobUpwardSpeed: 3
   ProjectileGravity: 20
   ProjectileBounces: 2
@@ -74,4 +79,4 @@ MonoBehaviour:
   ConsecutiveBounceVelocityRetentions:
   - 0.6
   - 0.2
-  ProjectileFuseTime: 2
+  ProjectileFuseTime: 6

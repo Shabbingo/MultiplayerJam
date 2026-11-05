@@ -222,7 +222,8 @@ namespace Unity.MP_FPS
             ecb.SetComponent(playerEntity, new PredictedPlayerGhost
             {
                 InputIndex = 0,
-                MaxHealth = 100f,
+                // Size-health is a 0-200 resource: 100 is normal size, either edge is lethal.
+                MaxHealth = 200f,
                 CurrentHealth = 100f,
                 ControllerState = initialControllerState,
                 EquippedWeaponID = weaponId,
@@ -264,10 +265,14 @@ namespace Unity.MP_FPS
             var clientsMap = SystemAPI.GetSingletonBuffer<ClientsMap>();
 
             // --- Part 1: Detect Death and Destroy Player Entity ---
-            foreach (var (playerGhost, ghostOwner, entity) in
-                     SystemAPI.Query<RefRO<PredictedPlayerGhost>, RefRO<GhostOwner>>().WithEntityAccess())
+            foreach (var (playerGhost, ghostOwner, transform, entity) in
+                     SystemAPI.Query<RefRO<PredictedPlayerGhost>, RefRO<GhostOwner>, RefRO<LocalTransform>>()
+                         .WithEntityAccess())
             {
-                if (playerGhost.ValueRO.CurrentHealth <= 0)
+                bool shrunkToDeath = playerGhost.ValueRO.CurrentHealth <= 0f;
+                bool overgrown = playerGhost.ValueRO.MaxHealth > 0f &&
+                                 playerGhost.ValueRO.CurrentHealth >= playerGhost.ValueRO.MaxHealth;
+                if (shrunkToDeath || overgrown)
                 {
                     var networkId = ghostOwner.ValueRO.NetworkId;
                     var connectionEntity = clientsMap[ghostOwner.ValueRO.NetworkId].ConnectionEntity;
@@ -277,6 +282,12 @@ namespace Unity.MP_FPS
                     {
                         Debug.Log($"[Server] Player {entity} has died. Starting respawn timer for connection {connectionEntity}.");
                         ecb.AddComponent(connectionEntity, new PendingRespawn { RespawnTimer = 5f });
+
+                        if (overgrown && VisualEffectManager.ServerInstance != null)
+                        {
+                            VisualEffectManager.ServerInstance.Server_RequestPlayerExplosion(
+                                (Vector3)transform.ValueRO.Position + Vector3.up);
+                        }
                     }
                     
                     if (SystemAPI.HasComponent<PlayerClientCommandInputLookup>(entity))

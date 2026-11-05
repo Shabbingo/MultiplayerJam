@@ -58,11 +58,23 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public float CurrentShrinkResource;
     [GhostField] public float MaxShrinkResource;
     [GhostField] public float ResizeBounceWindowRemaining;
+    [GhostField] public float SelfResizeChargeAmount;
+    [GhostField] public float SelfResizeMaxCharge;
+    [GhostField] public int SelfResizeChargeDirection;
+    [GhostField] public int SelfShrinkCharges;
+    [GhostField] public int SelfGrowCharges;
+    [GhostField] public int MaxSelfShrinkCharges;
+    [GhostField] public int MaxSelfGrowCharges;
+    [GhostField] public bool SelfResizeAmmoInitialized;
+    [GhostField] public float SelfShrinkRechargeTimer;
+    [GhostField] public float SelfGrowRechargeTimer;
     [GhostField] public float3 RecoilVelocity;
     
     [GhostField] public uint EquippedWeaponID;
     [GhostField] public float WeaponCooldown;   // Timer to control rate of fire
     [GhostField] public float SecondaryWeaponCooldown;
+    [GhostField] public float SecondaryReloadTimer;
+    [GhostField] public bool SecondaryIsReloading;
     
     [GhostField] public int CurrentAmmo;
     [GhostField] public float LastDamageAmount;

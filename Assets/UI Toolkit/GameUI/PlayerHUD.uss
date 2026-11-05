@@ -4,27 +4,32 @@
     height: 100%;
 }
 
-#weapon-info-container,
+.ability-side-panel,
 #health-info-container {
     position: absolute;
     bottom: 20px;
     background-color: rgba(0, 0, 0, 0.0);
     padding: 15px;
     border-radius: 5px;
-    width: 320px;
+    width: 300px;
 }
 
-#weapon-info-container {
+#left-ability-container {
+    left: 20px;
+    right: auto;
+    align-items: flex-start;
+}
+
+#right-ability-container {
     right: 20px;
     left: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end; /* Align children to the right */
+    align-items: flex-end;
 }
 
 #health-info-container {
-    left: 20px;
-    right: auto;
+    left: 50%;
+    margin-left: -170px;
+    width: 340px;
 }
 
 #player-health-bar {
@@ -45,6 +50,14 @@
     justify-content: center;
 }
 
+.self-resize-ammo-label {
+    color: white;
+    font-size: 13px;
+    -unity-font-style: bold;
+    text-shadow: 1px 1px 2px rgb(0, 0, 0);
+    margin-top: 8px;
+}
+
 #player-ammo-bar {
     width: 85%;
     height: 30px;
@@ -54,13 +67,26 @@
     justify-content: center;
 }
 
-#ammo-container {
-    display: flex;
-    flex-direction: row;
-    align-items: center; /* Vertically center items */
-    justify-content: flex-end; /* Push everything to the right */
-    margin-top: 5px;
-    width: 100%;
+.ability-ammo-label {
+    font-size: 15px;
+    color: white;
+    -unity-font-style: bold;
+    text-shadow: 1px 1px 2px rgb(0, 0, 0);
+    margin-bottom: 5px;
+}
+
+.ability-ammo-bar {
+    width: 240px;
+    height: 22px;
+    min-height: 22px;
+}
+
+.side-label-left {
+    -unity-text-align: middle-left;
+}
+
+.side-label-right {
+    -unity-text-align: middle-right;
 }
 
 #ammo-label {
@@ -193,8 +219,16 @@
     display: none;
 }
 
+#player-stamina-bar .unity-progress-bar__title {
+    display: flex;
+}
+
 .kits-ammo-bar .unity-progress-bar__progress {
     background-color: var(--color-progressbar-ammo-blue);
+}
+
+.kits-grow-ammo-bar .unity-progress-bar__progress {
+    background-color: rgba(255, 132, 35, 0.85);
 }
 
 .kits-shrink-resource-bar .unity-progress-bar__progress {

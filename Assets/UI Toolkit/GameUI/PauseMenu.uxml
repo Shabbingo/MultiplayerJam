@@ -6,9 +6,9 @@
                 <ui:VisualElement name="InGamePanel" picking-mode="Ignore">
                     <ui:Slider label="Mouse Sensitivity: 1.50" low-value="0.1" high-value="5" value="1.5" show-input-field="true" name="MouseSensitivitySlider" class="sensitivity-slider"/>
                     <ui:Slider label="Camera FOV: 75" low-value="60" high-value="110" value="75" show-input-field="true" name="CameraFovSlider" class="sensitivity-slider"/>
-                    <ui:Toggle label="Hold to Shrink (Off = Toggle)" value="true" name="HoldToShrinkToggle" class="shrink-mode-toggle"/>
-                    <ui:Button text="Shrink Binding: Right Button" name="ShrinkBindingButton" tabindex="0"/>
-                    <ui:Button text="Toss Grenade Binding: G" name="GrenadeBindingButton" tabindex="1"/>
+                    <ui:Label text="Self Shrink: Ctrl"/>
+                    <ui:Label text="Self Grow: Shift"/>
+                    <ui:Button text="Growth Missile Alt Binding: G" name="GrenadeBindingButton" tabindex="0"/>
                     <ui:Button text="Resume" name="ResumeButton" tabindex="2" selectable="false" focusable="false"/>
                     <ui:Button text="Main Menu" name="MainMenuButton" tabindex="3"/>
                     <ui:Button text="Quit" name="QuitButton" tabindex="4"/>

@@ -62,8 +62,11 @@ namespace Unity.MP_FPS
             player.WeaponCooldown = weaponId == SecondaryWeaponId
                 ? player.SecondaryWeaponCooldown
                 : weaponData.CooldownInMs;
-            player.ReloadTimer = 0f;
-            player.ControllerState.IsReloadingState = false;
+            player.ReloadTimer = weaponId == SecondaryWeaponId
+                ? player.SecondaryReloadTimer
+                : 0f;
+            player.ControllerState.IsReloadingState =
+                weaponId == SecondaryWeaponId && player.SecondaryIsReloading;
             return true;
         }
 
@@ -93,6 +96,9 @@ namespace Unity.MP_FPS
             else if (player.EquippedWeaponID == SecondaryWeaponId)
             {
                 player.ControllerState.SecondaryWeaponAmmo = player.CurrentAmmo;
+                player.SecondaryWeaponCooldown = player.WeaponCooldown;
+                player.SecondaryReloadTimer = player.ReloadTimer;
+                player.SecondaryIsReloading = player.ControllerState.IsReloadingState;
             }
 
             player.EquippedWeaponID = previousState.EquippedWeaponId;

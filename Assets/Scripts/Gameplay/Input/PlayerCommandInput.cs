@@ -9,14 +9,11 @@ public struct PlayerInput
     {
         Jump = 1 << 0,
         Shoot = 1 << 1,
-        Sprint = 1 << 2,
         Reload = 1 << 3,
-        ToggleShrink = 1 << 4,
-        SelectPrimaryWeapon = 1 << 5,
-        SelectSecondaryWeapon = 1 << 6,
-        ShrinkHeld = 1 << 7,
-        HoldShrinkMode = 1 << 8,
-        TossGrenade = 1 << 9
+        TossGrenade = 1 << 9,
+        GrowShot = 1 << 10,
+        SelfShrinkPressed = 1 << 11,
+        SelfGrowPressed = 1 << 12
     }
 
     public float2 MoveInput;
@@ -26,14 +23,11 @@ public struct PlayerInput
 
     public bool Jump => (InputFlags & (uint)InputFlag.Jump) != 0;
     public bool Shoot => (InputFlags & (uint)InputFlag.Shoot) != 0;
-    public bool Sprint => (InputFlags & (uint)InputFlag.Sprint) != 0;
     public bool Reload => (InputFlags & (uint)InputFlag.Reload) != 0;
-    public bool ToggleShrink => (InputFlags & (uint)InputFlag.ToggleShrink) != 0;
-    public bool ShrinkHeld => (InputFlags & (uint)InputFlag.ShrinkHeld) != 0;
-    public bool HoldShrinkMode => (InputFlags & (uint)InputFlag.HoldShrinkMode) != 0;
     public bool TossGrenade => (InputFlags & (uint)InputFlag.TossGrenade) != 0;
-    public bool SelectPrimaryWeapon => (InputFlags & (uint)InputFlag.SelectPrimaryWeapon) != 0;
-    public bool SelectSecondaryWeapon => (InputFlags & (uint)InputFlag.SelectSecondaryWeapon) != 0;
+    public bool GrowShot => (InputFlags & (uint)InputFlag.GrowShot) != 0;
+    public bool SelfShrinkPressed => (InputFlags & (uint)InputFlag.SelfShrinkPressed) != 0;
+    public bool SelfGrowPressed => (InputFlags & (uint)InputFlag.SelfGrowPressed) != 0;
 
     public void SetFlag(InputFlag flag, bool set)
     {
@@ -49,13 +43,12 @@ public struct PlayerInput
 
     public void UpdateFrom(in PlayerInput input)
     {
-        // Event flags accumulate within a network tick, but held-state flags must
-        // reflect the latest frame so releasing shrink is never lost.
-        const uint shrinkStateMask =
-            (uint)InputFlag.ShrinkHeld | (uint)InputFlag.HoldShrinkMode;
-        InputFlags = (InputFlags & ~shrinkStateMask) |
-                     (input.InputFlags & shrinkStateMask);
-        InputFlags |= input.InputFlags & ~shrinkStateMask;
+        // Event flags accumulate within a network tick. GrowShot is the only
+        // continuous held-state flag; self-resize is now a one-frame press event.
+        const uint heldStateMask = (uint)InputFlag.GrowShot;
+        InputFlags = (InputFlags & ~heldStateMask) |
+                     (input.InputFlags & heldStateMask);
+        InputFlags |= input.InputFlags & ~heldStateMask;
     }
 }
 

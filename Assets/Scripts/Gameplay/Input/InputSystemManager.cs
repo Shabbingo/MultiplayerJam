@@ -5,7 +5,6 @@ using UnityEngine;
 
 public class InputSystemManager : Singleton<InputSystemManager>
 {
-    private const string k_ShrinkBindingOverridesKey = "ShrinkBindingOverrides";
     private const string k_GrenadeBindingOverridesKey = "GrenadeBindingOverrides";
 
     protected override bool Persistent => true;
@@ -137,7 +136,6 @@ public class InputSystemManager : Singleton<InputSystemManager>
         Debug.Log($"[InputSystemManager]: Pairing device {device.name} user index {user.index} id {user.id}");
 
         var gameControls = new InputSystem_Actions();
-        ApplySavedShrinkBinding(gameControls);
         ApplySavedGrenadeBinding(gameControls);
         gameControls.Enable();
         user.AssociateActionsWithUser(gameControls);
@@ -153,21 +151,6 @@ public class InputSystemManager : Singleton<InputSystemManager>
         }
 
         return user;
-    }
-
-    public static void ApplySavedShrinkBinding(InputSystem_Actions controls)
-    {
-        string bindingOverrides = PlayerPrefs.GetString(k_ShrinkBindingOverridesKey, string.Empty);
-        if (!string.IsNullOrEmpty(bindingOverrides))
-        {
-            controls.UI.RightClick.LoadBindingOverridesFromJson(bindingOverrides);
-        }
-    }
-
-    public static void SaveShrinkBinding(InputSystem_Actions controls)
-    {
-        PlayerPrefs.SetString(k_ShrinkBindingOverridesKey,
-            controls.UI.RightClick.SaveBindingOverridesAsJson());
     }
 
     public static void ApplySavedGrenadeBinding(InputSystem_Actions controls)

@@ -16,8 +16,6 @@ namespace Unity.MP_FPS
             public const string QuitButton = "QuitButton";
             public const string SensitivitySlider = "MouseSensitivitySlider";
             public const string CameraFovSlider = "CameraFovSlider";
-            public const string HoldToShrinkToggle = "HoldToShrinkToggle";
-            public const string ShrinkBindingButton = "ShrinkBindingButton";
             public const string GrenadeBindingButton = "GrenadeBindingButton";
         }
 
@@ -26,10 +24,7 @@ namespace Unity.MP_FPS
         Button m_QuitButton;
         Slider m_SensitivitySlider;
         Slider m_CameraFovSlider;
-        Toggle m_HoldToShrinkToggle;
-        Button m_ShrinkBindingButton;
         Button m_GrenadeBindingButton;
-        InputActionRebindingExtensions.RebindingOperation m_ShrinkRebindOperation;
         InputActionRebindingExtensions.RebindingOperation m_GrenadeRebindOperation;
         int m_IgnorePauseToggleFrame = -1;
 
@@ -63,14 +58,6 @@ namespace Unity.MP_FPS
             RefreshCameraFovSlider();
             m_CameraFovSlider.RegisterValueChangedCallback(OnCameraFovChanged);
 
-            m_HoldToShrinkToggle = root.Q<Toggle>(UIElementNames.HoldToShrinkToggle);
-            m_HoldToShrinkToggle.SetValueWithoutNotify(GameSettings.Instance.HoldToShrink);
-            m_HoldToShrinkToggle.RegisterValueChangedCallback(OnHoldToShrinkChanged);
-
-            m_ShrinkBindingButton = root.Q<Button>(UIElementNames.ShrinkBindingButton);
-            m_ShrinkBindingButton.clicked += StartShrinkRebind;
-            RefreshShrinkBinding();
-
             m_GrenadeBindingButton = root.Q<Button>(UIElementNames.GrenadeBindingButton);
             m_GrenadeBindingButton.clicked += StartGrenadeRebind;
             RefreshGrenadeBinding();
@@ -84,14 +71,7 @@ namespace Unity.MP_FPS
             m_QuitButton.clicked -= OnQuitPressed;
             m_SensitivitySlider.UnregisterValueChangedCallback(OnSensitivityChanged);
             m_CameraFovSlider.UnregisterValueChangedCallback(OnCameraFovChanged);
-            m_HoldToShrinkToggle.UnregisterValueChangedCallback(OnHoldToShrinkChanged);
-            m_ShrinkBindingButton.clicked -= StartShrinkRebind;
             m_GrenadeBindingButton.clicked -= StartGrenadeRebind;
-
-            if (m_ShrinkRebindOperation != null)
-            {
-                m_ShrinkRebindOperation.Cancel();
-            }
 
             if (m_GrenadeRebindOperation != null)
             {
@@ -101,7 +81,7 @@ namespace Unity.MP_FPS
 
         void TogglePauseMenuVisibility(InputAction.CallbackContext obj)
         {
-            if (m_ShrinkRebindOperation != null || m_GrenadeRebindOperation != null ||
+            if (m_GrenadeRebindOperation != null ||
                 m_IgnorePauseToggleFrame == Time.frameCount)
             {
                 return;
@@ -112,7 +92,7 @@ namespace Unity.MP_FPS
             {
                 RefreshSensitivitySlider();
                 RefreshCameraFovSlider();
-                RefreshShrinkControls();
+                RefreshGrenadeBinding();
             }
             GameSettings.Instance.IsPauseMenuOpen = !GameSettings.Instance.IsPauseMenuOpen;
         }
@@ -143,91 +123,9 @@ namespace Unity.MP_FPS
             m_CameraFovSlider.label = $"Camera FOV: {GameSettings.Instance.CameraFov:0}";
         }
 
-        void RefreshShrinkControls()
-        {
-            m_HoldToShrinkToggle.SetValueWithoutNotify(GameSettings.Instance.HoldToShrink);
-            RefreshShrinkBinding();
-            RefreshGrenadeBinding();
-        }
-
-        void OnHoldToShrinkChanged(ChangeEvent<bool> evt)
-        {
-            GameSettings.Instance.HoldToShrink = evt.newValue;
-        }
-
-        void StartShrinkRebind()
-        {
-            if (m_ShrinkRebindOperation != null || m_GrenadeRebindOperation != null)
-            {
-                return;
-            }
-
-            if (!InputSystemManager.TryGetFirstInputUser(out var user))
-            {
-                return;
-            }
-
-            var controls = (InputSystem_Actions)user.actions;
-            var shrinkAction = controls.UI.RightClick;
-            shrinkAction.Disable();
-            m_ShrinkBindingButton.text = "Press a key or mouse button...";
-
-            m_ShrinkRebindOperation = shrinkAction.PerformInteractiveRebinding(0)
-                .WithControlsExcluding("<Mouse>/position")
-                .WithControlsExcluding("<Mouse>/delta")
-                .WithControlsExcluding("<Mouse>/scroll")
-                .WithCancelingThrough("<Keyboard>/escape")
-                .OnCancel(_ => FinishShrinkRebind(false))
-                .OnComplete(_ => FinishShrinkRebind(true))
-                .Start();
-        }
-
-        void FinishShrinkRebind(bool saveBinding)
-        {
-            if (m_ShrinkRebindOperation == null)
-            {
-                return;
-            }
-
-            var shrinkAction = m_ShrinkRebindOperation.action;
-            if (!saveBinding)
-            {
-                m_IgnorePauseToggleFrame = Time.frameCount;
-            }
-            m_ShrinkRebindOperation.Dispose();
-            m_ShrinkRebindOperation = null;
-            shrinkAction.Enable();
-
-            if (saveBinding)
-            {
-                if (InputSystemManager.TryGetFirstInputUser(out var user))
-                {
-                    var controls = (InputSystem_Actions)user.actions;
-                    InputSystemManager.SaveShrinkBinding(controls);
-                }
-            }
-
-            RefreshShrinkBinding();
-        }
-
-        void RefreshShrinkBinding()
-        {
-            if (!InputSystemManager.TryGetFirstInputUser(out var user))
-            {
-                m_ShrinkBindingButton.text = "Shrink Binding: Unavailable";
-                return;
-            }
-
-            var controls = (InputSystem_Actions)user.actions;
-            string bindingPath = controls.UI.RightClick.bindings[0].effectivePath;
-            string displayName = InputControlPath.ToHumanReadableString(bindingPath,
-                InputControlPath.HumanReadableStringOptions.OmitDevice);
-            m_ShrinkBindingButton.text = $"Shrink Binding: {displayName}";
-        }
-
         void StartGrenadeRebind()
         {
-            if (m_GrenadeRebindOperation != null || m_ShrinkRebindOperation != null)
+            if (m_GrenadeRebindOperation != null)
             {
                 return;
             }
@@ -282,7 +180,7 @@ namespace Unity.MP_FPS
         {
             if (!InputSystemManager.TryGetFirstInputUser(out var user))
             {
-                m_GrenadeBindingButton.text = "Toss Grenade Binding: Unavailable";
+                m_GrenadeBindingButton.text = "Growth Missile Alt Binding: Unavailable";
                 return;
             }
 
@@ -290,7 +188,7 @@ namespace Unity.MP_FPS
             string bindingPath = controls.FPS.ShootGrenade.bindings[0].effectivePath;
             string displayName = InputControlPath.ToHumanReadableString(bindingPath,
                 InputControlPath.HumanReadableStringOptions.OmitDevice);
-            m_GrenadeBindingButton.text = $"Toss Grenade Binding: {displayName}";
+            m_GrenadeBindingButton.text = $"Growth Missile Alt Binding: {displayName}";
         }
 
         static void OnResumePressed() => GameSettings.Instance.IsPauseMenuOpen = false;

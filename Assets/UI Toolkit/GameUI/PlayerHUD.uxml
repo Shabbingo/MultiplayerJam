@@ -1,18 +1,19 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
     <Style src="project://database/Assets/UI%20Toolkit/GameUI/PlayerHUD.uss?fileID=7433441132597879392&amp;guid=89bbe73027f904b8da50bf55484c285f&amp;type=3#PlayerHUD"/>
-    <ui:VisualElement name="weapon-info-container" picking-mode="Ignore">
-        <ui:Label name="weapon-type-label" text="Weapon Name" enabled="true" style="display: none;"/>
-        <ui:Label name="reloading-label" text="RELOADING"/>
-        <ui:VisualElement name="weapon-icon" style="display: none;"/>
-        <ui:VisualElement name="ammo-container">
-            <ui:Label name="ammo-label" text="0 / 0"/>
-            <ui:Label name="ammo-reserve-label" text="Reserve: &#8734;" style="display: none;"/>
-            <ui:ProgressBar value="22" title="AMMO" name="player-ammo-bar" class="kits-progress-bar kits-ammo-bar"/>
-        </ui:VisualElement>
+    <ui:VisualElement name="left-ability-container" picking-mode="Ignore" class="ability-side-panel">
+        <ui:Label name="shrink-ammo-label" text="LMB SHRINK 0 / 0" class="ability-ammo-label side-label-left"/>
+        <ui:ProgressBar value="0" title="SHRINK" name="shrink-ammo-bar" class="kits-progress-bar kits-ammo-bar ability-ammo-bar"/>
+        <ui:Label name="self-shrink-uses-label" text="CTRL SELF SHRINK: 3 / 3" class="self-resize-ammo-label side-label-left"/>
+    </ui:VisualElement>
+    <ui:VisualElement name="right-ability-container" picking-mode="Ignore" class="ability-side-panel">
+        <ui:Label name="grow-ammo-label" text="RMB GROW 0 / 0" class="ability-ammo-label side-label-right"/>
+        <ui:ProgressBar value="0" title="GROW" name="grow-ammo-bar" class="kits-progress-bar kits-grow-ammo-bar ability-ammo-bar"/>
+        <ui:Label name="self-grow-uses-label" text="SHIFT SELF GROW: 3 / 3" class="self-resize-ammo-label side-label-right"/>
     </ui:VisualElement>
     <ui:VisualElement name="health-info-container" picking-mode="Ignore">
         <ui:ProgressBar value="63.8" title="HEALTH" name="player-health-bar" class="kits-progress-bar"/>
         <ui:ProgressBar name="player-stamina-bar" low-value="0" high-value="5" value="5" title="SHRINK" class="kits-progress-bar kits-shrink-resource-bar"/>
+        <ui:Label name="reloading-label" text="RELOADING"/>
     </ui:VisualElement>
     <ui:VisualElement name="reticle-container" picking-mode="Ignore">
         <ui:VisualElement name="player-reticle" picking-mode="Ignore"/>

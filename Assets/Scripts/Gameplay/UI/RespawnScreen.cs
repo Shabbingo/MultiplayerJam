@@ -15,6 +15,7 @@ namespace Unity.MP_FPS.UI
         private World m_ClientWorld;
         private EntityManager m_EntityManager;
         private EntityQuery m_LocalPlayerQuery;
+        private bool m_HasLocalPlayerQuery;
 
         private float m_RespawnCountdown;
         private const float RESPAWN_DURATION = 5.0f;
@@ -30,25 +31,66 @@ namespace Unity.MP_FPS.UI
             m_RespawnTimerLabel = m_RespawnScreen.Q<Label>("RespawnMessage");
         }
 
-        private void InitializeEcs()
+        private void BindToClientWorld(World world)
         {
+            if (world == null || !world.IsCreated || world == m_ClientWorld)
+            {
+                return;
+            }
+
+            if (m_HasLocalPlayerQuery)
+            {
+                m_LocalPlayerQuery.Dispose();
+            }
+
+            m_ClientWorld = world;
+            m_EntityManager = world.EntityManager;
+            m_LocalPlayerQuery = m_EntityManager.CreateEntityQuery(
+                ComponentType.ReadOnly<PredictedPlayerGhost>(),
+                ComponentType.ReadOnly<GhostOwnerIsLocal>());
+            m_HasLocalPlayerQuery = true;
+        }
+
+        private bool TryBindToWorldWithLocalPlayer()
+        {
+            World fallbackWorld = null;
+
             foreach (var world in World.All)
             {
-                if (world.IsClient())
+                if (!world.IsCreated || !world.IsClient())
                 {
-                    m_ClientWorld = world;
-                    m_EntityManager = world.EntityManager;
-                    break;
+                    continue;
+                }
+
+                fallbackWorld ??= world;
+
+                using var localPlayerQuery = world.EntityManager.CreateEntityQuery(
+                    ComponentType.ReadOnly<PredictedPlayerGhost>(),
+                    ComponentType.ReadOnly<GhostOwnerIsLocal>());
+                if (!localPlayerQuery.IsEmptyIgnoreFilter)
+                {
+                    BindToClientWorld(world);
+                    return true;
                 }
             }
 
-            if (m_EntityManager != null)
+            if (m_ClientWorld == null || !m_ClientWorld.IsCreated)
             {
-                m_LocalPlayerQuery = m_EntityManager.CreateEntityQuery(
-                    ComponentType.ReadOnly<PredictedPlayerGhost>(),
-                    ComponentType.ReadOnly<GhostOwnerIsLocal>()
-                );
+                BindToClientWorld(fallbackWorld);
             }
+
+            return false;
+        }
+
+        private void OnDisable()
+        {
+            if (m_HasLocalPlayerQuery)
+            {
+                m_LocalPlayerQuery.Dispose();
+                m_HasLocalPlayerQuery = false;
+            }
+
+            m_ClientWorld = null;
         }
 
         void LateUpdate()
@@ -59,13 +101,20 @@ namespace Unity.MP_FPS.UI
                 return;
             }
 
-            if (m_ClientWorld == null || !m_ClientWorld.IsCreated)
+            if (!m_HasLocalPlayerQuery || m_ClientWorld == null || !m_ClientWorld.IsCreated)
             {
-                InitializeEcs();
-                if (m_ClientWorld == null) return;
+                TryBindToWorldWithLocalPlayer();
+                if (!m_HasLocalPlayerQuery) return;
             }
 
-            bool isPlayerAlive = m_LocalPlayerQuery.HasSingleton<PredictedPlayerGhost>();
+            // A menu/previous-session client world can remain alive while the gameplay
+            // client world is created. If the cached world has no player, look for the
+            // world that actually owns one before showing the death screen.
+            bool isPlayerAlive = !m_LocalPlayerQuery.IsEmptyIgnoreFilter;
+            if (!isPlayerAlive && TryBindToWorldWithLocalPlayer())
+            {
+                isPlayerAlive = !m_LocalPlayerQuery.IsEmptyIgnoreFilter;
+            }
 
             if (isPlayerAlive)
             {

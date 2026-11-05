@@ -9,12 +9,48 @@ using Unity.Mathematics;
 using Unity.NetCode;
 using Unity.Transforms;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [RequireComponent(typeof(CharacterController))]
 public class FirstPersonController : MonoBehaviour
 {
     public SoundDef PlayerHitSFX;
     [SerializeField, Range(0.05f, 1f)] private float m_ManualShrinkHealthMultiplier = 0.2f;
+
+    [Header("Self Resize")]
+    [SerializeField, Range(1, 10), Tooltip("Number of self-shrink uses available each life.")]
+    private int m_SelfShrinkUses = 3;
+    [SerializeField, Range(1, 10), Tooltip("Number of self-grow uses available each life.")]
+    private int m_SelfGrowUses = 3;
+    [SerializeField, Min(0.1f), Tooltip("Seconds required to regenerate one self-shrink use.")]
+    private float m_SelfShrinkRechargeSeconds = 5f;
+    [SerializeField, Min(0.1f), Tooltip("Seconds required to regenerate one self-grow use.")]
+    private float m_SelfGrowRechargeSeconds = 5f;
+    [SerializeField, Min(1f), Tooltip("Fixed percentage-point chunk applied immediately by each self-resize key press.")]
+    private float m_SelfResizeChunkSize = 25f;
+    [SerializeField, Min(0.01f), Tooltip("Distance kept from the lethal 0 and 200 boundaries. Self-resizing clamps here, but weapon hits can still kill.")]
+    private float m_SelfResizeSafetyMargin = 1f;
+    [SerializeField, Min(0f), Tooltip("Upward speed applied when self-growing while already airborne.")]
+    private float m_AirGrowJumpSpeed = 5f;
+    [SerializeField, Min(0f), Tooltip("Downward speed applied when self-shrinking while already airborne.")]
+    private float m_AirShrinkPushSpeed = 7f;
+
+    [Header("Self Resize Camera Pulse")]
+    [SerializeField, Range(0f, 1f), Tooltip("Peak lens distortion used by a self-resize pulse. Grow and shrink use opposite distortion directions.")]
+    private float m_SelfResizeLensDistortion = 0.35f;
+    [SerializeField, Tooltip("Swaps the lens directions so shrinking pushes outward and growing pulls inward.")]
+    private bool m_InvertSelfResizeLensDirection;
+    [SerializeField, Min(0.01f), Tooltip("Duration in seconds of the self-resize lens distortion pulse.")]
+    private float m_SelfResizeLensPulseDuration = 0.35f;
+    [SerializeField, Range(0f, 1f), Tooltip("Vertical center of the shrink pinch. Lower values move the distortion toward the bottom of the screen.")]
+    private float m_SelfShrinkLensCenterY = 0.15f;
+    [SerializeField, Range(0f, 1f), Tooltip("Vertical center of the grow distortion. Higher values move it toward the top of the screen.")]
+    private float m_SelfGrowLensCenterY = 0.85f;
+    [SerializeField, Tooltip("Lens pulse strength over its duration. Time 0 is the key press and time 1 is the end of the pulse.")]
+    private AnimationCurve m_SelfResizeLensPulseCurve = new(
+        new Keyframe(0f, 0f),
+        new Keyframe(0.12f, 1f),
+        new Keyframe(1f, 0f));
 
     [Header("Shrink Resource")]
     [SerializeField, Min(0.1f), Tooltip("Maximum shrink resource. At a drain rate of 1, this is the number of seconds the player can remain small.")]
@@ -366,6 +402,14 @@ public class FirstPersonController : MonoBehaviour
 
     private void Awake()
     {
+        CameraResizePulseEffect.Configure(
+            m_SelfResizeLensDistortion,
+            m_SelfResizeLensPulseDuration,
+            m_SelfResizeLensPulseCurve,
+            m_SelfShrinkLensCenterY,
+            m_SelfGrowLensCenterY,
+            m_InvertSelfResizeLensDirection);
+
         TryGetComponent(out m_Controller);
         Debug.Assert(m_Controller, "[THIRDPERSONCONTROLLER] Player has no CharacterController component");
         m_InitialLossyScale = transform.lossyScale;
@@ -594,16 +638,192 @@ public class FirstPersonController : MonoBehaviour
 
     public bool CanRestoreHealth(in PredictedPlayerGhost predictedPlayer)
     {
-        if (predictedPlayer.MaxHealth <= 0f || predictedPlayer.CurrentHealth <= 0f)
+        if (predictedPlayer.MaxHealth <= 0f || predictedPlayer.CurrentHealth <= 0f ||
+            predictedPlayer.CurrentHealth >= predictedPlayer.MaxHealth)
         {
             return false;
         }
 
-        float healthScale = predictedPlayer.ControllerState.IsManualShrinkActive &&
-                            !predictedPlayer.ControllerState.IsForcedFullSize
-            ? m_ManualShrinkHealthMultiplier
-            : 1f;
-        return predictedPlayer.CurrentHealth < predictedPlayer.MaxHealth * healthScale;
+        return !Mathf.Approximately(predictedPlayer.CurrentHealth, 100f);
+    }
+
+    public void ProcessSelfResize(ref PredictedPlayerGhost predictedPlayer,
+        in PlayerInput input, float deltaTime)
+    {
+        InitializeSelfResizeAmmo(ref predictedPlayer);
+
+        float chunkSize = Mathf.Max(1f, m_SelfResizeChunkSize);
+        predictedPlayer.SelfResizeMaxCharge = chunkSize;
+        predictedPlayer.SelfResizeChargeAmount = 0f;
+        if (predictedPlayer.MaxHealth <= 0f || deltaTime <= 0f)
+        {
+            return;
+        }
+
+        bool hasResizePress = input.SelfShrinkPressed || input.SelfGrowPressed;
+        if (!hasResizePress)
+        {
+            // Re-arm only after a neutral input command. NetCode can replay the
+            // pressed command during prediction, so clearing this every call would
+            // spend multiple uses for one physical key press.
+            predictedPlayer.SelfResizeChargeDirection = 0;
+            return;
+        }
+
+        if (predictedPlayer.SelfResizeChargeDirection != 0)
+        {
+            return;
+        }
+
+        // Ignore an ambiguous simultaneous press instead of applying two opposing uses.
+        if (input.SelfShrinkPressed && input.SelfGrowPressed)
+        {
+            return;
+        }
+
+        int requestedDirection = input.SelfGrowPressed ? 1 : input.SelfShrinkPressed ? -1 : 0;
+        predictedPlayer.SelfResizeChargeDirection = requestedDirection;
+
+        bool hasAmmo = requestedDirection > 0
+            ? predictedPlayer.SelfGrowCharges > 0
+            : predictedPlayer.SelfShrinkCharges > 0;
+        if (!hasAmmo)
+        {
+            return;
+        }
+
+        // Apply one safe chunk immediately. A press at a size boundary does not waste ammo.
+        float safeMinimum = Mathf.Min(
+            m_SelfResizeSafetyMargin,
+            predictedPlayer.MaxHealth * 0.5f);
+        float safeMaximum = Mathf.Max(
+            safeMinimum,
+            predictedPlayer.MaxHealth - m_SelfResizeSafetyMargin);
+        float resizedHealth = Mathf.Clamp(
+            predictedPlayer.CurrentHealth + chunkSize * requestedDirection,
+            safeMinimum,
+            safeMaximum);
+        if (Mathf.Approximately(resizedHealth, predictedPlayer.CurrentHealth))
+        {
+            return;
+        }
+
+        predictedPlayer.CurrentHealth = resizedHealth;
+        if (requestedDirection > 0)
+        {
+            predictedPlayer.SelfGrowCharges = Mathf.Max(
+                0, predictedPlayer.SelfGrowCharges - 1);
+        }
+        else
+        {
+            predictedPlayer.SelfShrinkCharges = Mathf.Max(
+                0, predictedPlayer.SelfShrinkCharges - 1);
+        }
+
+        ApplyAirResizeImpulse(ref predictedPlayer, requestedDirection);
+    }
+
+    private void ApplyAirResizeImpulse(ref PredictedPlayerGhost predictedPlayer,
+        int resizeDirection)
+    {
+        ref var state = ref predictedPlayer.ControllerState;
+        if (state.MovementType == MovementType.Standing)
+        {
+            return;
+        }
+
+        if (resizeDirection > 0)
+        {
+            float upwardSpeed = Mathf.Max(0f, m_AirGrowJumpSpeed);
+            state.JumpFallSpeed = Mathf.Max(state.JumpFallSpeed, upwardSpeed);
+            SetMovementType(ref state, MovementType.Jumping);
+            state.Jump = true;
+            state.Fall = false;
+            state.JumpTriggered = true;
+        }
+        else
+        {
+            float downwardSpeed = Mathf.Max(0f, m_AirShrinkPushSpeed);
+            state.JumpFallSpeed = Mathf.Min(state.JumpFallSpeed, -downwardSpeed);
+            SetMovementType(ref state, MovementType.Falling);
+            state.Jump = true;
+            state.Fall = true;
+        }
+    }
+
+    public void TriggerSelfResizeCameraPulse(int resizeDirection)
+    {
+        if (resizeDirection == 0)
+        {
+            return;
+        }
+
+        CameraResizePulseEffect.Trigger(
+            Mathf.Sign(resizeDirection) * m_SelfResizeLensDistortion,
+            m_SelfResizeLensPulseDuration,
+            m_SelfResizeLensPulseCurve);
+    }
+
+    public void UpdateSelfResizeAmmo(ref PredictedPlayerGhost predictedPlayer, float deltaTime)
+    {
+        InitializeSelfResizeAmmo(ref predictedPlayer);
+        if (deltaTime <= 0f)
+        {
+            return;
+        }
+
+        RegenerateSelfResizeCharge(
+            ref predictedPlayer.SelfShrinkCharges,
+            predictedPlayer.MaxSelfShrinkCharges,
+            ref predictedPlayer.SelfShrinkRechargeTimer,
+            m_SelfShrinkRechargeSeconds,
+            deltaTime);
+        RegenerateSelfResizeCharge(
+            ref predictedPlayer.SelfGrowCharges,
+            predictedPlayer.MaxSelfGrowCharges,
+            ref predictedPlayer.SelfGrowRechargeTimer,
+            m_SelfGrowRechargeSeconds,
+            deltaTime);
+    }
+
+    private void InitializeSelfResizeAmmo(ref PredictedPlayerGhost predictedPlayer)
+    {
+        if (predictedPlayer.SelfResizeAmmoInitialized)
+        {
+            return;
+        }
+
+        predictedPlayer.MaxSelfShrinkCharges = Mathf.Max(1, m_SelfShrinkUses);
+        predictedPlayer.MaxSelfGrowCharges = Mathf.Max(1, m_SelfGrowUses);
+        predictedPlayer.SelfShrinkCharges = predictedPlayer.MaxSelfShrinkCharges;
+        predictedPlayer.SelfGrowCharges = predictedPlayer.MaxSelfGrowCharges;
+        predictedPlayer.SelfShrinkRechargeTimer = 0f;
+        predictedPlayer.SelfGrowRechargeTimer = 0f;
+        predictedPlayer.SelfResizeAmmoInitialized = true;
+    }
+
+    private static void RegenerateSelfResizeCharge(ref int charges, int maximumCharges,
+        ref float rechargeTimer, float rechargeSeconds, float deltaTime)
+    {
+        if (charges >= maximumCharges)
+        {
+            charges = maximumCharges;
+            rechargeTimer = 0f;
+            return;
+        }
+
+        float interval = Mathf.Max(0.1f, rechargeSeconds);
+        rechargeTimer += deltaTime;
+        while (rechargeTimer >= interval && charges < maximumCharges)
+        {
+            rechargeTimer -= interval;
+            charges++;
+        }
+
+        if (charges >= maximumCharges)
+        {
+            rechargeTimer = 0f;
+        }
     }
 
     public bool TryRestoreHealth(ref PredictedPlayerGhost predictedPlayer, float fullSizeHealAmount)
@@ -613,14 +833,8 @@ public class FirstPersonController : MonoBehaviour
             return false;
         }
 
-        float healthScale = predictedPlayer.ControllerState.IsManualShrinkActive &&
-                            !predictedPlayer.ControllerState.IsForcedFullSize
-            ? m_ManualShrinkHealthMultiplier
-            : 1f;
-        float scaledMaxHealth = predictedPlayer.MaxHealth * healthScale;
-        predictedPlayer.CurrentHealth = Mathf.Min(
-            scaledMaxHealth,
-            predictedPlayer.CurrentHealth + fullSizeHealAmount * healthScale);
+        predictedPlayer.CurrentHealth = Mathf.MoveTowards(
+            predictedPlayer.CurrentHealth, 100f, fullSizeHealAmount);
         return true;
     }
 
@@ -671,36 +885,6 @@ public class FirstPersonController : MonoBehaviour
 
         ApplyManualShrinkHealth(ref predictedPlayer, shrinking);
         return true;
-    }
-
-    public void ProcessShrinkInput(ref PredictedPlayerGhost predictedPlayer, in PlayerInput input)
-    {
-        bool shrinkPressed = input.HoldShrinkMode ? input.ShrinkHeld : input.ToggleShrink;
-
-        if (input.HoldShrinkMode)
-        {
-            if (!predictedPlayer.ControllerState.IsForcedFullSize)
-            {
-                if (shrinkPressed && !predictedPlayer.ControllerState.ShrinkTogglePressed)
-                {
-                    TrySetManualShrink(ref predictedPlayer, true);
-                }
-                else if (!shrinkPressed && predictedPlayer.ControllerState.IsManualShrinkActive)
-                {
-                    TrySetManualShrink(ref predictedPlayer, false);
-                }
-            }
-        }
-        else if (shrinkPressed &&
-                 !predictedPlayer.ControllerState.ShrinkTogglePressed &&
-                 !predictedPlayer.ControllerState.IsForcedFullSize)
-        {
-            TryToggleManualShrink(ref predictedPlayer);
-        }
-
-        // Latching held input during a forced resize means it must be released
-        // before a subsequent press can shrink the player again.
-        predictedPlayer.ControllerState.ShrinkTogglePressed = shrinkPressed;
     }
 
     public void UpdateShrinkResource(ref PredictedPlayerGhost predictedPlayer, float deltaTime)
@@ -1251,7 +1435,7 @@ public class FirstPersonController : MonoBehaviour
                 case MovementType.Standing:
                 case MovementType.Jumping:
                 case MovementType.Falling:
-                    stateConsts = input.Sprint ? consts.Sprint : consts.Walk;
+                    stateConsts = consts.Walk;
                     break;
                 default:
                     Debug.LogError(
@@ -1540,7 +1724,7 @@ public class FirstPersonController : MonoBehaviour
     }
 
     public async void SpawnPredictedProjectile(uint spawnTick, uint weaponId, Vector3 spawnPosition,
-        Quaternion spawnRotation)
+        Quaternion spawnRotation, Vector3 targetPosition)
     {
         try
         {
@@ -1598,6 +1782,7 @@ public class FirstPersonController : MonoBehaviour
 
             var projectile = predictedProjectile.GetComponent<Projectile>();
             projectile.SetWeaponId(weaponId);
+            projectile.SetGuidedTarget(targetPosition);
 
             var projectileInfo = new Projectile.PredictedProjectileInfo
             {

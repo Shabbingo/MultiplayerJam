@@ -20,7 +20,13 @@ namespace Unity.MP_FPS
         [SerializeField] private SoundDef m_SpawnSFX;
         [SerializeField, Range(0.1f, 1f)] private float m_MinimumPlayerScale = 0.5f;
         public float MinimumPlayerScale => m_MinimumPlayerScale;
-        [SerializeField, Min(0.01f)] private float m_ManualScaleTransitionSpeed = 4f;
+        [SerializeField, Min(1f)] private float m_MaximumPlayerScale = 2f;
+        public float MaximumPlayerScale => m_MaximumPlayerScale;
+        [FormerlySerializedAs("m_ManualScaleTransitionSpeed")]
+        [SerializeField, Min(0.01f), Tooltip("How quickly the visible player scale catches up while shrinking.")]
+        private float m_ShrinkScaleResponseSpeed = 8f;
+        [SerializeField, Min(0.01f), Tooltip("How quickly the visible player scale catches up while growing.")]
+        private float m_GrowScaleResponseSpeed = 8f;
         [field: SerializeField] public Transform CameraTarget { get; private set; }
         [field: SerializeField] public Transform ReticlePoint { get; private set; }
         [field: SerializeField] public Transform ShotOrigin { get; private set; }
@@ -314,10 +320,13 @@ namespace Unity.MP_FPS
             }
 
             var targetScaleMultiplier = GetTargetScaleMultiplier(in predictedPlayerGhost);
+            float responseSpeed = targetScaleMultiplier < m_ManualScaleMultiplier
+                ? m_ShrinkScaleResponseSpeed
+                : m_GrowScaleResponseSpeed;
             m_ManualScaleMultiplier = Mathf.MoveTowards(
                 m_ManualScaleMultiplier,
                 targetScaleMultiplier,
-                m_ManualScaleTransitionSpeed * deltaTime);
+                responseSpeed * deltaTime);
 
             var targetScale = m_InitialScale * m_ManualScaleMultiplier;
 
@@ -335,9 +344,14 @@ namespace Unity.MP_FPS
                 return 1f;
             }
 
-            var healthRatio = Mathf.Clamp01(
-                predictedPlayerGhost.CurrentHealth / predictedPlayerGhost.MaxHealth);
-            var healthScaleMultiplier = Mathf.Lerp(m_MinimumPlayerScale, 1f, healthRatio);
+            const float normalSizeHealth = 100f;
+            float sizeHealth = Mathf.Clamp(
+                predictedPlayerGhost.CurrentHealth, 0f, predictedPlayerGhost.MaxHealth);
+            float healthScaleMultiplier = sizeHealth <= normalSizeHealth
+                ? Mathf.Lerp(m_MinimumPlayerScale, 1f, sizeHealth / normalSizeHealth)
+                : Mathf.Lerp(1f, m_MaximumPlayerScale,
+                    (sizeHealth - normalSizeHealth) /
+                    Mathf.Max(1f, predictedPlayerGhost.MaxHealth - normalSizeHealth));
             var controllerState = predictedPlayerGhost.ControllerState;
 
             return controllerState.IsForcedFullSize

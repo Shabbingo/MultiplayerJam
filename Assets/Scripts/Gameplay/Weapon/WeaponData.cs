@@ -21,7 +21,9 @@ namespace Unity.MP_FPS
     public enum PlayerResizeEffect
     {
         None,
-        RestoreFullSize
+        RestoreFullSize,
+        Shrink,
+        Grow
     }
 
     [CreateAssetMenu(fileName = "NewWeaponData", menuName = "FPS Sample/Weapon Data")]
@@ -58,11 +60,36 @@ namespace Unity.MP_FPS
         [Tooltip("How many seconds the resize effect lasts before the player returns to the size permitted by their unchanged health.")]
         public float ResizeEffectDuration = 5f;
 
-        public float PlayerDamage => ResizeEffect == PlayerResizeEffect.RestoreFullSize ? 0f : Damage;
+        public float PlayerSizeDelta => ResizeEffect switch
+        {
+            PlayerResizeEffect.RestoreFullSize => 0f,
+            PlayerResizeEffect.Grow => Mathf.Abs(Damage),
+            _ => -Mathf.Abs(Damage)
+        };
 
         public ProjectileBehavior Behavior = ProjectileBehavior.DirectDamage;
         public float AoeRadius = 5f;
         public float ProjectileSpeed = 30f;
+
+        [Header("Guided Projectile")]
+        [Tooltip("Steers the projectile toward the point selected by the firing raycast.")]
+        public bool IsGuidedProjectile;
+
+        [Min(0f)]
+        [Tooltip("Maximum homing turn rate in degrees per second. Lower values produce wider arcs.")]
+        public float GuidedTurnSpeed = 120f;
+
+        [Min(0f)]
+        [Tooltip("How quickly the missile approaches Projectile Speed. Use 0 for constant launch speed.")]
+        public float GuidedAcceleration = 40f;
+
+        [Min(0f)]
+        [Tooltip("Upward velocity applied at launch before guidance curves toward the raycast target.")]
+        public float GuidedLaunchUpwardSpeed = 6f;
+
+        [Min(1f)]
+        [Tooltip("Maximum distance used by the targeting raycast.")]
+        public float GuidedTargetRange = 250f;
 
         [Header("Grenade Projectile")]
         [Tooltip("Launches this projectile in an arc and allows it to bounce before impact detonation.")]
