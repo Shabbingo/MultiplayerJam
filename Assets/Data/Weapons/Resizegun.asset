@@ -65,7 +65,7 @@ MonoBehaviour:
   ResizeEffect: 3
   ResizeEffectDuration: 3
   Behavior: 0
-  AoeRadius: 2.5
+  AoeRadius: 3
   ProjectileSpeed: 24
   IsGuidedProjectile: 1
   GuidedTurnSpeed: 100

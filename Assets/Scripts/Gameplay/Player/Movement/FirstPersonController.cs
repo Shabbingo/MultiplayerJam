@@ -1247,12 +1247,15 @@ public class FirstPersonController : MonoBehaviour
         // Handle one-shot events first
         HandleAnimationEvents(animator, predictedPlayerGhost);
 
-        animator.SetBool(AnimationParameters.ShrinkCastHeld,
-            predictedPlayerGhost.ShrinkCastHeld);
-
         // Then handle continuous state parameters
         if (isClientOwned)
         {
+            // ShrinkCastHeld only exists on the first-person wizard-hands
+            // controller. Sending it to remote players' third-person
+            // controllers causes an Animator warning every prediction frame.
+            animator.SetBool(AnimationParameters.ShrinkCastHeld,
+                predictedPlayerGhost.ShrinkCastHeld);
+
             ApplyFirstPersonMovementAnimation(animator, state);
         }
         else

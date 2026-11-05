@@ -42,7 +42,9 @@ namespace Unity.MP_FPS
         const string k_ConnectionModeKey = "ConnectionMode";
         const string k_SessionNameKey = "SessionName";
         const string k_MouseSensitivityKey = "MouseSensitivity";
-        const string k_CameraFovKey = "CameraFov";
+        // V2 lowers the supported minimum and intentionally starts existing
+        // installs from the new 40-degree baseline once.
+        const string k_CameraFovKey = "CameraFovV2";
         const string k_HoldToShrinkKey = "HoldToShrink";
         const string k_KillLimitKey = "MatchKillLimit";
         const string k_TimeLimitMinutesKey = "MatchTimeLimitMinutes";
@@ -58,7 +60,7 @@ namespace Unity.MP_FPS
             m_MouseSensitivity = Mathf.Clamp(
                 PlayerPrefs.GetFloat(k_MouseSensitivityKey, 1.5f), 0.1f, 5f);
             m_CameraFov = Mathf.Clamp(
-                PlayerPrefs.GetFloat(k_CameraFovKey, 75f), 60f, 110f);
+                PlayerPrefs.GetFloat(k_CameraFovKey, 40f), 40f, 110f);
             m_HoldToShrink = PlayerPrefs.GetInt(k_HoldToShrinkKey, 1) != 0;
             m_MatchKillLimit = Mathf.Clamp(PlayerPrefs.GetInt(k_KillLimitKey, 20), 1, 100);
             m_MatchTimeLimitMinutes = Mathf.Clamp(
@@ -277,14 +279,14 @@ namespace Unity.MP_FPS
             }
         }
 
-        float m_CameraFov = 75f;
+        float m_CameraFov = 40f;
         [CreateProperty]
         public float CameraFov
         {
             get => m_CameraFov;
             set
             {
-                float clampedValue = Mathf.Clamp(value, 60f, 110f);
+                float clampedValue = Mathf.Clamp(value, 40f, 110f);
                 if (Mathf.Approximately(m_CameraFov, clampedValue))
                 {
                     return;
@@ -292,6 +294,14 @@ namespace Unity.MP_FPS
 
                 m_CameraFov = clampedValue;
                 PlayerPrefs.SetFloat(k_CameraFovKey, clampedValue);
+
+                // Apply immediately while the pause menu owns focus. The ECS
+                // presentation camera also reads this value every frame, but
+                // its update can be delayed while pausing or changing worlds.
+                // Writing the active GameObject camera here makes the slider
+                // visibly responsive without changing temporary FOV effects.
+                CameraFovSettings.ApplyToActiveCameras(clampedValue);
+
                 Notify();
             }
         }

@@ -55,6 +55,14 @@ namespace Unity.MP_FPS
         private readonly Dictionary<Entity, float> m_ForcedFullSizeTimers = new();
         private readonly List<Entity> m_ForcedFullSizeEntitiesScratch = new();
         private readonly HashSet<Entity> m_PendingSelfGrowthChecks = new();
+        private readonly Dictionary<int, HitscanBloomState> m_HitscanBloomByPlayer = new();
+        private readonly List<int> m_HitscanBloomPlayersScratch = new();
+
+        private struct HitscanBloomState
+        {
+            public float AdditionalSpreadDegrees;
+            public float RecoveryDegreesPerSecond;
+        }
 
         private struct GuidedAimRay
         {
@@ -172,6 +180,8 @@ namespace Unity.MP_FPS
             m_ForcedFullSizeTimers.Clear();
             m_ForcedFullSizeEntitiesScratch.Clear();
             m_PendingSelfGrowthChecks.Clear();
+            m_HitscanBloomByPlayer.Clear();
+            m_HitscanBloomPlayersScratch.Clear();
 
             var query = GetEntityQuery(typeof(PlayerControllerLink));
             foreach (var entity in query.ToEntityArray(Allocator.Temp))
@@ -196,6 +206,7 @@ namespace Unity.MP_FPS
 
             uint serverTick = networkTime.ServerTick.TickIndexForValidTick;
             UpdateForcedFullSizeEffects(deltaTime);
+            UpdateHitscanBloom(deltaTime);
 
             s_PlayerMovementActive = true;
             s_PlayerMovementTick = serverTick;
@@ -524,10 +535,12 @@ namespace Unity.MP_FPS
                             {
                                 case WeaponType.Hitscan:
                                 {
+                                    Vector3 hitscanDirection = ApplyHitscanBloom(
+                                        aimDirection, weaponData, shooterNetworkId, serverTick);
                                     uint rewindTick = commandInput.ClientInterpolationTick.IsValid
                                         ? commandInput.ClientInterpolationTick.TickIndexForValidTick
                                         : serverTick;
-                                    if (TryGetClosestHitscanCollision(eyePosition, aimDirection,
+                                    if (TryGetClosestHitscanCollision(eyePosition, hitscanDirection,
                                             weaponData.HitscanRange, shooterNetworkId, rewindTick,
                                             out var hit))
                                     {
@@ -561,9 +574,9 @@ namespace Unity.MP_FPS
                                             if (IsSizeLethal(healthBeforeDamage,
                                                     targetPredictedPlayer.ValueRO.CurrentHealth,
                                                     targetPredictedPlayer.ValueRO.MaxHealth) &&
-                                                LeaderboardManager.Instance != null)
+                                                LeaderboardManager.ServerInstance != null)
                                             {
-                                                LeaderboardManager.Instance.AddKill(shooterNetworkId,
+                                                LeaderboardManager.ServerInstance.AddKill(shooterNetworkId,
                                                     targetNetworkId);
                                                 Debug.Log(
                                                     $"[Server] Player {shooterNetworkId.ToString()} killed player {targetNetworkId.ToString()}.");
@@ -892,6 +905,77 @@ namespace Unity.MP_FPS
             return foundCollision;
         }
 
+        private void UpdateHitscanBloom(float deltaTime)
+        {
+            if (m_HitscanBloomByPlayer.Count == 0)
+            {
+                return;
+            }
+
+            m_HitscanBloomPlayersScratch.Clear();
+            m_HitscanBloomPlayersScratch.AddRange(m_HitscanBloomByPlayer.Keys);
+            foreach (int playerId in m_HitscanBloomPlayersScratch)
+            {
+                var bloom = m_HitscanBloomByPlayer[playerId];
+                bloom.AdditionalSpreadDegrees = Mathf.MoveTowards(
+                    bloom.AdditionalSpreadDegrees,
+                    0f,
+                    bloom.RecoveryDegreesPerSecond * deltaTime);
+
+                if (bloom.AdditionalSpreadDegrees <= 0f)
+                {
+                    m_HitscanBloomByPlayer.Remove(playerId);
+                }
+                else
+                {
+                    m_HitscanBloomByPlayer[playerId] = bloom;
+                }
+            }
+        }
+
+        private Vector3 ApplyHitscanBloom(Vector3 forward, WeaponData weaponData,
+            int shooterNetworkId, uint serverTick)
+        {
+            m_HitscanBloomByPlayer.TryGetValue(shooterNetworkId, out var bloom);
+
+            float baseSpread = Mathf.Max(0f, weaponData.HitscanBaseSpreadDegrees);
+            float maximumSpread = Mathf.Max(baseSpread,
+                weaponData.HitscanMaxSpreadDegrees);
+            float spreadDegrees = Mathf.Min(maximumSpread,
+                baseSpread + bloom.AdditionalSpreadDegrees);
+
+            bloom.AdditionalSpreadDegrees = Mathf.Min(
+                maximumSpread - baseSpread,
+                bloom.AdditionalSpreadDegrees +
+                Mathf.Max(0f, weaponData.HitscanSpreadPerShotDegrees));
+            bloom.RecoveryDegreesPerSecond = Mathf.Max(0f,
+                weaponData.HitscanSpreadRecoveryDegreesPerSecond);
+            m_HitscanBloomByPlayer[shooterNetworkId] = bloom;
+
+            if (spreadDegrees <= 0f)
+            {
+                return forward.normalized;
+            }
+
+            uint seed = math.hash(new uint2(serverTick,
+                unchecked((uint)shooterNetworkId))) | 1u;
+            var random = Unity.Mathematics.Random.CreateFromIndex(seed);
+            float coneRadius = Mathf.Sqrt(random.NextFloat());
+            float angle = Mathf.Deg2Rad * spreadDegrees * coneRadius;
+            float azimuth = random.NextFloat(0f, Mathf.PI * 2f);
+
+            Vector3 normalizedForward = forward.normalized;
+            Vector3 referenceUp = Mathf.Abs(Vector3.Dot(normalizedForward, Vector3.up)) > 0.99f
+                ? Vector3.right
+                : Vector3.up;
+            Vector3 right = Vector3.Cross(referenceUp, normalizedForward).normalized;
+            Vector3 up = Vector3.Cross(normalizedForward, right).normalized;
+            Vector3 radialDirection = right * Mathf.Cos(azimuth) + up * Mathf.Sin(azimuth);
+
+            return (normalizedForward * Mathf.Cos(angle) +
+                    radialDirection * Mathf.Sin(angle)).normalized;
+        }
+
         private static bool RayIntersectsCapsule(Vector3 origin, Vector3 direction,
             Vector3 point0, Vector3 point1, float radius, out float distance, out Vector3 normal)
         {
@@ -1063,13 +1147,13 @@ namespace Unity.MP_FPS
 
         private void RecordSelfCrushDeath(Entity playerEntity)
         {
-            if (LeaderboardManager.Instance == null || !ghostOwnerLookup.HasComponent(playerEntity))
+            if (LeaderboardManager.ServerInstance == null || !ghostOwnerLookup.HasComponent(playerEntity))
             {
                 return;
             }
 
             int playerNetworkId = ghostOwnerLookup[playerEntity].NetworkId;
-            LeaderboardManager.Instance.AddDeath(playerNetworkId);
+            LeaderboardManager.ServerInstance.AddDeath(playerNetworkId);
             Debug.Log($"[Server] Player {playerNetworkId} was crushed while returning to full size.");
         }
 

@@ -21,6 +21,8 @@ namespace Unity.MP_FPS
     [BurstCompile]
     public partial struct ServerGameSystem : ISystem
     {
+        private const float RespawnDelay = 5f;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
         {
@@ -172,7 +174,7 @@ namespace Unity.MP_FPS
         [BurstDiscard]
         private void AddDeathToLeaderboard(int networkId)
         {
-            LeaderboardManager.Instance.AddDeath(networkId);
+            LeaderboardManager.ServerInstance?.AddDeath(networkId);
         }
         
         // Add near the top of the struct/class:
@@ -185,7 +187,7 @@ namespace Unity.MP_FPS
         [BurstDiscard]
         private void RemovePlayerFromLeaderboard(int networkId)
         {
-            LeaderboardManager.Instance.RemovePlayer(networkId);
+            LeaderboardManager.ServerInstance?.RemovePlayer(networkId);
         }
 
         private void SpawnPlayerCharacter(ref SystemState state, EntityCommandBuffer ecb, Entity connectionEntity, FixedString64Bytes playerName, int characterIndex)
@@ -281,7 +283,11 @@ namespace Unity.MP_FPS
                     if (!SystemAPI.HasComponent<PendingRespawn>(connectionEntity))
                     {
                         Debug.Log($"[Server] Player {entity} has died. Starting respawn timer for connection {connectionEntity}.");
-                        ecb.AddComponent(connectionEntity, new PendingRespawn { RespawnTimer = 5f });
+                        ecb.AddComponent(connectionEntity, new PendingRespawn
+                        {
+                            RespawnTimer = RespawnDelay
+                        });
+                        SendRespawnState(ecb, connectionEntity, true, RespawnDelay);
 
                         if (overgrown && VisualEffectManager.ServerInstance != null)
                         {
@@ -313,6 +319,7 @@ namespace Unity.MP_FPS
                 if (pendingRespawn.ValueRO.RespawnTimer <= 0f)
                 {
                     Debug.Log($"[Server] Respawning player for connection {entity}.");
+                    SendRespawnState(ecb, entity, false, RespawnDelay);
 
                     if (_joinedClientLookup.HasComponent(entity))
                     {
@@ -332,6 +339,21 @@ namespace Unity.MP_FPS
                     }
                 }
             }
+        }
+
+        private static void SendRespawnState(EntityCommandBuffer ecb,
+            Entity connectionEntity, bool isRespawning, float duration)
+        {
+            var rpcEntity = ecb.CreateEntity();
+            ecb.AddComponent(rpcEntity, new PlayerRespawnStateRpc
+            {
+                IsRespawning = isRespawning ? (byte)1 : (byte)0,
+                Duration = duration
+            });
+            ecb.AddComponent(rpcEntity, new SendRpcCommandRequest
+            {
+                TargetConnection = connectionEntity
+            });
         }
 
         void HandleJoinRequests(ref SystemState state, Entity gameplayMapsEntity, PlayerEntityPrefabs playerEntityPrefabs, EntityCommandBuffer ecb)

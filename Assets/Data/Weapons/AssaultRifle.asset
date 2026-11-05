@@ -15,10 +15,15 @@ MonoBehaviour:
   WeaponName: Assault Rifle
   Type: 0
   ReticleType: 0
-  CooldownInMs: 0.1
+  CooldownInMs: 0.05
+  ProjectileReleaseDelay: 0
   Damage: 10
   HitscanRange: 100
-  MagazineSize: 30
+  HitscanBaseSpreadDegrees: 0.15
+  HitscanSpreadPerShotDegrees: 0.12
+  HitscanMaxSpreadDegrees: 1
+  HitscanSpreadRecoveryDegreesPerSecond: 2
+  MagazineSize: 20
   ReloadTime: 2
   ProjectileGhostPrefab:
     <GhostPrefab>k__BackingField:
@@ -71,3 +76,11 @@ MonoBehaviour:
   GuidedAcceleration: 40
   GuidedLaunchUpwardSpeed: 6
   GuidedTargetRange: 250
+  IsLobbedProjectile: 0
+  LobUpwardSpeed: 8
+  ProjectileGravity: 20
+  ProjectileBounces: 1
+  FirstBounceVelocityRetention: 0.65
+  ConsecutiveBounceVelocityRetentions:
+  - 0.65
+  ProjectileFuseTime: 5

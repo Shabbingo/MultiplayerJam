@@ -576,9 +576,9 @@ namespace Unity.MP_FPS
 
                 if (CrossedLethalSizeBoundary(healthBeforeDamage,
                         targetPlayer.ValueRO.CurrentHealth, targetPlayer.ValueRO.MaxHealth) &&
-                    LeaderboardManager.Instance != null)
+                    LeaderboardManager.ServerInstance != null)
                 {
-                    LeaderboardManager.Instance.AddKill(projectileData.OwnerNetworkId, targetNetworkId);
+                    LeaderboardManager.ServerInstance.AddKill(projectileData.OwnerNetworkId, targetNetworkId);
                 }
             }
 
@@ -630,9 +630,9 @@ namespace Unity.MP_FPS
                             targetPredictedPlayer.ValueRO.CurrentHealth,
                             targetPredictedPlayer.ValueRO.MaxHealth))
                     {
-                        if (LeaderboardManager.Instance != null)
+                        if (LeaderboardManager.ServerInstance != null)
                         {
-                            LeaderboardManager.Instance.AddKill(shooterNetworkId, targetNetworkId);
+                            LeaderboardManager.ServerInstance.AddKill(shooterNetworkId, targetNetworkId);
                             Debug.Log(
                                 $"[Server] Player {shooterNetworkId.ToString()} killed player {targetNetworkId.ToString()} (Direct).");
                         }

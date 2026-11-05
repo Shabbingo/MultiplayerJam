@@ -14,7 +14,11 @@ namespace Gameplay.Leaderboard
     [ResetOnPlayMode(resetMethod: "ResetStaticState")]
     public class LeaderboardManager : GhostMonoBehaviour, IUpdateServer, IUpdateClient
     {
-        public static LeaderboardManager Instance { get; private set; }
+        // Host mode creates a server and a client copy in the same Unity process.
+        // Keep one reference per world; a conventional singleton causes whichever
+        // copy awakens second (normally the client) to be destroyed.
+        public static LeaderboardManager ServerInstance { get; private set; }
+        public static LeaderboardManager ClientInstance { get; private set; }
 
         private const float MatchRestartDelay = 8f;
         private float _matchElapsed;
@@ -48,8 +52,9 @@ namespace Gameplay.Leaderboard
 
         protected static void ResetStaticState()
         {
-            _pendingPlayers.Clear();
-            _pendingPlayers = null;
+            ServerInstance = null;
+            ClientInstance = null;
+            _pendingPlayers = new Queue<(int, FixedString64Bytes)>();
         }
 
         public struct PlayerScoreEntry : IBufferElementData
@@ -60,15 +65,24 @@ namespace Gameplay.Leaderboard
             [GhostField] public int Deaths;
         }
 
-        private void Awake()
+        public override void OnGhostLinked()
         {
-            if (Instance != null && Instance != this)
+            if (Role == MultiplayerRole.Server)
             {
-                Destroy(this.gameObject);
-                return;
+                ServerInstance = this;
             }
+            else
+            {
+                ClientInstance = this;
+            }
+        }
 
-            Instance = this;
+        private void OnDestroy()
+        {
+            if (ServerInstance == this)
+                ServerInstance = null;
+            if (ClientInstance == this)
+                ClientInstance = null;
         }
 
         public static void AddPlayer(int networkId, FixedString64Bytes playerName)

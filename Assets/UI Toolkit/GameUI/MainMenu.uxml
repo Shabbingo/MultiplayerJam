@@ -27,7 +27,7 @@
                 <ui:VisualElement name="OptionsPanel" picking-mode="Ignore" style="display: none;">
                     <ui:Label text="OPTIONS" class="options-title" />
                     <ui:Slider label="Mouse Sensitivity: 1.50" low-value="0.1" high-value="5" value="1.5" show-input-field="true" name="MouseSensitivitySlider" class="sensitivity-slider" />
-                    <ui:Slider label="Camera FOV: 75" low-value="60" high-value="110" value="75" show-input-field="true" name="CameraFovSlider" class="sensitivity-slider" />
+                    <ui:Slider label="Camera FOV: 40" low-value="40" high-value="110" value="40" show-input-field="true" name="CameraFovSlider" class="sensitivity-slider" />
                     <ui:SliderInt label="Kill Limit: 20" low-value="1" high-value="100" value="20" show-input-field="true" name="KillLimitSlider" class="sensitivity-slider" />
                     <ui:SliderInt label="Time Limit: 10 Minutes" low-value="1" high-value="60" value="10" show-input-field="true" name="TimeLimitSlider" class="sensitivity-slider" />
                     <ui:DropdownField label="Host Map" name="MapDropdown" tabindex="7" />

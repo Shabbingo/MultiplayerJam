@@ -45,6 +45,22 @@ namespace Unity.MP_FPS
         [Header("Hitscan Properties")] [Tooltip("Max range for raycast-based weapons.")]
         public float HitscanRange = 100f;
 
+        [Min(0f)]
+        [Tooltip("Minimum random cone angle, in degrees, applied to every hitscan shot.")]
+        public float HitscanBaseSpreadDegrees = 0.15f;
+
+        [Min(0f)]
+        [Tooltip("Additional spread added after every consecutive hitscan shot.")]
+        public float HitscanSpreadPerShotDegrees = 0.2f;
+
+        [Min(0f)]
+        [Tooltip("Maximum total hitscan spread angle while continuously firing.")]
+        public float HitscanMaxSpreadDegrees = 2.5f;
+
+        [Min(0f)]
+        [Tooltip("How many degrees of accumulated spread recover per second.")]
+        public float HitscanSpreadRecoveryDegreesPerSecond = 2f;
+
         [Header("Ammo & Reloading")] public int MagazineSize = 30;
         public float ReloadTime = 2.0f; // Time in seconds
 

@@ -274,7 +274,7 @@ Camera:
     height: 1
   near clip plane: 0.1
   far clip plane: 1000
-  field of view: 60
+  field of view: 40
   orthographic: 0
   orthographic size: 5
   m_Depth: 0
@@ -319,7 +319,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: efb50e809baabd7458110ba3391653de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Client.MainCameraAuthoring
-  Fov: 75
+  Fov: 40
 --- !u!114 &415143672
 MonoBehaviour:
   m_ObjectHideFlags: 0

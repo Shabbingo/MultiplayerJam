@@ -6,7 +6,7 @@ namespace Unity.MP_FPS
     [DisallowMultipleComponent]
     public class MainCameraAuthoring : MonoBehaviour
     {
-        public float Fov = 75f;
+        public float Fov = 40f;
 
         public class Baker : Baker<MainCameraAuthoring>
         {

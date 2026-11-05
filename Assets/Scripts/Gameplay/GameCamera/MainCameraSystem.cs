@@ -58,6 +58,32 @@ namespace Unity.MP_FPS
         }
     }
 
+    /// <summary>
+    /// Applies the resolved FOV to every active gameplay camera. Depending on
+    /// the current multiplayer startup path, the rendered view can come from
+    /// either the scene camera or the spawned MainCamera prefab.
+    /// </summary>
+    public static class CameraFovSettings
+    {
+        public static void ApplyToActiveCameras(float fov)
+        {
+            float clampedFov = Mathf.Clamp(fov, 1f, 179f);
+
+            if (MainCameraSingleton.Instance != null)
+            {
+                MainCameraSingleton.Instance.fieldOfView = clampedFov;
+            }
+
+            foreach (var camera in Camera.allCameras)
+            {
+                if (camera != null && camera.CompareTag("MainCamera"))
+                {
+                    camera.fieldOfView = clampedFov;
+                }
+            }
+        }
+    }
+
     public static class CameraResizePulseEffect
     {
         private const string k_VolumeProfileResource = "SelfResizePulseVolumeProfile";
@@ -339,8 +365,8 @@ namespace Unity.MP_FPS
                 float baseFov = GameSettings.Instance != null
                     ? GameSettings.Instance.CameraFov
                     : mainCamera.BaseFov;
-                MainCameraSingleton.Instance.fieldOfView =
-                    mainCamera.CurrentFov = baseFov + fovOffset;
+                mainCamera.CurrentFov = baseFov + fovOffset;
+                CameraFovSettings.ApplyToActiveCameras(mainCamera.CurrentFov);
                 CameraResizePulseEffect.EnsureDriver(MainCameraSingleton.Instance);
             }
         }

@@ -80,8 +80,8 @@ namespace Unity.MP_FPS.UI
         private void OnHideLeaderboard(InputAction.CallbackContext context)
         {
             _scoreboardHeld = false;
-            if (LeaderboardManager.Instance == null ||
-                !LeaderboardManager.Instance.IsMatchEnded)
+            if (LeaderboardManager.ClientInstance == null ||
+                !LeaderboardManager.ClientInstance.IsMatchEnded)
             {
                 _rootElement.style.display = DisplayStyle.None;
             }
@@ -148,11 +148,11 @@ namespace Unity.MP_FPS.UI
                 return;
             }
 
-            bool matchEnded = LeaderboardManager.Instance != null &&
-                              LeaderboardManager.Instance.IsMatchEnded;
-            if (LeaderboardManager.Instance != null)
+            bool matchEnded = LeaderboardManager.ClientInstance != null &&
+                              LeaderboardManager.ClientInstance.IsMatchEnded;
+            if (LeaderboardManager.ClientInstance != null)
             {
-                float remaining = LeaderboardManager.Instance.MatchTimeRemaining;
+                float remaining = LeaderboardManager.ClientInstance.MatchTimeRemaining;
                 int totalSeconds = Mathf.Max(0, Mathf.CeilToInt(remaining));
                 int minutes = totalSeconds / 60;
                 int seconds = totalSeconds % 60;
@@ -166,9 +166,9 @@ namespace Unity.MP_FPS.UI
                 _matchResultLabel.style.display = DisplayStyle.Flex;
                 _matchRestartLabel.style.display = DisplayStyle.Flex;
                 _matchResultLabel.text =
-                    $"WINNER: {LeaderboardManager.Instance.WinnerName}";
+                    $"WINNER: {LeaderboardManager.ClientInstance.WinnerName}";
                 _matchRestartLabel.text =
-                    $"NEXT ROUND IN {Mathf.CeilToInt(LeaderboardManager.Instance.MatchRestartTimeRemaining)}";
+                    $"NEXT ROUND IN {Mathf.CeilToInt(LeaderboardManager.ClientInstance.MatchRestartTimeRemaining)}";
 
                 if (!_wasMatchEnded)
                 {
@@ -201,9 +201,9 @@ namespace Unity.MP_FPS.UI
         
         private void UpdateLeaderboardUI()
         {
-            if (LeaderboardManager.Instance == null) return;
+            if (LeaderboardManager.ClientInstance == null) return;
 
-            var scores = LeaderboardManager.Instance.GetScores();
+            var scores = LeaderboardManager.ClientInstance.GetScores();
 
             // Sort scores: Kills descending, then Deaths ascending
             scores.Sort((a, b) =>

@@ -31,6 +31,12 @@ namespace Unity.MP_FPS
             }
             Instance = GetComponent<Camera>();
             AudioListener = GetComponent<AudioListener>();
+
+            if (GameSettings.Instance != null)
+            {
+                CameraFovSettings.ApplyToActiveCameras(
+                    GameSettings.Instance.CameraFov);
+            }
         }
 
         void OnDestroy()
