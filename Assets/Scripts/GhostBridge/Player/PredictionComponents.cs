@@ -80,6 +80,9 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public float LastDamageAmount;
     [GhostField] public uint LastHitTick;
     [GhostField] public uint LastShotTick;
+    [GhostField] public bool ShrinkCastHeld;
+    [GhostField] public bool GrowShotPending;
+    [GhostField] public float GrowShotReleaseTimer;
     [GhostField] public uint LastJumpTick;
     [GhostField] public uint LastLandTick;
     [GhostField] public uint LastReloadTick;

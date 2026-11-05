@@ -36,6 +36,10 @@ namespace Unity.MP_FPS
         [Header("Firing Mechanics")] [Tooltip("Shots per second")]
         public float CooldownInMs = 10f;
 
+        [Min(0f)]
+        [Tooltip("Delay from starting the firing animation until the shot is released. Used to synchronize projectiles with a hand-cast pose.")]
+        public float ProjectileReleaseDelay;
+
         public float Damage = 15f;
 
         [Header("Hitscan Properties")] [Tooltip("Max range for raycast-based weapons.")]

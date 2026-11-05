@@ -121,7 +121,7 @@ namespace Unity.MP_FPS
                     return;
                 }
 
-                var spawnPoint = isFirstPerson ? player.VisualShotOrigin1P : player.VisualShotOrigin3P;
+                var spawnPoint = player.GetVisualShotOrigin(weaponId, isFirstPerson);
                 if (spawnPoint == null)
                 {
                     spawnPoint = player.transform; // Fallback

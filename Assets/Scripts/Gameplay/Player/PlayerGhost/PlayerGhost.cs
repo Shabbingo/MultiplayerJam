@@ -34,6 +34,17 @@ namespace Unity.MP_FPS
         public Transform VisualShotOrigin1P { get; private set; }
         [field: SerializeField] public Transform VisualShotOrigin3P { get; private set; }
 
+        [Header("First-Person Wizard Hands")]
+        [SerializeField, Tooltip("Hides the gun meshes while retaining the first- and third-person arms.")]
+        private bool m_HideWeaponVisuals = true;
+        [SerializeField, Tooltip("Camera-local origin used by the left-click shrink ability.")]
+        private Vector3 m_LeftHandShotOffset = new(-0.39f, -0.47f, 0.35f);
+        [SerializeField, Tooltip("Camera-local origin used by the right-click grow ability.")]
+        private Vector3 m_RightHandShotOffset = new(0.39f, -0.47f, 0.35f);
+        [SerializeField, Min(0f),
+         Tooltip("Minimum guided-projectile origin height above the player's feet. Keep this above the projectile's 0.2 radius so tiny players do not spawn it in the floor.")]
+        private float m_MinimumGuidedProjectileSpawnHeight = 0.25f;
+
         [Header("Manual Aiming Setup")]
         [SerializeField] private Animator m_Animator3P;
         private static readonly int AimPitchHash = Animator.StringToHash("AimPitch");
@@ -56,6 +67,10 @@ namespace Unity.MP_FPS
         private Vector3 m_InitialScale;
         private float m_ManualScaleMultiplier = 1f;
         private Vector3 m_ReticleVector;
+        private Transform m_LeftHandShotOrigin;
+        private Transform m_RightHandShotOrigin;
+        private Transform m_ThirdPersonLeftHandShotOrigin;
+        private Transform m_ThirdPersonRightHandShotOrigin;
 
         private CinemachineTargetGroup m_TargetGroup;
         private CinemachinePositionComposer m_PositionComposer;
@@ -105,6 +120,77 @@ namespace Unity.MP_FPS
             GetRequiredComponent(out m_Controller);
             m_ReticleVector = ReticlePoint.localPosition;
             m_InitialScale = transform.localScale;
+            m_LeftHandShotOrigin = CreateHandShotOrigin("LeftHandShotOrigin", m_LeftHandShotOffset);
+            m_RightHandShotOrigin = CreateHandShotOrigin("RightHandShotOrigin", m_RightHandShotOffset);
+        }
+
+        private Transform CreateHandShotOrigin(string originName, Vector3 localPosition)
+        {
+            if (CameraTarget == null)
+            {
+                return null;
+            }
+
+            var origin = new GameObject(originName).transform;
+            origin.SetParent(CameraTarget, false);
+            origin.localPosition = localPosition;
+            origin.localRotation = Quaternion.identity;
+            return origin;
+        }
+
+        public Vector3 GetHandShotOffset(uint weaponId)
+        {
+            return weaponId == WeaponManager.SecondaryWeaponId
+                ? m_RightHandShotOffset
+                : m_LeftHandShotOffset;
+        }
+
+        public Vector3 GetScaledHandShotOffset(uint weaponId)
+        {
+            float playerScale = Mathf.Max(0.01f, Mathf.Abs(transform.lossyScale.x));
+            return GetHandShotOffset(weaponId) * playerScale;
+        }
+
+        public Vector3 ApplyShotOriginClearance(Vector3 shotOrigin, uint weaponId)
+        {
+            if (weaponId != WeaponManager.SecondaryWeaponId)
+            {
+                return shotOrigin;
+            }
+
+            float minimumY = transform.position.y + m_MinimumGuidedProjectileSpawnHeight;
+            shotOrigin.y = Mathf.Max(shotOrigin.y, minimumY);
+            return shotOrigin;
+        }
+
+        public Transform GetVisualShotOrigin(uint weaponId, bool isFirstPerson)
+        {
+            if (!isFirstPerson)
+            {
+                bool useThirdPersonRightHand = weaponId == WeaponManager.SecondaryWeaponId;
+                var thirdPersonOrigin = useThirdPersonRightHand
+                    ? m_ThirdPersonRightHandShotOrigin
+                    : m_ThirdPersonLeftHandShotOrigin;
+                return thirdPersonOrigin != null ? thirdPersonOrigin : VisualShotOrigin3P;
+            }
+
+            bool useRightHand = weaponId == WeaponManager.SecondaryWeaponId;
+            var origin = useRightHand ? m_RightHandShotOrigin : m_LeftHandShotOrigin;
+            if (origin != null)
+            {
+                // Keep inspector changes live while playing.
+                origin.localPosition = useRightHand
+                    ? m_RightHandShotOffset
+                    : m_LeftHandShotOffset;
+                if (useRightHand)
+                {
+                    origin.position = ApplyShotOriginClearance(
+                        origin.position, WeaponManager.SecondaryWeaponId);
+                }
+                return origin;
+            }
+
+            return VisualShotOrigin1P;
         }
         
         private void LateUpdate()
@@ -129,6 +215,11 @@ namespace Unity.MP_FPS
             bool isClientOwned = (Role == MultiplayerRole.ClientOwned);
             m_OwnerVisuals.SetActive(isClientOwned);
             m_OtherPlayerVisuals.SetActive(!isClientOwned);
+
+            if (Role != MultiplayerRole.Server)
+            {
+                ConfigureWizardVisuals();
+            }
 
             if (Role != MultiplayerRole.Server &&
                 TryReadGhostComponentData<GhostOwner>(out var ghostOwner))
@@ -188,6 +279,57 @@ namespace Unity.MP_FPS
 
             PlayerGhostManager.TryGetInstanceByRole(Role, out var playerManager);
             playerManager.Register(this);
+        }
+
+        private void ConfigureWizardVisuals()
+        {
+            m_ThirdPersonLeftHandShotOrigin = FindDescendant(
+                m_OtherPlayerVisuals, "Left_Hand_End");
+            m_ThirdPersonRightHandShotOrigin = FindDescendant(
+                m_OtherPlayerVisuals, "Right_Hand_End");
+
+            if (!m_HideWeaponVisuals)
+            {
+                return;
+            }
+
+            HideWeaponRoots(m_OwnerVisuals);
+            HideWeaponRoots(m_OtherPlayerVisuals);
+        }
+
+        private static Transform FindDescendant(GameObject root, string childName)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            foreach (var child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name == childName)
+                {
+                    return child;
+                }
+            }
+
+            return null;
+        }
+
+        private static void HideWeaponRoots(GameObject visualRoot)
+        {
+            if (visualRoot == null)
+            {
+                return;
+            }
+
+            // Keep the arm and hand meshes, hiding only the weapon roots.
+            foreach (var child in visualRoot.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name == "Robot_Weapon_A" || child.name == "Pfb_assaultRifle")
+                {
+                    child.gameObject.SetActive(false);
+                }
+            }
         }
 
         private static Color GetPlayerColor(int networkId)

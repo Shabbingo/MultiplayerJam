@@ -225,7 +225,56 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     {
                         predictedPlayer.ValueRW.LocalLookYawPitchDegrees = input.LookYawPitchDegrees;
 
-                        bool useGrowthProjectile = input.GrowShot || input.TossGrenade;
+                        bool growthInputRequested = input.GrowShot || input.TossGrenade;
+                        var secondaryWeaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
+                            WeaponManager.SecondaryWeaponId);
+                        if (growthInputRequested &&
+                            !predictedPlayer.ValueRO.GrowShotPending &&
+                            !predictedPlayer.ValueRO.SecondaryIsReloading &&
+                            predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo > 0 &&
+                            secondaryWeaponData != null &&
+                            predictedPlayer.ValueRO.SecondaryWeaponCooldown >=
+                            Mathf.Max(0f, secondaryWeaponData.CooldownInMs -
+                                           secondaryWeaponData.ProjectileReleaseDelay))
+                        {
+                            predictedPlayer.ValueRW.GrowShotPending = true;
+                            predictedPlayer.ValueRW.GrowShotReleaseTimer =
+                                secondaryWeaponData.ProjectileReleaseDelay;
+                            predictedPlayer.ValueRW.LastGrenadeShotTick =
+                                commandInput.Tick.TickIndexForValidTick;
+                        }
+
+                        if (growthInputRequested &&
+                            !predictedPlayer.ValueRO.GrowShotPending &&
+                            predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo <= 0 &&
+                            !predictedPlayer.ValueRO.SecondaryIsReloading &&
+                            secondaryWeaponData != null)
+                        {
+                            predictedPlayer.ValueRW.SecondaryIsReloading = true;
+                            predictedPlayer.ValueRW.SecondaryReloadTimer = secondaryWeaponData.ReloadTime;
+                            predictedPlayer.ValueRW.LastReloadTick =
+                                commandInput.Tick.TickIndexForValidTick;
+                        }
+
+                        bool useGrowthProjectile = false;
+                        if (predictedPlayer.ValueRO.GrowShotPending)
+                        {
+                            float releaseTimer = predictedPlayer.ValueRO.GrowShotReleaseTimer -
+                                                 accumulateDT;
+                            predictedPlayer.ValueRW.GrowShotReleaseTimer = releaseTimer;
+                            useGrowthProjectile = releaseTimer <= 0f;
+                        }
+
+                        if (useGrowthProjectile)
+                        {
+                            predictedPlayer.ValueRW.GrowShotPending = false;
+                            predictedPlayer.ValueRW.GrowShotReleaseTimer = 0f;
+                        }
+
+                        predictedPlayer.ValueRW.ShrinkCastHeld = input.Shoot &&
+                            !growthInputRequested &&
+                            predictedPlayer.ValueRO.CurrentAmmo > 0 &&
+                            !predictedPlayer.ValueRO.ControllerState.IsReloadingState;
                         var weaponBeforeAbility = default(WeaponManager.TemporaryWeaponState);
                         uint abilityWeaponId = useGrowthProjectile
                             ? WeaponManager.SecondaryWeaponId
@@ -252,11 +301,18 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 predictedPlayer.ValueRW.LastReloadTick = commandInput.Tick.TickIndexForValidTick;
                             }
                             
-                            if (wantsToShoot && !predictedPlayer.ValueRO.ControllerState.IsReloadingState && predictedPlayer.ValueRO.CurrentAmmo > 0 && predictedPlayer.ValueRO.WeaponCooldown >= weaponData.CooldownInMs)
+                            if (wantsToShoot && !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
+                                predictedPlayer.ValueRO.CurrentAmmo > 0 &&
+                                (useGrowthProjectile ||
+                                 predictedPlayer.ValueRO.WeaponCooldown >= weaponData.CooldownInMs))
                             {
                                 predictedPlayer.ValueRW.WeaponCooldown = 0f;
                                 predictedPlayer.ValueRW.CurrentAmmo--;
-                                predictedPlayer.ValueRW.LastShotTick = commandInput.Tick.TickIndexForValidTick;
+                                if (!useGrowthProjectile)
+                                {
+                                    predictedPlayer.ValueRW.LastShotTick =
+                                        commandInput.Tick.TickIndexForValidTick;
+                                }
 
                                 var playerGhost = controllerLink.Controller.GetComponent<PlayerGhost>();
                                 var controllerState = predictedPlayer.ValueRO.ControllerState;
@@ -267,10 +323,15 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
                                 float3 eyePosition = playerGhost.CameraTarget.position;
                                 var aimDirection = math.mul(aimRotation, new float3(0, 0, 1));
-                                // Match the server's deterministic projectile origin. The rendered
-                                // weapon muzzle can be animation-offset and does not exist at the
-                                // same position in the server world.
-                                var shotOriginPosition = eyePosition + aimDirection * 0.5f;
+                                // Match the server's deterministic hand origin exactly so predicted
+                                // right-hand projectiles reconcile without a sideways correction.
+                                float3 handShotOffset = playerGhost.GetScaledHandShotOffset(
+                                    predictedPlayer.ValueRO.EquippedWeaponID);
+                                var shotOriginPosition = eyePosition +
+                                                         math.mul(aimRotation, handShotOffset);
+                                shotOriginPosition = playerGhost.ApplyShotOriginClearance(
+                                    shotOriginPosition,
+                                    predictedPlayer.ValueRO.EquippedWeaponID);
                                 controllerLink.Controller.ApplyAirborneShotThrust(
                                     ref predictedPlayer.ValueRW, aimDirection);
                                     

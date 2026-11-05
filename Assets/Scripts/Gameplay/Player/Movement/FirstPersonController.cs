@@ -124,6 +124,8 @@ public class FirstPersonController : MonoBehaviour
         public static readonly int MovementPlaybackSpeed = Animator.StringToHash("MovementPlaybackSpeed"); //3P
         public static readonly int TurnSpeed = Animator.StringToHash("Turn"); //3P
         public static readonly int Shoot = Animator.StringToHash("Shoot");
+        public static readonly int ShootGrenade = Animator.StringToHash("ShootGrenade");
+        public static readonly int ShrinkCastHeld = Animator.StringToHash("ShrinkCastHeld");
         public static readonly int IsShooting = Animator.StringToHash("IsShooting");
         public static readonly int Reload = Animator.StringToHash("Reload");
         public static readonly int Jump = Animator.StringToHash("Jump");
@@ -364,6 +366,7 @@ public class FirstPersonController : MonoBehaviour
     private DamageVisualsController m_DamageVisualsController;
     private uint _lastProcessedHitTick = 0;
     private uint _lastAnimatedShotTick = 0;
+    private uint _lastAnimatedGrenadeShotTick = 0;
     private uint _lastAnimatedJumpTick = 0;
     private uint _lastAnimatedLandTick = 0;
     private uint _lastAnimatedReloadTick = 0;
@@ -1244,6 +1247,9 @@ public class FirstPersonController : MonoBehaviour
         // Handle one-shot events first
         HandleAnimationEvents(animator, predictedPlayerGhost);
 
+        animator.SetBool(AnimationParameters.ShrinkCastHeld,
+            predictedPlayerGhost.ShrinkCastHeld);
+
         // Then handle continuous state parameters
         if (isClientOwned)
         {
@@ -1271,6 +1277,18 @@ public class FirstPersonController : MonoBehaviour
             }
 
             _lastAnimatedShotTick = ghostState.LastShotTick;
+        }
+
+        // The grow-cast animation begins at windup start. Its projectile is released
+        // later by the predicted/server timer at the weapon's configured hand pose.
+        if (ghostState.LastGrenadeShotTick > _lastAnimatedGrenadeShotTick)
+        {
+            if (!ghostState.SecondaryIsReloading)
+            {
+                animator.SetTrigger(AnimationParameters.ShootGrenade);
+            }
+
+            _lastAnimatedGrenadeShotTick = ghostState.LastGrenadeShotTick;
         }
 
         // Reloading

@@ -16,6 +16,7 @@ MonoBehaviour:
   Type: 1
   ReticleType: 2
   CooldownInMs: 1
+  ProjectileReleaseDelay: 0.4167
   Damage: 20
   HitscanRange: 1
   MagazineSize: 10
