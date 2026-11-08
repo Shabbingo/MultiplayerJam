@@ -11,7 +11,16 @@
         <ui:Label name="self-grow-uses-label" text="SHIFT SELF GROW: 3 / 3" class="self-resize-ammo-label side-label-right"/>
     </ui:VisualElement>
     <ui:VisualElement name="health-info-container" picking-mode="Ignore">
-        <ui:ProgressBar value="63.8" title="HEALTH" name="player-health-bar" class="kits-progress-bar"/>
+        <ui:VisualElement name="reflect-shield-frame" picking-mode="Ignore">
+            <ui:VisualElement name="reflect-ready-glow" picking-mode="Ignore"/>
+            <ui:VisualElement name="reflect-cooldown-wheel" picking-mode="Ignore">
+                <ui:VisualElement name="reflect-cooldown-top" class="reflect-cooldown-segment" picking-mode="Ignore"/>
+                <ui:VisualElement name="reflect-cooldown-right" class="reflect-cooldown-segment" picking-mode="Ignore"/>
+                <ui:VisualElement name="reflect-cooldown-bottom" class="reflect-cooldown-segment" picking-mode="Ignore"/>
+                <ui:VisualElement name="reflect-cooldown-left" class="reflect-cooldown-segment" picking-mode="Ignore"/>
+            </ui:VisualElement>
+            <ui:ProgressBar value="63.8" title="HEALTH" name="player-health-bar" class="kits-progress-bar"/>
+        </ui:VisualElement>
         <ui:ProgressBar name="player-stamina-bar" low-value="0" high-value="5" value="5" title="SHRINK" class="kits-progress-bar kits-shrink-resource-bar"/>
         <ui:Label name="reloading-label" text="RELOADING"/>
     </ui:VisualElement>

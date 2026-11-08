@@ -17,6 +17,7 @@ public partial class ClientInputReaderSystem : SystemBase
         Entity currentLocalPlayer = Entity.Null;
         float3 playerPosition = float3.zero;
         PredictedPlayerGhost currentLocalPlayerData = default;
+        FirstPersonController currentLocalPlayerController = null;
 
         // 1. Find the local player entity and its position
         foreach (var (transform, ghost, owner, entity) in SystemAPI.Query<
@@ -28,6 +29,11 @@ public partial class ClientInputReaderSystem : SystemBase
             currentLocalPlayer = entity;
             playerPosition = transform.ValueRO.Position;
             currentLocalPlayerData = ghost.ValueRO;
+            if (EntityManager.HasComponent<PlayerControllerLink>(entity))
+            {
+                currentLocalPlayerController = EntityManager
+                    .GetComponentObject<PlayerControllerLink>(entity).Controller;
+            }
             break; // Found local player, stop searching
         }
 
@@ -72,21 +78,19 @@ public partial class ClientInputReaderSystem : SystemBase
 
                 ProcessGameplayInput(controls, ref playerInput);
 
-                // The pulse uses the same per-player resources as self-resizing.
-                // Empty shrink/grow charges therefore cannot be used to spam the
-                // camera effect while the server rejects the actual resize.
-                if (!resizePulseHandled && currentLocalPlayer != Entity.Null)
+                // Only play feedback when the predicted resize will actually change
+                // the player's size. This shares the resize code's charge and size
+                // boundary rules, so rejected input remains visually silent.
+                if (!resizePulseHandled && currentLocalPlayerController != null)
                 {
-                    if (playerInput.SelfShrinkPressed &&
-                        currentLocalPlayerData.SelfShrinkCharges > 0)
+                    int resizeDirection = playerInput.SelfShrinkPressed ==
+                                          playerInput.SelfGrowPressed
+                        ? 0
+                        : playerInput.SelfGrowPressed ? 1 : -1;
+                    if (currentLocalPlayerController.CanSelfResize(
+                            in currentLocalPlayerData, resizeDirection))
                     {
-                        CameraResizePulseEffect.TriggerConfigured(-1);
-                        resizePulseHandled = true;
-                    }
-                    else if (playerInput.SelfGrowPressed &&
-                             currentLocalPlayerData.SelfGrowCharges > 0)
-                    {
-                        CameraResizePulseEffect.TriggerConfigured(1);
+                        CameraResizePulseEffect.TriggerConfigured(resizeDirection);
                         resizePulseHandled = true;
                     }
                 }
@@ -121,23 +125,27 @@ public partial class ClientInputReaderSystem : SystemBase
 
     private void ProcessGameplayInput(in InputSystem_Actions controls, ref PlayerInput playerInput)
     {
+        var keyboard = UnityEngine.InputSystem.Keyboard.current;
+        bool gameplayKeysEnabled = keyboard != null && !GameSettings.Instance.IsPauseMenuOpen;
+        bool reflectPressed = gameplayKeysEnabled && keyboard.fKey.wasPressedThisFrame;
+
         playerInput.SetFlag(PlayerInput.InputFlag.Jump, controls.Player.Jump.triggered);
         playerInput.SetFlag(PlayerInput.InputFlag.Shoot, controls.FPS.ShootSingle.IsPressed());
         playerInput.SetFlag(PlayerInput.InputFlag.Reload, controls.FPS.Reload.triggered);
         playerInput.SetFlag(PlayerInput.InputFlag.TossGrenade,
-            controls.FPS.ShootGrenade.triggered);
+            controls.FPS.ShootGrenade.triggered && !reflectPressed);
         // Right click is exclusively the growth projectile. Manual self-resizing has
         // deliberately been removed so firing can never alter the shooter's own size.
         playerInput.SetFlag(PlayerInput.InputFlag.GrowShot,
             controls.UI.RightClick.IsPressed());
 
-        var keyboard = UnityEngine.InputSystem.Keyboard.current;
-        bool gameplayKeysEnabled = keyboard != null && !GameSettings.Instance.IsPauseMenuOpen;
         playerInput.SetFlag(PlayerInput.InputFlag.SelfShrinkPressed,
             gameplayKeysEnabled &&
             (keyboard.leftCtrlKey.wasPressedThisFrame || keyboard.rightCtrlKey.wasPressedThisFrame));
         playerInput.SetFlag(PlayerInput.InputFlag.SelfGrowPressed,
             gameplayKeysEnabled &&
             (keyboard.leftShiftKey.wasPressedThisFrame || keyboard.rightShiftKey.wasPressedThisFrame));
+        playerInput.SetFlag(PlayerInput.InputFlag.ReflectPressed,
+            reflectPressed);
     }
 }

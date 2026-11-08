@@ -13,7 +13,8 @@ public struct PlayerInput
         TossGrenade = 1 << 9,
         GrowShot = 1 << 10,
         SelfShrinkPressed = 1 << 11,
-        SelfGrowPressed = 1 << 12
+        SelfGrowPressed = 1 << 12,
+        ReflectPressed = 1 << 13
     }
 
     public float2 MoveInput;
@@ -28,6 +29,7 @@ public struct PlayerInput
     public bool GrowShot => (InputFlags & (uint)InputFlag.GrowShot) != 0;
     public bool SelfShrinkPressed => (InputFlags & (uint)InputFlag.SelfShrinkPressed) != 0;
     public bool SelfGrowPressed => (InputFlags & (uint)InputFlag.SelfGrowPressed) != 0;
+    public bool ReflectPressed => (InputFlags & (uint)InputFlag.ReflectPressed) != 0;
 
     public void SetFlag(InputFlag flag, bool set)
     {

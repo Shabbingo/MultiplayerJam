@@ -8,6 +8,7 @@
                     <ui:Slider label="Camera FOV: 40" low-value="40" high-value="110" value="40" show-input-field="true" name="CameraFovSlider" class="sensitivity-slider"/>
                     <ui:Label text="Self Shrink: Ctrl"/>
                     <ui:Label text="Self Grow: Shift"/>
+                    <ui:Label text="Reflect Shield: F"/>
                     <ui:Button text="Growth Missile Alt Binding: G" name="GrenadeBindingButton" tabindex="0"/>
                     <ui:Button text="Resume" name="ResumeButton" tabindex="2" selectable="false" focusable="false"/>
                     <ui:Button text="Main Menu" name="MainMenuButton" tabindex="3"/>

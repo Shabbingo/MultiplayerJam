@@ -15,6 +15,13 @@ namespace Unity.MP_FPS
         private VisualElement m_RootElement;
         private ProgressBar m_HealthBar;
         private VisualElement m_PlayerHealthBarFill;
+        private VisualElement m_ReflectShieldFrame;
+        private VisualElement m_ReflectCooldownWheel;
+        private VisualElement m_ReflectCooldownTop;
+        private VisualElement m_ReflectCooldownRight;
+        private VisualElement m_ReflectCooldownBottom;
+        private VisualElement m_ReflectCooldownLeft;
+        private VisualElement m_ReflectReadyGlow;
         private ProgressBar m_SelfResizeChargeBar;
         private ProgressBar m_ShrinkAmmoBar;
         private ProgressBar m_GrowAmmoBar;
@@ -30,6 +37,7 @@ namespace Unity.MP_FPS
 
         // The reticle will stay white for at least 100ms after a shot.
         private const float k_ShotFeedbackDuration = 0.1f;
+        private const float k_ReflectCooldownDuration = 30f;
         private static readonly Color k_HealthBarColor = new Color(0.29f, 0.83f, 0.43f, 0.75f);
         private const string k_CrossReticleClass = "kits-reticle-cross";
         private const string k_TCrossReticleClass = "kits-reticle-tcross";
@@ -47,6 +55,13 @@ namespace Unity.MP_FPS
 
             // Find the UI elements by name
             m_HealthBar = m_RootElement.Q<ProgressBar>("player-health-bar");
+            m_ReflectShieldFrame = m_RootElement.Q<VisualElement>("reflect-shield-frame");
+            m_ReflectCooldownWheel = m_RootElement.Q<VisualElement>("reflect-cooldown-wheel");
+            m_ReflectCooldownTop = m_RootElement.Q<VisualElement>("reflect-cooldown-top");
+            m_ReflectCooldownRight = m_RootElement.Q<VisualElement>("reflect-cooldown-right");
+            m_ReflectCooldownBottom = m_RootElement.Q<VisualElement>("reflect-cooldown-bottom");
+            m_ReflectCooldownLeft = m_RootElement.Q<VisualElement>("reflect-cooldown-left");
+            m_ReflectReadyGlow = m_RootElement.Q<VisualElement>("reflect-ready-glow");
             if (m_HealthBar != null)
             {
                 m_PlayerHealthBarFill = m_HealthBar.Q<VisualElement>(null, "unity-progress-bar__progress");
@@ -119,6 +134,10 @@ namespace Unity.MP_FPS
 
             // Get the player's data directly from the ECS component
             PredictedPlayerGhost playerData = m_LocalPlayerQuery.GetSingleton<PredictedPlayerGhost>();
+
+            m_ReflectShieldFrame?.EnableInClassList(
+                "reflect-shield-active", playerData.ReflectShieldTimeRemaining > 0f);
+            UpdateReflectCooldownWheel(in playerData);
 
             // Update Health Bar
             if (m_HealthBar != null)
@@ -203,6 +222,54 @@ namespace Unity.MP_FPS
             {
                 bar.highValue = Mathf.Max(1, capacity);
                 bar.value = ammo;
+            }
+        }
+
+        private void UpdateReflectCooldownWheel(in PredictedPlayerGhost playerData)
+        {
+            if (m_ReflectCooldownWheel == null)
+            {
+                return;
+            }
+
+            float cooldownProgress = 1f - Mathf.Clamp01(
+                playerData.ReflectCooldownTimeRemaining / k_ReflectCooldownDuration);
+            SetSegmentWidth(m_ReflectCooldownTop,
+                Mathf.Clamp01(cooldownProgress * 4f));
+            SetSegmentHeight(m_ReflectCooldownRight,
+                Mathf.Clamp01(cooldownProgress * 4f - 1f));
+            SetSegmentWidth(m_ReflectCooldownBottom,
+                Mathf.Clamp01(cooldownProgress * 4f - 2f));
+            SetSegmentHeight(m_ReflectCooldownLeft,
+                Mathf.Clamp01(cooldownProgress * 4f - 3f));
+
+            bool isReady = playerData.ReflectCooldownTimeRemaining <= 0f;
+            float pulse = 0.55f + 0.45f *
+                (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f));
+            m_ReflectCooldownWheel.style.opacity = isReady ? pulse : 0.85f;
+
+            if (m_ReflectReadyGlow != null)
+            {
+                m_ReflectReadyGlow.style.display = isReady
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+                m_ReflectReadyGlow.style.opacity = pulse;
+            }
+        }
+
+        private static void SetSegmentWidth(VisualElement segment, float progress)
+        {
+            if (segment != null)
+            {
+                segment.style.width = Length.Percent(progress * 100f);
+            }
+        }
+
+        private static void SetSegmentHeight(VisualElement segment, float progress)
+        {
+            if (segment != null)
+            {
+                segment.style.height = Length.Percent(progress * 100f);
             }
         }
 

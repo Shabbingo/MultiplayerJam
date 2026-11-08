@@ -41,6 +41,70 @@
     justify-content: center;
 }
 
+#reflect-shield-frame {
+    position: relative;
+    width: 100%;
+    padding: 3px;
+    border-width: 3px;
+    border-color: rgba(90, 205, 255, 0);
+    border-radius: 12px;
+}
+
+#reflect-shield-frame.reflect-shield-active {
+    border-color: rgb(90, 205, 255);
+    background-color: rgba(90, 205, 255, 0.18);
+}
+
+#reflect-cooldown-wheel,
+#reflect-ready-glow {
+    position: absolute;
+    left: -7px;
+    right: -7px;
+    top: -7px;
+    bottom: -7px;
+    border-radius: 15px;
+}
+
+#reflect-cooldown-wheel {
+    overflow: visible;
+}
+
+.reflect-cooldown-segment {
+    position: absolute;
+    background-color: rgb(90, 205, 255);
+}
+
+#reflect-cooldown-top {
+    top: 0;
+    left: 0;
+    height: 4px;
+}
+
+#reflect-cooldown-right {
+    top: 0;
+    right: 0;
+    width: 4px;
+}
+
+#reflect-cooldown-bottom {
+    right: 0;
+    bottom: 0;
+    height: 4px;
+}
+
+#reflect-cooldown-left {
+    left: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+#reflect-ready-glow {
+    display: none;
+    border-width: 5px;
+    border-color: rgb(90, 205, 255);
+    background-color: rgba(90, 205, 255, 0.14);
+}
+
 #player-stamina-bar {
     width: 100%;
     height: 24px;

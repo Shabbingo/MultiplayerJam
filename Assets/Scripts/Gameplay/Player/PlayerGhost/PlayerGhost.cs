@@ -22,6 +22,14 @@ namespace Unity.MP_FPS
         public float MinimumPlayerScale => m_MinimumPlayerScale;
         [SerializeField, Min(1f)] private float m_MaximumPlayerScale = 2f;
         public float MaximumPlayerScale => m_MaximumPlayerScale;
+
+        [Header("Reflect Shield Glow")]
+        [SerializeField] private Color m_ReflectGlowColour = new(0.2f, 0.75f, 1f, 1f);
+        [SerializeField, Min(0f)] private float m_ReflectGlowIntensity = 4f;
+        [SerializeField, Min(0.1f)] private float m_ReflectGlowRange = 5f;
+        [SerializeField] private Color m_ReflectShieldColour = new(0.12f, 0.68f, 1f, 0.42f);
+        [SerializeField] private Vector3 m_ReflectShieldOffset = new(0f, 1f, 0f);
+        [SerializeField] private Vector3 m_ReflectShieldScale = new(1.5f, 2.4f, 1.5f);
         [FormerlySerializedAs("m_ManualScaleTransitionSpeed")]
         [SerializeField, Min(0.01f), Tooltip("How quickly the visible player scale catches up while shrinking.")]
         private float m_ShrinkScaleResponseSpeed = 8f;
@@ -71,6 +79,9 @@ namespace Unity.MP_FPS
         private Transform m_RightHandShotOrigin;
         private Transform m_ThirdPersonLeftHandShotOrigin;
         private Transform m_ThirdPersonRightHandShotOrigin;
+        private Light m_ReflectGlow;
+        private MeshRenderer m_ReflectShieldRenderer;
+        private Material m_ReflectShieldMaterial;
 
         private CinemachineTargetGroup m_TargetGroup;
         private CinemachinePositionComposer m_PositionComposer;
@@ -219,6 +230,7 @@ namespace Unity.MP_FPS
             if (Role != MultiplayerRole.Server)
             {
                 ConfigureWizardVisuals();
+                CreateReflectGlow();
             }
 
             if (Role != MultiplayerRole.Server &&
@@ -295,6 +307,52 @@ namespace Unity.MP_FPS
 
             HideWeaponRoots(m_OwnerVisuals);
             HideWeaponRoots(m_OtherPlayerVisuals);
+        }
+
+        private void CreateReflectGlow()
+        {
+            var glowObject = new GameObject("Reflect Shield Glow");
+            glowObject.transform.SetParent(transform, false);
+            glowObject.transform.localPosition = Vector3.up;
+            m_ReflectGlow = glowObject.AddComponent<Light>();
+            m_ReflectGlow.type = LightType.Point;
+            m_ReflectGlow.color = m_ReflectGlowColour;
+            m_ReflectGlow.intensity = m_ReflectGlowIntensity;
+            m_ReflectGlow.range = m_ReflectGlowRange;
+            m_ReflectGlow.shadows = LightShadows.None;
+            m_ReflectGlow.enabled = false;
+
+            Shader shieldShader = Shader.Find("MultiplayerJam/Reflect Energy Shield");
+            if (shieldShader == null)
+            {
+                Debug.LogWarning("Reflect energy shield shader could not be found.");
+                return;
+            }
+
+            var shieldObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            shieldObject.name = "Reflect Energy Shield";
+            shieldObject.transform.SetParent(transform, false);
+            shieldObject.transform.localPosition = m_ReflectShieldOffset;
+            shieldObject.transform.localScale = m_ReflectShieldScale;
+
+            var shieldCollider = shieldObject.GetComponent<Collider>();
+            if (shieldCollider != null)
+            {
+                shieldCollider.enabled = false;
+                Destroy(shieldCollider);
+            }
+
+            m_ReflectShieldRenderer = shieldObject.GetComponent<MeshRenderer>();
+            m_ReflectShieldRenderer.shadowCastingMode =
+                UnityEngine.Rendering.ShadowCastingMode.Off;
+            m_ReflectShieldRenderer.receiveShadows = false;
+            m_ReflectShieldMaterial = new Material(shieldShader)
+            {
+                name = "Runtime Reflect Energy Shield Material"
+            };
+            m_ReflectShieldMaterial.SetColor("_ShieldColor", m_ReflectShieldColour);
+            m_ReflectShieldRenderer.sharedMaterial = m_ReflectShieldMaterial;
+            m_ReflectShieldRenderer.enabled = false;
         }
 
         private static Transform FindDescendant(GameObject root, string childName)
@@ -385,6 +443,11 @@ namespace Unity.MP_FPS
 
         public override void OnGhostPreDestroy()
         {
+            if (m_ReflectShieldMaterial != null)
+            {
+                Destroy(m_ReflectShieldMaterial);
+            }
+
             if (PlayerGhostManager.TryGetInstanceByRole(Role, out var playerManager))
             {
                 playerManager.Unregister(this);
@@ -437,6 +500,22 @@ namespace Unity.MP_FPS
             ApplyPlayerScale(deltaTime);
 
             var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
+            bool reflectShieldActive = predictedPlayerGhost.ReflectShieldTimeRemaining > 0f;
+            if (m_ReflectGlow != null)
+            {
+                m_ReflectGlow.enabled = reflectShieldActive;
+                if (reflectShieldActive)
+                {
+                    m_ReflectGlow.intensity = m_ReflectGlowIntensity *
+                        (0.85f + 0.15f * Mathf.Sin(Time.time * 12f));
+                }
+            }
+
+            if (m_ReflectShieldRenderer != null)
+            {
+                m_ReflectShieldRenderer.enabled = reflectShieldActive;
+            }
+
             var controllerState = predictedPlayerGhost.ControllerState;
             if (Role == MultiplayerRole.ClientOwned)
             {

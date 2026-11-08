@@ -23,8 +23,8 @@ MonoBehaviour:
   HitscanSpreadPerShotDegrees: 0.12
   HitscanMaxSpreadDegrees: 1
   HitscanSpreadRecoveryDegreesPerSecond: 2
-  MagazineSize: 20
-  ReloadTime: 2
+  MagazineSize: 30
+  ReloadTime: 1.5
   ProjectileGhostPrefab:
     <GhostPrefab>k__BackingField:
       m_AssetGUID: 

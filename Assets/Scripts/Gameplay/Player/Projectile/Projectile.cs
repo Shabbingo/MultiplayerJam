@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System;
-using Gameplay.Leaderboard;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.NetCode;
@@ -562,24 +561,9 @@ namespace Unity.MP_FPS
                     continue;
                 }
 
-                var targetPlayer = playerGhostLookup.GetRefRW(targetEntity);
-                float healthBeforeDamage = targetPlayer.ValueRO.CurrentHealth;
-                float appliedDelta = weaponData.PlayerSizeDelta;
-                targetPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
-                    targetPlayer.ValueRO.CurrentHealth + appliedDelta,
-                    0f,
-                    targetPlayer.ValueRO.MaxHealth);
-                movementSystem.ApplyWeaponResizeEffect(targetEntity, weaponData, ref targetPlayer.ValueRW);
-                targetPlayer.ValueRW.ControllerState.IsHit = true;
-                targetPlayer.ValueRW.LastDamageAmount = Mathf.Abs(appliedDelta);
-                targetPlayer.ValueRW.LastHitTick = serverCurrentTick;
-
-                if (CrossedLethalSizeBoundary(healthBeforeDamage,
-                        targetPlayer.ValueRO.CurrentHealth, targetPlayer.ValueRO.MaxHealth) &&
-                    LeaderboardManager.ServerInstance != null)
-                {
-                    LeaderboardManager.ServerInstance.AddKill(projectileData.OwnerNetworkId, targetNetworkId);
-                }
+                movementSystem.ApplyIncomingWeaponDamage(targetEntity,
+                    projectileData.OwnerNetworkId, weaponData, serverCurrentTick,
+                    playerGhostLookup, ghostOwnerLookup);
             }
 
             DrawGizmoAtPosition(impactPosition);
@@ -612,35 +596,10 @@ namespace Unity.MP_FPS
                 {
                     Debug.Log(
                         $"2 hitPlayerOwner.NetworkId: {hitPlayerOwner.NetworkId.ToString()}, projectileData.OwnerNetworkId: {projectileData.OwnerNetworkId.ToString()}");
-                    var targetPredictedPlayer = playerGhostLookup.GetRefRW(hitGhostObject.LinkedEntity);
-                    var healthBeforeDamage = targetPredictedPlayer.ValueRO.CurrentHealth;
-                    var appliedDelta = weaponData.PlayerSizeDelta;
-                    targetPredictedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
-                        targetPredictedPlayer.ValueRO.CurrentHealth + appliedDelta,
-                        0f,
-                        targetPredictedPlayer.ValueRO.MaxHealth);
                     world.GetExistingSystemManaged<ServerPlayerMovementSystem>()
-                        .ApplyWeaponResizeEffect(hitGhostObject.LinkedEntity, weaponData,
-                            ref targetPredictedPlayer.ValueRW);
-                    targetPredictedPlayer.ValueRW.ControllerState.IsHit = true;
-                    targetPredictedPlayer.ValueRW.LastDamageAmount = Mathf.Abs(appliedDelta);
-                    targetPredictedPlayer.ValueRW.LastHitTick = serverCurrentTick;
-
-                    if (CrossedLethalSizeBoundary(healthBeforeDamage,
-                            targetPredictedPlayer.ValueRO.CurrentHealth,
-                            targetPredictedPlayer.ValueRO.MaxHealth))
-                    {
-                        if (LeaderboardManager.ServerInstance != null)
-                        {
-                            LeaderboardManager.ServerInstance.AddKill(shooterNetworkId, targetNetworkId);
-                            Debug.Log(
-                                $"[Server] Player {shooterNetworkId.ToString()} killed player {targetNetworkId.ToString()} (Direct).");
-                        }
-                        else
-                        {
-                            Debug.LogWarning("[Server] LeaderboardManager instance not found. Cannot add kill.");
-                        }
-                    }
+                        .ApplyIncomingWeaponDamage(hitGhostObject.LinkedEntity,
+                            shooterNetworkId, weaponData, serverCurrentTick,
+                            playerGhostLookup, ghostOwnerLookup);
 
                     DrawGizmoAtPosition(impactPosition);
                     GhostGameObject.DestroyEntity();
@@ -659,10 +618,5 @@ namespace Unity.MP_FPS
             Debug.DrawRay(position - Vector3.forward * size, Vector3.forward * size * 2, color, duration);
         }
 
-        private static bool CrossedLethalSizeBoundary(float previous, float current, float maximum)
-        {
-            bool wasAlive = previous > 0f && previous < maximum;
-            return wasAlive && (current <= 0f || current >= maximum);
-        }
     }
 }

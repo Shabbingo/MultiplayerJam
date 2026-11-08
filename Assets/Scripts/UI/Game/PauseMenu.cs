@@ -144,6 +144,7 @@ namespace Unity.MP_FPS
                 .WithControlsExcluding("<Mouse>/position")
                 .WithControlsExcluding("<Mouse>/delta")
                 .WithControlsExcluding("<Mouse>/scroll")
+                .WithControlsExcluding("<Keyboard>/f")
                 .WithCancelingThrough("<Keyboard>/escape")
                 .OnCancel(_ => FinishGrenadeRebind(false))
                 .OnComplete(_ => FinishGrenadeRebind(true))

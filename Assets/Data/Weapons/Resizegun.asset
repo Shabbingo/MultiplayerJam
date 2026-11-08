@@ -19,6 +19,10 @@ MonoBehaviour:
   ProjectileReleaseDelay: 0.4167
   Damage: 20
   HitscanRange: 1
+  HitscanBaseSpreadDegrees: 0.15
+  HitscanSpreadPerShotDegrees: 0.2
+  HitscanMaxSpreadDegrees: 2.5
+  HitscanSpreadRecoveryDegreesPerSecond: 2
   MagazineSize: 10
   ReloadTime: 3
   ProjectileGhostPrefab:
@@ -64,11 +68,11 @@ MonoBehaviour:
   WeaponReloadSfx: {fileID: 11400000, guid: 787dd818efa43da4f969b63e44de56b7, type: 2}
   ResizeEffect: 3
   ResizeEffectDuration: 3
-  Behavior: 0
-  AoeRadius: 3
-  ProjectileSpeed: 24
+  Behavior: 1
+  AoeRadius: 4
+  ProjectileSpeed: 30
   IsGuidedProjectile: 1
-  GuidedTurnSpeed: 100
+  GuidedTurnSpeed: 150
   GuidedAcceleration: 35
   GuidedLaunchUpwardSpeed: 8
   GuidedTargetRange: 250

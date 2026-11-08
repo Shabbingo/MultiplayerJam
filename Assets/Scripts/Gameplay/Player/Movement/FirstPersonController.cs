@@ -687,26 +687,8 @@ public class FirstPersonController : MonoBehaviour
         int requestedDirection = input.SelfGrowPressed ? 1 : input.SelfShrinkPressed ? -1 : 0;
         predictedPlayer.SelfResizeChargeDirection = requestedDirection;
 
-        bool hasAmmo = requestedDirection > 0
-            ? predictedPlayer.SelfGrowCharges > 0
-            : predictedPlayer.SelfShrinkCharges > 0;
-        if (!hasAmmo)
-        {
-            return;
-        }
-
-        // Apply one safe chunk immediately. A press at a size boundary does not waste ammo.
-        float safeMinimum = Mathf.Min(
-            m_SelfResizeSafetyMargin,
-            predictedPlayer.MaxHealth * 0.5f);
-        float safeMaximum = Mathf.Max(
-            safeMinimum,
-            predictedPlayer.MaxHealth - m_SelfResizeSafetyMargin);
-        float resizedHealth = Mathf.Clamp(
-            predictedPlayer.CurrentHealth + chunkSize * requestedDirection,
-            safeMinimum,
-            safeMaximum);
-        if (Mathf.Approximately(resizedHealth, predictedPlayer.CurrentHealth))
+        if (!TryGetSelfResizeTargetHealth(
+                in predictedPlayer, requestedDirection, out float resizedHealth))
         {
             return;
         }
@@ -724,6 +706,45 @@ public class FirstPersonController : MonoBehaviour
         }
 
         ApplyAirResizeImpulse(ref predictedPlayer, requestedDirection);
+    }
+
+    public bool CanSelfResize(in PredictedPlayerGhost predictedPlayer, int resizeDirection)
+    {
+        return TryGetSelfResizeTargetHealth(
+            in predictedPlayer, resizeDirection, out _);
+    }
+
+    private bool TryGetSelfResizeTargetHealth(in PredictedPlayerGhost predictedPlayer,
+        int resizeDirection, out float resizedHealth)
+    {
+        resizedHealth = predictedPlayer.CurrentHealth;
+        if (resizeDirection == 0 || predictedPlayer.MaxHealth <= 0f ||
+            predictedPlayer.CurrentHealth <= 0f)
+        {
+            return false;
+        }
+
+        bool hasAmmo = resizeDirection > 0
+            ? predictedPlayer.SelfGrowCharges > 0
+            : predictedPlayer.SelfShrinkCharges > 0;
+        if (!hasAmmo)
+        {
+            return false;
+        }
+
+        // A press at a size boundary neither spends ammo nor plays resize feedback.
+        float safeMinimum = Mathf.Min(
+            m_SelfResizeSafetyMargin,
+            predictedPlayer.MaxHealth * 0.5f);
+        float safeMaximum = Mathf.Max(
+            safeMinimum,
+            predictedPlayer.MaxHealth - m_SelfResizeSafetyMargin);
+        resizedHealth = Mathf.Clamp(
+            predictedPlayer.CurrentHealth +
+            Mathf.Max(1f, m_SelfResizeChunkSize) * resizeDirection,
+            safeMinimum,
+            safeMaximum);
+        return !Mathf.Approximately(resizedHealth, predictedPlayer.CurrentHealth);
     }
 
     private void ApplyAirResizeImpulse(ref PredictedPlayerGhost predictedPlayer,

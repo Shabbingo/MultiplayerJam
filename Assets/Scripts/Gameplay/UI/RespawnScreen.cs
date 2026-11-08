@@ -56,6 +56,11 @@ namespace Unity.MP_FPS.UI
             }
 
             RespawnCamera.gameObject.SetActive(true);
+            if (GameSettings.Instance != null)
+            {
+                RespawnCamera.fieldOfView = GameSettings.Instance.CameraFov;
+            }
+
             if (!m_IsRespawning ||
                 m_LastRespawnSequence != ClientRespawnState.Sequence)
             {

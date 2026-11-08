@@ -160,6 +160,13 @@ public class InputSystemManager : Singleton<InputSystemManager>
         if (!string.IsNullOrEmpty(bindingOverrides))
         {
             controls.FPS.ShootGrenade.LoadBindingOverridesFromJson(bindingOverrides);
+            if (controls.FPS.ShootGrenade.bindings.Count > 0 &&
+                string.Equals(controls.FPS.ShootGrenade.bindings[0].effectivePath,
+                    "<Keyboard>/f", System.StringComparison.OrdinalIgnoreCase))
+            {
+                controls.FPS.ShootGrenade.RemoveBindingOverride(0);
+                PlayerPrefs.DeleteKey(k_GrenadeBindingOverridesKey);
+            }
         }
     }
 

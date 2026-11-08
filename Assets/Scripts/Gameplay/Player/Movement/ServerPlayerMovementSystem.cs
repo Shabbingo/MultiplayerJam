@@ -57,6 +57,12 @@ namespace Unity.MP_FPS
         private readonly HashSet<Entity> m_PendingSelfGrowthChecks = new();
         private readonly Dictionary<int, HitscanBloomState> m_HitscanBloomByPlayer = new();
         private readonly List<int> m_HitscanBloomPlayersScratch = new();
+        private const float k_ReflectDuration = 0.5f;
+        private const float k_ReflectCooldown = 30f;
+        private readonly Dictionary<int, float> m_ReflectActiveTimers = new();
+        private readonly Dictionary<int, float> m_ReflectCooldownTimers = new();
+        private readonly List<int> m_ReflectPlayersScratch = new();
+        private readonly Dictionary<int, Entity> m_PlayerEntitiesByNetworkId = new();
 
         private struct HitscanBloomState
         {
@@ -182,6 +188,10 @@ namespace Unity.MP_FPS
             m_PendingSelfGrowthChecks.Clear();
             m_HitscanBloomByPlayer.Clear();
             m_HitscanBloomPlayersScratch.Clear();
+            m_ReflectActiveTimers.Clear();
+            m_ReflectCooldownTimers.Clear();
+            m_ReflectPlayersScratch.Clear();
+            m_PlayerEntitiesByNetworkId.Clear();
 
             var query = GetEntityQuery(typeof(PlayerControllerLink));
             foreach (var entity in query.ToEntityArray(Allocator.Temp))
@@ -207,6 +217,7 @@ namespace Unity.MP_FPS
             uint serverTick = networkTime.ServerTick.TickIndexForValidTick;
             UpdateForcedFullSizeEffects(deltaTime);
             UpdateHitscanBloom(deltaTime);
+            UpdateReflectTimers(deltaTime);
 
             s_PlayerMovementActive = true;
             s_PlayerMovementTick = serverTick;
@@ -335,12 +346,55 @@ namespace Unity.MP_FPS
             var predictedClientInputComponentLookup = m_PredictedClientInputComponentLookup;
             var playerGhostLookup = m_PlayerGhostLookup;
 
+            m_PlayerEntitiesByNetworkId.Clear();
+            foreach (var (owner, entity) in SystemAPI.Query<RefRO<GhostOwner>>()
+                         .WithAll<PredictedPlayerGhost>()
+                         .WithEntityAccess())
+            {
+                m_PlayerEntitiesByNetworkId[owner.ValueRO.NetworkId] = entity;
+            }
+
+            // Resolve every shield press before processing any player's attack this
+            // tick, so protection never depends on ECS entity iteration order.
+            foreach (var (predictedPlayer, inputLookup, entity) in
+                     SystemAPI.Query<RefRW<PredictedPlayerGhost>,
+                             RefRO<PlayerClientCommandInputLookup>>()
+                         .WithAll<Simulate, GhostGameObjectLink>()
+                         .WithEntityAccess())
+            {
+                var predictedClient = predictedClientInputComponentLookup[
+                    inputLookup.ValueRO.ClientCommandInputEntity];
+                for (int inputIndex = 0; inputIndex < predictedClient.InputCount; inputIndex++)
+                {
+                    var reflectInput = commands[predictedClient.BeginInputIndex + inputIndex];
+                    if (!reflectInput.PlayerInput.ReflectPressed)
+                    {
+                        continue;
+                    }
+
+                    TryActivateReflect(entity, ref predictedPlayer.ValueRW);
+                    break;
+                }
+            }
+
             var projectileSpawnList = new NativeList<ProjectileSpawnData>(Allocator.Temp);
             var vfxSpawnList = new NativeList<VfxSpawnData>(Allocator.Temp);
 
-            foreach (var predictedPlayer in SystemAPI.Query<RefRW<PredictedPlayerGhost>>()
+            foreach (var (predictedPlayer, owner) in
+                     SystemAPI.Query<RefRW<PredictedPlayerGhost>, RefRO<GhostOwner>>()
                          .WithAll<Simulate>())
             {
+                predictedPlayer.ValueRW.ReflectShieldTimeRemaining =
+                    m_ReflectActiveTimers.TryGetValue(
+                        owner.ValueRO.NetworkId, out float shieldTimeRemaining)
+                        ? shieldTimeRemaining
+                        : 0f;
+                predictedPlayer.ValueRW.ReflectCooldownTimeRemaining =
+                    m_ReflectCooldownTimers.TryGetValue(
+                        owner.ValueRO.NetworkId, out float cooldownTimeRemaining)
+                        ? cooldownTimeRemaining
+                        : 0f;
+
                 if (predictedPlayer.ValueRO.WeaponCooldown < float.MaxValue)
                 {
                     predictedPlayer.ValueRW.WeaponCooldown += deltaTime;
@@ -547,8 +601,6 @@ namespace Unity.MP_FPS
                                         if (hit.PlayerEntity != Entity.Null &&
                                             playerGhostLookup.HasComponent(hit.PlayerEntity))
                                         {
-                                            var targetPredictedPlayer =
-                                                playerGhostLookup.GetRefRW(hit.PlayerEntity);
                                             var targetNetworkId = ghostOwnerLookup[hit.PlayerEntity].NetworkId;
 
                                             if (shooterNetworkId == targetNetworkId)
@@ -557,37 +609,9 @@ namespace Unity.MP_FPS
                                                 continue;
                                             }
 
-                                            var healthBeforeDamage = targetPredictedPlayer.ValueRO.CurrentHealth;
-                                            var appliedDelta = weaponData.PlayerSizeDelta;
-                                            targetPredictedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
-                                                targetPredictedPlayer.ValueRO.CurrentHealth + appliedDelta,
-                                                0f,
-                                                targetPredictedPlayer.ValueRO.MaxHealth);
-                                            ApplyWeaponResizeEffect(hit.PlayerEntity, weaponData,
-                                                ref targetPredictedPlayer.ValueRW);
-                                            targetPredictedPlayer.ValueRW.ControllerState.IsHit = true;
-
-                                            targetPredictedPlayer.ValueRW.LastDamageAmount =
-                                                Mathf.Abs(appliedDelta);
-                                            targetPredictedPlayer.ValueRW.LastHitTick = serverTick;
-
-                                            if (IsSizeLethal(healthBeforeDamage,
-                                                    targetPredictedPlayer.ValueRO.CurrentHealth,
-                                                    targetPredictedPlayer.ValueRO.MaxHealth) &&
-                                                LeaderboardManager.ServerInstance != null)
-                                            {
-                                                LeaderboardManager.ServerInstance.AddKill(shooterNetworkId,
-                                                    targetNetworkId);
-                                                Debug.Log(
-                                                    $"[Server] Player {shooterNetworkId.ToString()} killed player {targetNetworkId.ToString()}.");
-                                            }
-                                            else if (IsSizeLethal(healthBeforeDamage,
-                                                         targetPredictedPlayer.ValueRO.CurrentHealth,
-                                                         targetPredictedPlayer.ValueRO.MaxHealth))
-                                            {
-                                                Debug.LogWarning(
-                                                    "[Server] LeaderboardManager instance not found. Cannot add kill.");
-                                            }
+                                            ApplyIncomingWeaponDamage(hit.PlayerEntity,
+                                                shooterNetworkId, weaponData, serverTick,
+                                                playerGhostLookup, ghostOwnerLookup);
                                         }
 
                                         if (weaponData.ProjectileHitVfxPrefab != null)
@@ -1079,6 +1103,139 @@ namespace Unity.MP_FPS
         {
             bool wasAlive = previous > 0f && previous < maximum;
             return wasAlive && (current <= 0f || current >= maximum);
+        }
+
+        private void TryActivateReflect(Entity playerEntity,
+            ref PredictedPlayerGhost predictedPlayer)
+        {
+            if (predictedPlayer.CurrentHealth <= 0f ||
+                !ghostOwnerLookup.HasComponent(playerEntity))
+            {
+                return;
+            }
+
+            int playerNetworkId = ghostOwnerLookup[playerEntity].NetworkId;
+            if (m_ReflectCooldownTimers.ContainsKey(playerNetworkId))
+            {
+                return;
+            }
+
+            m_ReflectActiveTimers[playerNetworkId] = k_ReflectDuration;
+            m_ReflectCooldownTimers[playerNetworkId] = k_ReflectCooldown;
+            predictedPlayer.ReflectShieldTimeRemaining = k_ReflectDuration;
+            predictedPlayer.ReflectCooldownTimeRemaining = k_ReflectCooldown;
+        }
+
+        private void UpdateReflectTimers(float deltaTime)
+        {
+            UpdateReflectTimerDictionary(m_ReflectActiveTimers, deltaTime);
+            UpdateReflectTimerDictionary(m_ReflectCooldownTimers, deltaTime);
+        }
+
+        private void UpdateReflectTimerDictionary(Dictionary<int, float> timers,
+            float deltaTime)
+        {
+            m_ReflectPlayersScratch.Clear();
+            foreach (var pair in timers)
+            {
+                m_ReflectPlayersScratch.Add(pair.Key);
+            }
+
+            foreach (int playerNetworkId in m_ReflectPlayersScratch)
+            {
+                float remaining = timers[playerNetworkId] - deltaTime;
+                if (remaining <= 0f)
+                {
+                    timers.Remove(playerNetworkId);
+                }
+                else
+                {
+                    timers[playerNetworkId] = remaining;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies a weapon size delta to its intended target, or redirects it to the
+        /// attacker when the intended target's reflect shield is active.
+        /// </summary>
+        public bool ApplyIncomingWeaponDamage(Entity intendedTargetEntity,
+            int attackerNetworkId, WeaponData weaponData, uint hitTick,
+            ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
+            ComponentLookup<GhostOwner> ownerLookup)
+        {
+            if (!ownerLookup.HasComponent(intendedTargetEntity) ||
+                !playerGhostLookup.HasComponent(intendedTargetEntity))
+            {
+                return false;
+            }
+
+            if (playerGhostLookup[intendedTargetEntity].CurrentHealth <= 0f)
+            {
+                return false;
+            }
+
+            int intendedTargetNetworkId = ownerLookup[intendedTargetEntity].NetworkId;
+            Entity damageTargetEntity = intendedTargetEntity;
+            int damageSourceNetworkId = attackerNetworkId;
+            bool reflected = m_ReflectActiveTimers.ContainsKey(intendedTargetNetworkId);
+
+            if (reflected)
+            {
+                // The shield still blocks the hit if its original attacker has already
+                // disappeared and there is no valid player to receive the reflection.
+                if (!m_PlayerEntitiesByNetworkId.TryGetValue(
+                        attackerNetworkId, out damageTargetEntity) ||
+                    !playerGhostLookup.HasComponent(damageTargetEntity) ||
+                    !ownerLookup.HasComponent(damageTargetEntity))
+                {
+                    return false;
+                }
+
+                damageSourceNetworkId = intendedTargetNetworkId;
+            }
+
+            var damagedPlayer = playerGhostLookup.GetRefRW(damageTargetEntity);
+            if (damagedPlayer.ValueRO.CurrentHealth <= 0f)
+            {
+                return false;
+            }
+
+            int damagedPlayerNetworkId = ownerLookup[damageTargetEntity].NetworkId;
+            float healthBeforeDamage = damagedPlayer.ValueRO.CurrentHealth;
+            float appliedDelta = weaponData.PlayerSizeDelta;
+            damagedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
+                damagedPlayer.ValueRO.CurrentHealth + appliedDelta,
+                0f,
+                damagedPlayer.ValueRO.MaxHealth);
+            ApplyWeaponResizeEffect(damageTargetEntity, weaponData,
+                ref damagedPlayer.ValueRW);
+            damagedPlayer.ValueRW.ControllerState.IsHit = true;
+            damagedPlayer.ValueRW.LastDamageAmount = Mathf.Abs(appliedDelta);
+            damagedPlayer.ValueRW.LastHitTick = hitTick;
+
+            if (IsSizeLethal(healthBeforeDamage, damagedPlayer.ValueRO.CurrentHealth,
+                    damagedPlayer.ValueRO.MaxHealth))
+            {
+                if (LeaderboardManager.ServerInstance != null)
+                {
+                    LeaderboardManager.ServerInstance.AddKill(
+                        damageSourceNetworkId, damagedPlayerNetworkId);
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        "[Server] LeaderboardManager instance not found. Cannot add kill.");
+                }
+            }
+
+            if (reflected)
+            {
+                Debug.Log($"[Server] Player {intendedTargetNetworkId} reflected " +
+                          $"player {attackerNetworkId}'s hit.");
+            }
+
+            return true;
         }
 
         public bool TryGetGuidedAimPoint(int ownerNetworkId, float range, out Vector3 targetPoint)
