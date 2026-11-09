@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 665ddbc8044943e88db52090577341cf, type: 3}
+  m_Name: Card Modifier Catalog
+  m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierCatalog
+  m_Cards:
+  - {fileID: 11400000, guid: d52cf40ff8e24f1a8cfe9320ba4e8f01, type: 2}
+  - {fileID: 11400000, guid: efec9f1468b8413b96e13247a040421d, type: 2}
+  - {fileID: 11400000, guid: f08119cb908746d0b0c8cb6d39769828, type: 2}
+  - {fileID: 11400000, guid: 7115f50796ba469ab60875f815f22757, type: 2}
+  - {fileID: 11400000, guid: 5a16c3407511460095f55c54ef74439e, type: 2}
+  - {fileID: 11400000, guid: 34f3431e6b914bd3ab0119b91c165a1b, type: 2}
+  - {fileID: 11400000, guid: 9287244702af45b7b2dbe274c11f0691, type: 2}
+  - {fileID: 11400000, guid: d2eaa438d2374ce1a1c9534498a286ae, type: 2}

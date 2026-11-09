@@ -20,6 +20,24 @@ namespace Unity.MP_FPS
 
         public WeaponRegistry WeaponRegistry;
 
+        [Header("Card Modifier Profiles")]
+        [SerializeField] private Cards.CardModifierCatalog m_CardModifierCatalog;
+
+        [SerializeField, Tooltip("Firing profile used when the Scatter card transforms either hand. Defaults to registered weapon ID 1 when unassigned.")]
+        private WeaponData m_ScatterWeaponProfile;
+
+        [SerializeField]
+        private Cards.ModifierGameplayTuning m_ModifierTuning = new()
+        {
+            DamagePerStack = 0.1f,
+            ExplosionRadiusPerStack = 1f,
+            ScatterPelletCount = 10,
+            ScatterHalfAngleDegrees = 7.5f,
+            SlowPercent = 0.2f,
+            SlowDuration = 2f,
+            AddedHomingTurnSpeed = 120f
+        };
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -29,6 +47,41 @@ namespace Unity.MP_FPS
             }
 
             Instance = this;
+        }
+
+        public Cards.RuntimeWeaponProfile ResolveRuntimeProfile(uint weaponId,
+            in Cards.PlayerModifierStacks modifiers)
+        {
+            WeaponData baseProfile = WeaponRegistry.GetWeaponData(weaponId);
+            WeaponData scatterProfile = m_ScatterWeaponProfile != null
+                ? m_ScatterWeaponProfile
+                : WeaponRegistry.GetWeaponData(1);
+            Cards.WeaponHand hand = weaponId == SecondaryWeaponId
+                ? Cards.WeaponHand.Right
+                : Cards.WeaponHand.Left;
+            Cards.ModifierGameplayTuning tuning = GetModifierTuning();
+            return Cards.WeaponModifierResolver.Resolve(baseProfile, scatterProfile, hand,
+                in modifiers, in tuning);
+        }
+
+        private Cards.ModifierGameplayTuning GetModifierTuning()
+        {
+            Cards.ModifierGameplayTuning tuning = m_ModifierTuning;
+            if (m_CardModifierCatalog == null)
+            {
+                return tuning;
+            }
+
+            var damage = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.DamagePercent);
+            var explosion = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.ExplosionRadius);
+            var scatter = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.ScatterWeapon);
+            var slow = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.SlowTarget);
+            if (damage != null) tuning.DamagePerStack = damage.ValuePerStack;
+            if (explosion != null) tuning.ExplosionRadiusPerStack = explosion.ValuePerStack;
+            if (scatter != null) tuning.ScatterPelletCount = Mathf.Max(1,
+                Mathf.RoundToInt(scatter.ValuePerStack));
+            if (slow != null) tuning.SlowPercent = slow.ValuePerStack;
+            return tuning;
         }
 
         public bool TryEquipWeapon(ref PredictedPlayerGhost player, uint weaponId)

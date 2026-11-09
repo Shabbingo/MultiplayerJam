@@ -1,4 +1,5 @@
 using Unity.Entities;
+using Unity.MP_FPS.Cards;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -13,6 +14,7 @@ public class PredictedPlayerGhostBaker : Baker<PredictedPlayerGhostAuthoring>
     {
         var entity = GetEntity(TransformUsageFlags.None);
         AddComponent(entity, new PredictedPlayerGhost { DisabledPredictionLerpFactor = authoring.DisabledPredictionLerpFactor });
+        AddComponent<PlayerModifierStacks>(entity);
         AddBuffer<PredictedPlayerGhostState>(entity);
 
         AddComponent<PlayerInputComponent>(entity);

@@ -10,6 +10,7 @@ using Unity.Physics;
 using Random = Unity.Mathematics.Random;
 using Unity.Transforms;
 using Collider = UnityEngine.Collider;
+using Unity.MP_FPS.Cards;
 
 namespace Unity.MP_FPS
 {
@@ -123,6 +124,8 @@ namespace Unity.MP_FPS
                     }
 
                     RemovePlayerFromLeaderboard(networkId);
+                    state.World.GetExistingSystemManaged<PlayerRunModifierStoreSystem>()
+                        ?.Remove(networkId);
                     clientsMap.ElementAt(networkId) = default;
                 }
             }
@@ -205,6 +208,10 @@ namespace Unity.MP_FPS
             // Instantiate the player entity
             var playerEntityPrefab = playerEntityPrefabs.PlayerRifleEntityPrefab;
             var playerEntity = ecb.Instantiate(playerEntityPrefab);
+            var modifierStore = state.World.GetExistingSystemManaged<PlayerRunModifierStoreSystem>();
+            PlayerModifierStacks modifiers = modifierStore != null
+                ? modifierStore.GetOrCreate(ownerNetworkId.Value)
+                : default;
 
             // Every player starts with the automatic rifle. Weapon selection is handled in-game.
             var weaponId = WeaponManager.PrimaryWeaponId;
@@ -220,6 +227,7 @@ namespace Unity.MP_FPS
                 : 0;
 
             ecb.SetComponent(playerEntity, new GhostOwner { NetworkId = ownerNetworkId.Value });
+            ecb.SetComponent(playerEntity, modifiers);
             ecb.AddComponent(playerEntity, new PlayerClientCommandInputLookup { ClientCommandInputEntity = clientInputEntity });
             ecb.SetComponent(playerEntity, new PredictedPlayerGhost
             {
