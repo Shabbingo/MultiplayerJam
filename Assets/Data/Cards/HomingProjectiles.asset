@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 5
   m_DisplayName: Homing Projectiles
-  m_Description: Adds 60 degrees per second of player-tracking turn speed to the selected hand.
+  m_Description: Adds 15 degrees per second of player-tracking turn speed to the selected hand.
   m_Icon: {fileID: 0}
   m_StrengthScore: 3
   m_BaseOfferWeight: 1
   m_Kind: 4
   m_AllowedTargets: 3
   m_StackLimit: 5
-  m_ValuePerStack: 60
+  m_ValuePerStack: 15

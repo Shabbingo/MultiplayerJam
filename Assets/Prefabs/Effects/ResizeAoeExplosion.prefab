@@ -118,4 +118,4 @@ MonoBehaviour:
   m_StartRadius: 0.08
   m_RingWidth: 0.055
   m_RingSegments: 64
-  m_Colour: {r: 0.664029, g: 0.031372547, b: 1, a: 0.9}
+  m_Colour: {r: 0.7914909, g: 0.031372547, b: 1, a: 0.9}

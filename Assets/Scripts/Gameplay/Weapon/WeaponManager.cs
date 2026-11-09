@@ -38,7 +38,7 @@ namespace Unity.MP_FPS
             ScatterHalfAngleDegrees = 7.5f,
             SlowPercent = 0.5f,
             SlowDuration = 3f,
-            AddedHomingTurnSpeed = 60f,
+            AddedHomingTurnSpeed = 15f,
             ReloadTimeReductionPerStack = 0.15f,
             AmmoPerStack = 10
         };

@@ -30,7 +30,7 @@ namespace Unity.MP_FPS.Cards
             ScatterHalfAngleDegrees = 7.5f,
             SlowPercent = 0.5f,
             SlowDuration = 3f,
-            AddedHomingTurnSpeed = 60f,
+            AddedHomingTurnSpeed = 15f,
             ReloadTimeReductionPerStack = 0.15f,
             AmmoPerStack = 10
         };
@@ -128,9 +128,14 @@ namespace Unity.MP_FPS.Cards
                 Mathf.Max(0f, tuning.ExplosionRadiusPerStack);
             bool tracksPlayers = homingStacks > 0;
             bool isHoming = source.IsGuidedProjectile || tracksPlayers;
-            float homingTurnSpeed = (source.IsGuidedProjectile
-                ? Mathf.Max(0f, source.GuidedTurnSpeed)
-                : 0f) + homingStacks * Mathf.Max(0f, tuning.AddedHomingTurnSpeed);
+            // Once the Homing card is present it owns player-tracking strength for
+            // either hand. Do not add the right weapon's strong live-aim guidance
+            // rate on top, otherwise its first Homing stack becomes nearly perfect.
+            float homingTurnSpeed = tracksPlayers
+                ? homingStacks * Mathf.Max(0f, tuning.AddedHomingTurnSpeed)
+                : source.IsGuidedProjectile
+                    ? Mathf.Max(0f, source.GuidedTurnSpeed)
+                    : 0f;
             bool appliesSlow = modifiers.GetStacks(CardModifierKind.SlowTarget, target) > 0;
             float reloadMultiplier = Mathf.Max(0.25f,
                 1f - reloadStacks * Mathf.Clamp(tuning.ReloadTimeReductionPerStack, 0f, 0.5f));

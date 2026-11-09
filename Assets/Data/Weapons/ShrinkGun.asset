@@ -10,34 +10,34 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 600e1b9bafb249d0907133f228c0a442, type: 3}
-  m_Name: Resizegun
+  m_Name: ShrinkGun
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
-  WeaponName: Resizegun
+  WeaponName: Assault Rifle
   Type: 1
-  ReticleType: 2
+  ReticleType: 0
   CooldownInMs: 0.75
   ProjectileReleaseDelay: 0.25
   Damage: 25
-  HitscanRange: 1
+  HitscanRange: 100
   HitscanBaseSpreadDegrees: 0.15
-  HitscanSpreadPerShotDegrees: 0.2
-  HitscanMaxSpreadDegrees: 2.5
+  HitscanSpreadPerShotDegrees: 0.12
+  HitscanMaxSpreadDegrees: 1
   HitscanSpreadRecoveryDegreesPerSecond: 2
-  MagazineSize: 10
-  ReloadTime: 3
+  MagazineSize: 15
+  ReloadTime: 1
   ProjectileGhostPrefab:
     <GhostPrefab>k__BackingField:
-      m_AssetGUID: 38ee40c188d217c4fbd0f86d3a8afe09
+      m_AssetGUID: 83a79bf5320972c46ae675e08e77534b
       m_SubObjectName: 
       m_SubObjectType: 
       m_SubObjectGUID: 
       m_EditorAssetChanged: 0
     m_GhostGuid:
       Value:
-        x: 470085251
-        y: 1282485640
-        z: 3599699391
-        w: 2431625379
+        x: 1605990968
+        y: 1277661219
+        z: 240610982
+        w: 3023402984
   ProjectileHitVfxPrefab:
     <GhostPrefab>k__BackingField:
       m_AssetGUID: 4f6a8c2d1e3b4a5c9d807162534bf0ae
@@ -64,12 +64,12 @@ MonoBehaviour:
         y: 2437402558
         z: 1237618833
         w: 3997788915
-  WeaponFireSfx: {fileID: 11400000, guid: efa46b087affc004e90934acb0e499bb, type: 2}
-  WeaponReloadSfx: {fileID: 11400000, guid: 787dd818efa43da4f969b63e44de56b7, type: 2}
-  ResizeEffect: 3
-  ResizeEffectDuration: 3
+  WeaponFireSfx: {fileID: 11400000, guid: fc81bfa0b72614d498bbd910628ff6ef, type: 2}
+  WeaponReloadSfx: {fileID: 11400000, guid: e371920830b214046bde8a79c9798829, type: 2}
+  ResizeEffect: 2
+  ResizeEffectDuration: 5
   Behavior: 1
-  AoeRadius: 4
+  AoeRadius: 5
   ProjectileSpeed: 40
   IsGuidedProjectile: 1
   GuidedTurnSpeed: 150
@@ -77,11 +77,10 @@ MonoBehaviour:
   GuidedLaunchUpwardSpeed: 8
   GuidedTargetRange: 250
   IsLobbedProjectile: 0
-  LobUpwardSpeed: 3
+  LobUpwardSpeed: 8
   ProjectileGravity: 20
-  ProjectileBounces: 2
-  FirstBounceVelocityRetention: 0.3
+  ProjectileBounces: 1
+  FirstBounceVelocityRetention: 0.65
   ConsecutiveBounceVelocityRetentions:
-  - 0.6
-  - 0.2
-  ProjectileFuseTime: 6
+  - 0.65
+  ProjectileFuseTime: 5

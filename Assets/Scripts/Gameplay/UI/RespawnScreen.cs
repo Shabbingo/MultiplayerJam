@@ -20,7 +20,6 @@ namespace Unity.MP_FPS.UI
         private uint m_LastRespawnSequence;
 
         private float m_RespawnCountdown;
-        private bool m_HasSeenLocalPlayer;
         private int m_SpectatorIndex;
         private int m_SpectatedNetworkId = -1;
         private AudioListener m_SpectatorAudioListener;
@@ -57,7 +56,6 @@ namespace Unity.MP_FPS.UI
             m_RespawnScreen.style.display = DisplayStyle.None;
             m_IsRespawning = false;
             m_LastRespawnSequence = ClientRespawnState.Sequence;
-            m_HasSeenLocalPlayer = false;
             m_SpectatorIndex = 0;
             m_SpectatedNetworkId = -1;
         }
@@ -155,17 +153,20 @@ namespace Unity.MP_FPS.UI
             {
                 if (!localPlayerQuery.IsEmptyIgnoreFilter)
                 {
-                    m_HasSeenLocalPlayer = true;
-                    m_SpectatedNetworkId = -1;
-                    return false;
+                    using NativeArray<PredictedPlayerGhost> localPlayers =
+                        localPlayerQuery.ToComponentDataArray<PredictedPlayerGhost>(Allocator.Temp);
+                    foreach (PredictedPlayerGhost localPlayer in localPlayers)
+                    {
+                        bool isAlive = localPlayer.CurrentHealth > 0f &&
+                            (localPlayer.MaxHealth <= 0f ||
+                             localPlayer.CurrentHealth < localPlayer.MaxHealth);
+                        if (isAlive && MainCameraSingleton.Instance != null)
+                        {
+                            m_SpectatedNetworkId = -1;
+                            return false;
+                        }
+                    }
                 }
-            }
-
-            // Avoid flashing spectator mode during initial connection before this
-            // client has ever owned a character.
-            if (!m_HasSeenLocalPlayer)
-            {
-                return false;
             }
 
             RebuildSpectatorTargets(entityManager);
