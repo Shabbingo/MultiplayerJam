@@ -541,6 +541,7 @@ MonoBehaviour:
   m_AvailableMapScenes:
   - GameScene
   - Tom_Map1
+  - LachiesMap
 --- !u!4 &985785698
 Transform:
   m_ObjectHideFlags: 0

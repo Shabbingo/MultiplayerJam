@@ -15,6 +15,9 @@ EditorBuildSettings:
     path: Assets/Scenes/Tom_Map1.unity
     guid: d8a1562d328bcdb4db51718af1e938c5
   - enabled: 1
+    path: Assets/Scenes/LachiesMap.unity
+    guid: 3374bb35adc30764a8afb03549492c76
+  - enabled: 1
     path: Assets/Scenes/GameResourcesSubScene.unity
     guid: 61e4dafa831829f41ac2fd6c36bacab8
   - enabled: 1
