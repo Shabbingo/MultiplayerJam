@@ -8,7 +8,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 7
   m_DisplayName: Explosive Payload
-  m_Description: Adds one metre to the selected hand's impact explosion radius.
+  m_Description: Adds one metre to the selected hand's impact explosion radius and displays the affected area.
   m_Icon: {fileID: 0}
   m_StrengthScore: 3
   m_BaseOfferWeight: 1

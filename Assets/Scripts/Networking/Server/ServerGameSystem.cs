@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 using Gameplay.Leaderboard;
 using Unity.Burst;
 using Unity.CharacterController;
@@ -23,14 +24,17 @@ namespace Unity.MP_FPS
     public partial struct ServerGameSystem : ISystem
     {
         private const float RespawnDelay = 5f;
+        private const float MinimumSpawnSeparation = 5f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
         {
             _overlapColliders = new Collider[16];
+            _reservedSpawnPositions = new List<Vector3>();
         }
         
         private static Collider[] _overlapColliders = new Collider[16];
+        private static List<Vector3> _reservedSpawnPositions = new();
         private ComponentLookup<JoinedClient> _joinedClientLookup;
 
         public void OnCreate(ref SystemState state)
@@ -74,6 +78,9 @@ namespace Unity.MP_FPS
                 state.EntityManager.DestroyEntity(SystemAPI.GetSingletonEntity<DisableCharacterDynamicContacts>());
             }
 
+            // ECS instantiation is deferred, so physics cannot see another player
+            // queued earlier in this same tick. Reserve every chosen point locally.
+            _reservedSpawnPositions.Clear();
             HandleJoinRequests(ref state, gameplayMapsEntity, playerEntityPrefabs, ecb);
             HandlePlayerDeathAndRespawn(ref state, ecb);
         }
@@ -406,12 +413,17 @@ namespace Unity.MP_FPS
         {
             var spawnPointsQuery = SystemAPI.QueryBuilder().WithAll<SpawnPoint, LocalToWorld>().Build();
             var spawnPoints = spawnPointsQuery.ToComponentDataArray<LocalToWorld>(Allocator.Temp);
+            var livingPlayersQuery = SystemAPI.QueryBuilder()
+                .WithAll<PredictedPlayerGhost, LocalTransform>().Build();
+            var livingPlayerTransforms = livingPlayersQuery
+                .ToComponentDataArray<LocalTransform>(Allocator.Temp);
             ref FixedRandom random = ref SystemAPI.GetSingletonRW<FixedRandom>().ValueRW;
 
             if (spawnPoints.Length == 0)
             {
                 spawnPoint = default;
                 spawnPoints.Dispose();
+                livingPlayerTransforms.Dispose();
                 return false;
             }
 
@@ -424,28 +436,49 @@ namespace Unity.MP_FPS
             }
 
             int bestSpawnPointIndex = 0;
-            int minColliderCount = int.MaxValue;
+            float bestMinimumDistanceSq = float.NegativeInfinity;
+            float requiredDistanceSq = MinimumSpawnSeparation * MinimumSpawnSeparation;
 
             for (int i = 0; i < spawnPoints.Length; i++)
             {
-                int numColliders = UnityEngine.Physics.OverlapSphereNonAlloc(spawnPoints[i].Position, 2f,
+                Vector3 candidate = spawnPoints[i].Position;
+                int numColliders = UnityEngine.Physics.OverlapSphereNonAlloc(candidate,
+                    MinimumSpawnSeparation,
                     _overlapColliders, LayerMask.GetMask("ServerPlayer"));
+                float minimumDistanceSq = float.MaxValue;
+                foreach (var playerTransform in livingPlayerTransforms)
+                {
+                    minimumDistanceSq = Mathf.Min(minimumDistanceSq,
+                        (candidate - (Vector3)playerTransform.Position).sqrMagnitude);
+                }
 
-                if (numColliders == 0)
+                foreach (Vector3 reservedPosition in _reservedSpawnPositions)
+                {
+                    minimumDistanceSq = Mathf.Min(minimumDistanceSq,
+                        (candidate - reservedPosition).sqrMagnitude);
+                }
+
+                bool hasReservedConflict = minimumDistanceSq < requiredDistanceSq;
+                if (numColliders == 0 && !hasReservedConflict)
                 {
                     bestSpawnPointIndex = i;
                     break;
                 }
 
-                if (numColliders < minColliderCount)
+                // If every point is occupied, choose the one furthest from all live
+                // and already-queued players instead of stacking at index zero.
+                float score = minimumDistanceSq - numColliders * requiredDistanceSq;
+                if (score > bestMinimumDistanceSq)
                 {
-                    minColliderCount = numColliders;
+                    bestMinimumDistanceSq = score;
                     bestSpawnPointIndex = i;
                 }
             }
 
             spawnPoint = spawnPoints[bestSpawnPointIndex];
+            _reservedSpawnPositions.Add(spawnPoint.Position);
             spawnPoints.Dispose();
+            livingPlayerTransforms.Dispose();
             return true;
         }
     }

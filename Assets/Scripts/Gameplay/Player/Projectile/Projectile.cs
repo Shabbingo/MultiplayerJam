@@ -551,7 +551,16 @@ namespace Unity.MP_FPS
             float effectScale = explosionRadius > 0f
                 ? Mathf.Max(0.01f, explosionRadius)
                 : 1f;
-            GhostSpawner.SpawnGhostPrefab(weaponData.ProjectileHitVfxPrefab,
+            GhostSpawner.GhostReference effectPrefab = weaponData.ProjectileHitVfxPrefab;
+            if (explosionRadius > 0f && WeaponManager.Instance != null)
+            {
+                // Explosive Payload uses the existing expanding AOE-range effect so
+                // every player can read the card's actual gameplay radius.
+                effectPrefab = WeaponManager.Instance.GetExplosionImpactVfx() ?? effectPrefab;
+            }
+
+            if (effectPrefab == null) return;
+            GhostSpawner.SpawnGhostPrefab(effectPrefab,
                 position,
                 Quaternion.LookRotation(effectDirection),
                 GhostGameObject.GenerateRandomHash(),

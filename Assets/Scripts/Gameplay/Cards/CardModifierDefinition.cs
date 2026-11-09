@@ -27,7 +27,9 @@ namespace Unity.MP_FPS.Cards
         HomingProjectiles,
         SlowTarget,
         ExplosionRadius,
-        ScatterWeapon
+        ScatterWeapon,
+        ReloadSpeed,
+        MagazineCapacity
     }
 
     [CreateAssetMenu(fileName = "CardModifier", menuName = "Multiplayer Jam/Card Modifier")]
@@ -76,8 +78,7 @@ namespace Unity.MP_FPS.Cards
             m_BaseOfferWeight = Mathf.Max(0.01f, m_BaseOfferWeight);
             m_StackLimit = Mathf.Clamp(m_StackLimit, 1, 5);
 
-            if (m_Kind is CardModifierKind.HomingProjectiles or
-                CardModifierKind.SlowTarget or
+            if (m_Kind is CardModifierKind.SlowTarget or
                 CardModifierKind.ScatterWeapon)
             {
                 m_StackLimit = 1;

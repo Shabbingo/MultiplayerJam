@@ -19,6 +19,8 @@ namespace Unity.MP_FPS.Cards
         [Range(0f, 1f)] public float SlowPercent;
         [Min(0f)] public float SlowDuration;
         [Min(0f)] public float AddedHomingTurnSpeed;
+        [Range(0f, 0.5f)] public float ReloadTimeReductionPerStack;
+        [Min(0)] public int AmmoPerStack;
 
         public static ModifierGameplayTuning Default => new()
         {
@@ -26,9 +28,11 @@ namespace Unity.MP_FPS.Cards
             ExplosionRadiusPerStack = 1f,
             ScatterPelletCount = 10,
             ScatterHalfAngleDegrees = 7.5f,
-            SlowPercent = 0.2f,
-            SlowDuration = 2f,
-            AddedHomingTurnSpeed = 120f
+            SlowPercent = 0.5f,
+            SlowDuration = 3f,
+            AddedHomingTurnSpeed = 60f,
+            ReloadTimeReductionPerStack = 0.15f,
+            AmmoPerStack = 10
         };
     }
 
@@ -113,19 +117,25 @@ namespace Unity.MP_FPS.Cards
                 : baseProfile;
             int damageStacks = modifiers.GetStacks(CardModifierKind.DamagePercent, target);
             int explosionStacks = modifiers.GetStacks(CardModifierKind.ExplosionRadius, target);
+            int homingStacks = modifiers.GetStacks(CardModifierKind.HomingProjectiles, target);
+            int reloadStacks = modifiers.GetStacks(CardModifierKind.ReloadSpeed, target);
+            int ammoStacks = modifiers.GetStacks(CardModifierKind.MagazineCapacity, target);
             float damage = source.Damage * (1f + damageStacks * Mathf.Max(0f, tuning.DamagePerStack));
             float baseExplosionRadius = source.Behavior == ProjectileBehavior.AreaOfEffect
                 ? Mathf.Max(0f, source.AoeRadius)
                 : 0f;
             float explosionRadius = baseExplosionRadius + explosionStacks *
                 Mathf.Max(0f, tuning.ExplosionRadiusPerStack);
-            bool tracksPlayers =
-                modifiers.GetStacks(CardModifierKind.HomingProjectiles, target) > 0;
+            bool tracksPlayers = homingStacks > 0;
             bool isHoming = source.IsGuidedProjectile || tracksPlayers;
-            float homingTurnSpeed = source.IsGuidedProjectile
-                ? source.GuidedTurnSpeed
-                : Mathf.Max(0f, tuning.AddedHomingTurnSpeed);
+            float homingTurnSpeed = (source.IsGuidedProjectile
+                ? Mathf.Max(0f, source.GuidedTurnSpeed)
+                : 0f) + homingStacks * Mathf.Max(0f, tuning.AddedHomingTurnSpeed);
             bool appliesSlow = modifiers.GetStacks(CardModifierKind.SlowTarget, target) > 0;
+            float reloadMultiplier = Mathf.Max(0.25f,
+                1f - reloadStacks * Mathf.Clamp(tuning.ReloadTimeReductionPerStack, 0f, 0.5f));
+            int magazineSize = Mathf.Max(1, source.MagazineSize +
+                ammoStacks * Mathf.Max(0, tuning.AmmoPerStack));
 
             return new RuntimeWeaponProfile(
                 source,
@@ -134,8 +144,8 @@ namespace Unity.MP_FPS.Cards
                 damage,
                 Mathf.Max(0.001f, source.CooldownInMs),
                 Mathf.Max(0f, source.ProjectileReleaseDelay),
-                Mathf.Max(1, source.MagazineSize),
-                Mathf.Max(0f, source.ReloadTime),
+                magazineSize,
+                Mathf.Max(0f, source.ReloadTime * reloadMultiplier),
                 Mathf.Max(0f, source.ProjectileSpeed),
                 scatter ? Mathf.Max(1, tuning.ScatterPelletCount) : 1,
                 scatter ? Mathf.Max(0f, tuning.ScatterHalfAngleDegrees) : 0f,

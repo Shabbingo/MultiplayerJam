@@ -19,6 +19,10 @@ namespace Unity.MP_FPS.Cards
         [GhostField] public byte RightExplosion;
         [GhostField] public byte LeftScatter;
         [GhostField] public byte RightScatter;
+        [GhostField] public byte LeftReloadSpeed;
+        [GhostField] public byte RightReloadSpeed;
+        [GhostField] public byte LeftMagazineCapacity;
+        [GhostField] public byte RightMagazineCapacity;
         [GhostField] public byte ExtraSelfShrinkCharges;
         [GhostField] public byte ExtraSelfGrowCharges;
         [GhostField] public byte ExtraReflectCharges;
@@ -37,6 +41,10 @@ namespace Unity.MP_FPS.Cards
                 (CardModifierKind.ExplosionRadius, ModifierTarget.RightHand) => RightExplosion,
                 (CardModifierKind.ScatterWeapon, ModifierTarget.LeftHand) => LeftScatter,
                 (CardModifierKind.ScatterWeapon, ModifierTarget.RightHand) => RightScatter,
+                (CardModifierKind.ReloadSpeed, ModifierTarget.LeftHand) => LeftReloadSpeed,
+                (CardModifierKind.ReloadSpeed, ModifierTarget.RightHand) => RightReloadSpeed,
+                (CardModifierKind.MagazineCapacity, ModifierTarget.LeftHand) => LeftMagazineCapacity,
+                (CardModifierKind.MagazineCapacity, ModifierTarget.RightHand) => RightMagazineCapacity,
                 (CardModifierKind.ExtraSelfShrinkCharge, ModifierTarget.Self) => ExtraSelfShrinkCharges,
                 (CardModifierKind.ExtraSelfGrowCharge, ModifierTarget.Self) => ExtraSelfGrowCharges,
                 (CardModifierKind.ExtraReflectCharge, ModifierTarget.Self) => ExtraReflectCharges,
@@ -81,6 +89,14 @@ namespace Unity.MP_FPS.Cards
                     return Increment(ref LeftScatter, limit);
                 case (CardModifierKind.ScatterWeapon, ModifierTarget.RightHand):
                     return Increment(ref RightScatter, limit);
+                case (CardModifierKind.ReloadSpeed, ModifierTarget.LeftHand):
+                    return Increment(ref LeftReloadSpeed, limit);
+                case (CardModifierKind.ReloadSpeed, ModifierTarget.RightHand):
+                    return Increment(ref RightReloadSpeed, limit);
+                case (CardModifierKind.MagazineCapacity, ModifierTarget.LeftHand):
+                    return Increment(ref LeftMagazineCapacity, limit);
+                case (CardModifierKind.MagazineCapacity, ModifierTarget.RightHand):
+                    return Increment(ref RightMagazineCapacity, limit);
                 case (CardModifierKind.ExtraSelfShrinkCharge, ModifierTarget.Self):
                     return Increment(ref ExtraSelfShrinkCharges, limit);
                 case (CardModifierKind.ExtraSelfGrowCharge, ModifierTarget.Self):

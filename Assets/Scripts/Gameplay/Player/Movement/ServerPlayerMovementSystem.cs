@@ -1468,8 +1468,34 @@ namespace Unity.MP_FPS
                     continue;
                 }
 
-                Vector3 candidate = EntityManager.GetComponentData<LocalTransform>(pair.Value)
-                    .Position + new float3(0f, 1f, 0f);
+                Vector3 candidate;
+                if (EntityManager.HasComponent<GhostGameObjectLink>(pair.Value))
+                {
+                    var link = EntityManager.GetComponentObject<GhostGameObjectLink>(pair.Value);
+                    var targetGhost = link?.LinkedInstance != null
+                        ? link.LinkedInstance.GetComponent<PlayerGhost>()
+                        : null;
+                    if (targetGhost?.Controller?.CharacterController != null)
+                    {
+                        // Aim at the live collider centre. Its bounds update with the
+                        // player's size, unlike the old fixed one-metre height offset.
+                        candidate = targetGhost.Controller.CharacterController.bounds.center;
+                    }
+                    else if (targetGhost?.CameraTarget != null)
+                    {
+                        candidate = targetGhost.CameraTarget.position;
+                    }
+                    else
+                    {
+                        candidate = EntityManager.GetComponentData<LocalTransform>(pair.Value)
+                            .Position + new float3(0f, 0.5f, 0f);
+                    }
+                }
+                else
+                {
+                    candidate = EntityManager.GetComponentData<LocalTransform>(pair.Value)
+                        .Position + new float3(0f, 0.5f, 0f);
+                }
                 float distanceSq = (candidate - projectilePosition).sqrMagnitude;
                 if (distanceSq >= bestDistanceSq) continue;
                 bestDistanceSq = distanceSq;

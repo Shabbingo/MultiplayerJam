@@ -36,9 +36,11 @@ namespace Unity.MP_FPS
             ExplosionRadiusPerStack = 1f,
             ScatterPelletCount = 10,
             ScatterHalfAngleDegrees = 7.5f,
-            SlowPercent = 0.2f,
-            SlowDuration = 2f,
-            AddedHomingTurnSpeed = 120f
+            SlowPercent = 0.5f,
+            SlowDuration = 3f,
+            AddedHomingTurnSpeed = 60f,
+            ReloadTimeReductionPerStack = 0.15f,
+            AmmoPerStack = 10
         };
 
         public Cards.CardModifierCatalog CardModifierCatalog => m_CardModifierCatalog;
@@ -93,12 +95,24 @@ namespace Unity.MP_FPS
             var explosion = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.ExplosionRadius);
             var scatter = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.ScatterWeapon);
             var slow = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.SlowTarget);
+            var homing = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.HomingProjectiles);
+            var reload = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.ReloadSpeed);
+            var ammo = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.MagazineCapacity);
             if (damage != null) tuning.DamagePerStack = damage.ValuePerStack;
             if (explosion != null) tuning.ExplosionRadiusPerStack = explosion.ValuePerStack;
             if (scatter != null) tuning.ScatterPelletCount = Mathf.Max(1,
                 Mathf.RoundToInt(scatter.ValuePerStack));
             if (slow != null) tuning.SlowPercent = slow.ValuePerStack;
+            if (homing != null) tuning.AddedHomingTurnSpeed = homing.ValuePerStack;
+            if (reload != null) tuning.ReloadTimeReductionPerStack = reload.ValuePerStack;
+            if (ammo != null) tuning.AmmoPerStack = Mathf.Max(0,
+                Mathf.RoundToInt(ammo.ValuePerStack));
             return tuning;
+        }
+
+        public GhostSpawner.GhostReference GetExplosionImpactVfx()
+        {
+            return WeaponRegistry.GetWeaponData(SecondaryWeaponId)?.ProjectileHitVfxPrefab;
         }
 
         public bool TryEquipWeapon(ref PredictedPlayerGhost player, uint weaponId)

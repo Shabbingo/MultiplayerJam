@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 6
   m_DisplayName: Slow Target
-  m_Description: Hits from the selected hand slow the target by 20% for two seconds.
+  m_Description: Hits from the selected hand slow the target by 50% for three seconds.
   m_Icon: {fileID: 0}
   m_StrengthScore: 3
   m_BaseOfferWeight: 1
   m_Kind: 5
   m_AllowedTargets: 3
   m_StackLimit: 1
-  m_ValuePerStack: 0.2
+  m_ValuePerStack: 0.5

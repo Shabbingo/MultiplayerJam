@@ -201,9 +201,11 @@ MonoBehaviour:
     ExplosionRadiusPerStack: 1
     ScatterPelletCount: 10
     ScatterHalfAngleDegrees: 7.5
-    SlowPercent: 0.2
-    SlowDuration: 2
-    AddedHomingTurnSpeed: 120
+    SlowPercent: 0.5
+    SlowDuration: 3
+    AddedHomingTurnSpeed: 60
+    ReloadTimeReductionPerStack: 0.15
+    AmmoPerStack: 10
 --- !u!4 &897885690
 Transform:
   m_ObjectHideFlags: 0
