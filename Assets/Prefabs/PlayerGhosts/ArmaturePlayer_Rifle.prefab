@@ -211,15 +211,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FirstPersonController
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
   m_ManualShrinkHealthMultiplier: 0.2
-  m_SelfShrinkUses: 3
-  m_SelfGrowUses: 3
-  m_SelfShrinkRechargeSeconds: 2
-  m_SelfGrowRechargeSeconds: 2
+  m_ReflectDuration: 0.25
+  m_ReflectCooldown: 15
+  m_SelfShrinkUses: 2
+  m_SelfGrowUses: 2
+  m_SelfShrinkRechargeSeconds: 4
+  m_SelfGrowRechargeSeconds: 4
   m_SelfResizeChunkSize: 25
   m_SelfResizeSafetyMargin: 1
   m_AirGrowJumpSpeed: 5
   m_AirShrinkPushSpeed: 7
-  m_SelfResizeLensDistortion: 0.8
+  m_SelfResizeLensDistortion: 0.5
   m_InvertSelfResizeLensDirection: 1
   m_SelfResizeLensPulseDuration: 0.2
   m_SelfShrinkLensCenterY: 0.3
@@ -339,6 +341,12 @@ MonoBehaviour:
   m_SpawnSFX: {fileID: 11400000, guid: bfec68d58a412fa4fb63e149caa5b3e5, type: 2}
   m_MinimumPlayerScale: 0.2
   m_MaximumPlayerScale: 2
+  m_ReflectGlowColour: {r: 0.2, g: 0.75, b: 1, a: 1}
+  m_ReflectGlowIntensity: 4
+  m_ReflectGlowRange: 5
+  m_ReflectShieldColour: {r: 0.12, g: 0.68, b: 1, a: 0.42}
+  m_ReflectShieldOffset: {x: 0, y: 1, z: 0}
+  m_ReflectShieldScale: {x: 1.5, y: 2.4, z: 1.5}
   m_ShrinkScaleResponseSpeed: 16
   m_GrowScaleResponseSpeed: 32
   <CameraTarget>k__BackingField: {fileID: 1666222585322407308}

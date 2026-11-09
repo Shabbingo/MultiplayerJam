@@ -17,6 +17,15 @@ public class FirstPersonController : MonoBehaviour
     public SoundDef PlayerHitSFX;
     [SerializeField, Range(0.05f, 1f)] private float m_ManualShrinkHealthMultiplier = 0.2f;
 
+    [Header("Reflect")]
+    [SerializeField, Min(0.01f), Tooltip("Seconds that incoming weapon hits are reflected after activating the ability.")]
+    private float m_ReflectDuration = 0.25f;
+    [SerializeField, Min(0.1f), Tooltip("Seconds before the reflect ability can be activated again.")]
+    private float m_ReflectCooldown = 15f;
+
+    public float ReflectDuration => Mathf.Max(0.01f, m_ReflectDuration);
+    public float ReflectCooldown => Mathf.Max(0.1f, m_ReflectCooldown);
+
     [Header("Self Resize")]
     [SerializeField, Range(1, 10), Tooltip("Number of self-shrink uses available each life.")]
     private int m_SelfShrinkUses = 3;

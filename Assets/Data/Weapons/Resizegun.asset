@@ -15,9 +15,9 @@ MonoBehaviour:
   WeaponName: Resizegun
   Type: 1
   ReticleType: 2
-  CooldownInMs: 1
-  ProjectileReleaseDelay: 0.4167
-  Damage: 20
+  CooldownInMs: 0.75
+  ProjectileReleaseDelay: 0.25
+  Damage: 25
   HitscanRange: 1
   HitscanBaseSpreadDegrees: 0.15
   HitscanSpreadPerShotDegrees: 0.2
@@ -70,7 +70,7 @@ MonoBehaviour:
   ResizeEffectDuration: 3
   Behavior: 1
   AoeRadius: 4
-  ProjectileSpeed: 30
+  ProjectileSpeed: 40
   IsGuidedProjectile: 1
   GuidedTurnSpeed: 150
   GuidedAcceleration: 35

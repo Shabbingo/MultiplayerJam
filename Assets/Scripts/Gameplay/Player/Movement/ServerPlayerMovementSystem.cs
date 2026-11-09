@@ -57,8 +57,6 @@ namespace Unity.MP_FPS
         private readonly HashSet<Entity> m_PendingSelfGrowthChecks = new();
         private readonly Dictionary<int, HitscanBloomState> m_HitscanBloomByPlayer = new();
         private readonly List<int> m_HitscanBloomPlayersScratch = new();
-        private const float k_ReflectDuration = 0.5f;
-        private const float k_ReflectCooldown = 30f;
         private readonly Dictionary<int, float> m_ReflectActiveTimers = new();
         private readonly Dictionary<int, float> m_ReflectCooldownTimers = new();
         private readonly List<int> m_ReflectPlayersScratch = new();
@@ -1120,10 +1118,23 @@ namespace Unity.MP_FPS
                 return;
             }
 
-            m_ReflectActiveTimers[playerNetworkId] = k_ReflectDuration;
-            m_ReflectCooldownTimers[playerNetworkId] = k_ReflectCooldown;
-            predictedPlayer.ReflectShieldTimeRemaining = k_ReflectDuration;
-            predictedPlayer.ReflectCooldownTimeRemaining = k_ReflectCooldown;
+            float reflectDuration = 0.25f;
+            float reflectCooldown = 15f;
+            if (EntityManager.HasComponent<PlayerControllerLink>(playerEntity))
+            {
+                var controllerLink = EntityManager.GetComponentObject<PlayerControllerLink>(playerEntity);
+                if (controllerLink?.Controller != null)
+                {
+                    reflectDuration = controllerLink.Controller.ReflectDuration;
+                    reflectCooldown = controllerLink.Controller.ReflectCooldown;
+                }
+            }
+
+            m_ReflectActiveTimers[playerNetworkId] = reflectDuration;
+            m_ReflectCooldownTimers[playerNetworkId] = reflectCooldown;
+            predictedPlayer.ReflectShieldTimeRemaining = reflectDuration;
+            predictedPlayer.ReflectCooldownTimeRemaining = reflectCooldown;
+            predictedPlayer.ReflectCooldownDuration = reflectCooldown;
         }
 
         private void UpdateReflectTimers(float deltaTime)

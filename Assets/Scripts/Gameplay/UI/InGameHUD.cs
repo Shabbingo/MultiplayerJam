@@ -37,7 +37,6 @@ namespace Unity.MP_FPS
 
         // The reticle will stay white for at least 100ms after a shot.
         private const float k_ShotFeedbackDuration = 0.1f;
-        private const float k_ReflectCooldownDuration = 30f;
         private static readonly Color k_HealthBarColor = new Color(0.29f, 0.83f, 0.43f, 0.75f);
         private const string k_CrossReticleClass = "kits-reticle-cross";
         private const string k_TCrossReticleClass = "kits-reticle-tcross";
@@ -232,8 +231,10 @@ namespace Unity.MP_FPS
                 return;
             }
 
+            float cooldownDuration = Mathf.Max(
+                0.01f, playerData.ReflectCooldownDuration);
             float cooldownProgress = 1f - Mathf.Clamp01(
-                playerData.ReflectCooldownTimeRemaining / k_ReflectCooldownDuration);
+                playerData.ReflectCooldownTimeRemaining / cooldownDuration);
             SetSegmentWidth(m_ReflectCooldownTop,
                 Mathf.Clamp01(cooldownProgress * 4f));
             SetSegmentHeight(m_ReflectCooldownRight,
