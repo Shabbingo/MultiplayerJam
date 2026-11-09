@@ -23,6 +23,10 @@ namespace Unity.MP_FPS.UI
         private int m_SpectatorIndex;
         private int m_SpectatedNetworkId = -1;
         private AudioListener m_SpectatorAudioListener;
+        private Vector3 m_LastPlayerCameraPosition;
+        private Quaternion m_LastPlayerCameraRotation = Quaternion.identity;
+        private bool m_HasLastPlayerCameraPose;
+        private bool m_WasSpectating;
         private readonly List<SpectatorTarget> m_SpectatorTargets = new();
 
         private readonly struct SpectatorTarget
@@ -75,9 +79,11 @@ namespace Unity.MP_FPS.UI
                 RespawnCamera.gameObject.SetActive(false);
                 if (m_SpectatorAudioListener != null) m_SpectatorAudioListener.enabled = false;
                 m_IsRespawning = false;
+                m_WasSpectating = false;
                 return;
             }
 
+            CachePlayerCameraPose();
             bool isSpectating = UpdateSpectatorCamera();
             if (!ClientRespawnState.IsRespawning && !isSpectating)
             {
@@ -86,6 +92,7 @@ namespace Unity.MP_FPS.UI
                 if (m_SpectatorAudioListener != null) m_SpectatorAudioListener.enabled = false;
                 m_RespawnScreen.style.display = DisplayStyle.None;
                 m_LastRespawnSequence = ClientRespawnState.Sequence;
+                m_WasSpectating = false;
                 return;
             }
 
@@ -99,6 +106,12 @@ namespace Unity.MP_FPS.UI
             {
                 RespawnCamera.fieldOfView = GameSettings.Instance.CameraFov;
             }
+
+            if (isSpectating && !m_WasSpectating)
+            {
+                Debug.Log($"[Spectator] Camera activated with {m_SpectatorTargets.Count} available target(s).");
+            }
+            m_WasSpectating = isSpectating;
 
             if (ClientRespawnState.IsRespawning && (!m_IsRespawning ||
                 m_LastRespawnSequence != ClientRespawnState.Sequence))
@@ -140,10 +153,12 @@ namespace Unity.MP_FPS.UI
 
         private bool UpdateSpectatorCamera()
         {
-            World clientWorld = GhostBridgeBootstrap.Instance?.ClientWorld;
+            bool playerCameraMissing = GetActivePlayerCamera() == null;
+            World clientWorld = GetClientWorld();
             if (clientWorld == null || !clientWorld.IsCreated)
             {
-                return false;
+                if (playerCameraMissing) ApplyLastPlayerCameraPose();
+                return playerCameraMissing;
             }
 
             EntityManager entityManager = clientWorld.EntityManager;
@@ -160,7 +175,7 @@ namespace Unity.MP_FPS.UI
                         bool isAlive = localPlayer.CurrentHealth > 0f &&
                             (localPlayer.MaxHealth <= 0f ||
                              localPlayer.CurrentHealth < localPlayer.MaxHealth);
-                        if (isAlive && MainCameraSingleton.Instance != null)
+                        if (isAlive)
                         {
                             m_SpectatedNetworkId = -1;
                             return false;
@@ -172,6 +187,7 @@ namespace Unity.MP_FPS.UI
             RebuildSpectatorTargets(entityManager);
             if (m_SpectatorTargets.Count == 0)
             {
+                ApplyLastPlayerCameraPose();
                 return true;
             }
 
@@ -200,8 +216,56 @@ namespace Unity.MP_FPS.UI
 
             SpectatorTarget selectedTarget = m_SpectatorTargets[m_SpectatorIndex];
             m_SpectatedNetworkId = selectedTarget.NetworkId;
-            FollowSpectatorTarget(selectedTarget.Player);
+            FollowSpectatorTarget(selectedTarget.Player, !m_WasSpectating);
             return true;
+        }
+
+        private static World GetClientWorld()
+        {
+            World bootstrapWorld = GhostBridgeBootstrap.Instance?.ClientWorld;
+            if (bootstrapWorld != null && bootstrapWorld.IsCreated)
+            {
+                return bootstrapWorld;
+            }
+
+            // GameManager creates NetCode worlds directly, so GhostBridgeBootstrap's
+            // own ClientWorld property is normally null during a hosted/joined match.
+            for (int i = 0; i < World.All.Count; i++)
+            {
+                World world = World.All[i];
+                if (world.IsCreated && world.IsClient())
+                {
+                    return world;
+                }
+            }
+
+            return null;
+        }
+
+        private void CachePlayerCameraPose()
+        {
+            Camera playerCamera = GetActivePlayerCamera();
+            if (playerCamera == null) return;
+
+            m_LastPlayerCameraPosition = playerCamera.transform.position;
+            m_LastPlayerCameraRotation = playerCamera.transform.rotation;
+            m_HasLastPlayerCameraPose = true;
+        }
+
+        private Camera GetActivePlayerCamera()
+        {
+            Camera playerCamera = Camera.main;
+            return playerCamera != null && playerCamera != RespawnCamera &&
+                   playerCamera.enabled && playerCamera.gameObject.activeInHierarchy
+                ? playerCamera
+                : null;
+        }
+
+        private void ApplyLastPlayerCameraPose()
+        {
+            if (!m_HasLastPlayerCameraPose) return;
+            RespawnCamera.transform.SetPositionAndRotation(
+                m_LastPlayerCameraPosition, m_LastPlayerCameraRotation);
         }
 
         private void RebuildSpectatorTargets(EntityManager entityManager)
@@ -240,7 +304,7 @@ namespace Unity.MP_FPS.UI
                 left.NetworkId.CompareTo(right.NetworkId));
         }
 
-        private void FollowSpectatorTarget(PlayerGhost player)
+        private void FollowSpectatorTarget(PlayerGhost player, bool snapToTarget)
         {
             if (player == null) return;
             Transform targetTransform = player.CameraTarget != null
@@ -249,7 +313,9 @@ namespace Unity.MP_FPS.UI
             Vector3 focusPoint = targetTransform.position;
             Vector3 desiredPosition = focusPoint - player.transform.forward * 4f +
                                       Vector3.up * 1.5f;
-            float blend = 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime);
+            float blend = snapToTarget
+                ? 1f
+                : 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime);
             RespawnCamera.transform.position = Vector3.Lerp(
                 RespawnCamera.transform.position, desiredPosition, blend);
             Vector3 lookDirection = focusPoint - RespawnCamera.transform.position;

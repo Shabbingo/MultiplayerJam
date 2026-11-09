@@ -39,7 +39,18 @@ namespace Unity.MP_FPS
             GameSettings.Instance.GameState = GlobalGameState.Loading;
             
             GameSettings.Instance.IsPauseMenuOpen = false;
-            await DisconnectAndUnloadWorlds();
+            try
+            {
+                await DisconnectAndUnloadWorlds();
+            }
+            catch (OperationCanceledException)
+            {
+                // Unity cancels outstanding Awaitables when scripts reload in the
+                // Editor. The teardown task's finally block already clears its state;
+                // do not let an expected editor cancellation escape this async-void
+                // entry point as an unhandled console exception.
+                return;
+            }
             
             // Restart the main menu scene.
             Start();
