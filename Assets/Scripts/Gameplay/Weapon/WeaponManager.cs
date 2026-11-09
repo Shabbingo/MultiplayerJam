@@ -23,6 +23,8 @@ namespace Unity.MP_FPS
         [Header("Card Modifier Profiles")]
         [SerializeField] private Cards.CardModifierCatalog m_CardModifierCatalog;
 
+        [SerializeField] private Cards.RoundCardRules m_RoundCardRules;
+
         [SerializeField, Tooltip("Firing profile used when the Scatter card transforms either hand. Defaults to registered weapon ID 1 when unassigned.")]
         private WeaponData m_ScatterWeaponProfile;
 
@@ -37,6 +39,9 @@ namespace Unity.MP_FPS
             SlowDuration = 2f,
             AddedHomingTurnSpeed = 120f
         };
+
+        public Cards.CardModifierCatalog CardModifierCatalog => m_CardModifierCatalog;
+        public Cards.RoundCardRules RoundCardRules => m_RoundCardRules;
 
         private void Awake()
         {

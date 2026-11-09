@@ -4,8 +4,8 @@ using Unity.NetCode;
 namespace Unity.MP_FPS.Cards
 {
     /// <summary>
-    /// Network-ready round/draft state. A later director system owns transitions;
-    /// clients only render the replicated values.
+    /// Compact round/draft state for systems that need an ECS representation. The
+    /// leaderboard round director owns live transitions and broadcasts presentation RPCs.
     /// </summary>
     public struct RoundCardState : IComponentData
     {

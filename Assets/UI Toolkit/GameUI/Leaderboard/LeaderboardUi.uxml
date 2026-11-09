@@ -1,16 +1,33 @@
 <ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="project://database/Assets/UI%20Toolkit/GameUI/Leaderboard/table.uss?fileID=7433441132597879392&amp;guid=ae0f7f1b297840a4f85f4c14cf0a086f&amp;type=3#table"/>
     <ui:VisualElement name="root" style="flex-grow: 1; align-self: stretch; justify-content: center; align-items: center; align-content: stretch;">
-        <ui:VisualElement name="VisualElement" class="score-table">
+        <ui:VisualElement name="score-table" class="score-table">
             <ui:Label text="MATCH TIME: 10:00" name="match-timer" style="font-size: 18px; color: rgb(255, 255, 255); -unity-font-style: bold; -unity-text-align: middle-center; margin-bottom: 8px;"/>
             <ui:Label text="WINNER: PLAYER" name="match-result" style="font-size: 28px; color: rgb(255, 170, 40); -unity-font-style: bold; -unity-text-align: middle-center; margin-bottom: 8px; display: none;"/>
             <ui:Label text="NEXT ROUND IN 8" name="match-restart" style="font-size: 16px; color: rgb(255, 255, 255); -unity-text-align: middle-center; margin-bottom: 12px; display: none;"/>
             <ui:VisualElement class="table-header" style="flex-direction: row; justify-content: flex-start; align-self: auto; align-content: auto; margin-right: 3px;">
                 <ui:Label text="Name" name="Label" class="header-cell" style="flex-basis: 200px; flex-grow: 2; color: rgb(255, 255, 255);"/>
+                <ui:Label text="Wins" class="header-cell" style="flex-basis: 50px; flex-grow: 1; color: rgb(255, 255, 255);"/>
                 <ui:Label text="Kills" class="header-cell" style="flex-basis: 50px; flex-grow: 1; color: rgb(255, 255, 255);"/>
-                <ui:Label text="Death" class="header-cell" style="flex-basis: 50px; flex-grow: 1; color: rgb(255, 255, 255);"/>
             </ui:VisualElement>
             <ui:ListView name="score-items" virtualization-method="DynamicHeight" fixed-item-height="22" style="flex-grow: 1;"/>
+        </ui:VisualElement>
+        <ui:VisualElement name="draft-panel" class="score-table" style="display: none; width: 920px; margin-top: 14px; padding: 18px;">
+            <ui:Label text="ROUND DRAFT" name="draft-title" style="font-size: 28px; color: rgb(255, 170, 40); -unity-font-style: bold; -unity-text-align: middle-center;"/>
+            <ui:Label text="PLAYER IS CHOOSING" name="draft-player" style="font-size: 20px; color: white; -unity-text-align: middle-center; margin-top: 6px;"/>
+            <ui:Label text="10 SECONDS" name="draft-timer" style="font-size: 17px; color: rgb(180, 220, 255); -unity-text-align: middle-center; margin-top: 4px; margin-bottom: 12px;"/>
+            <ui:VisualElement name="draft-cards" style="flex-direction: row; justify-content: space-around;">
+                <ui:Button text="CARD ONE" name="card-0" style="width: 275px; height: 170px; font-size: 17px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
+                <ui:Button text="CARD TWO" name="card-1" style="width: 275px; height: 170px; font-size: 17px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
+                <ui:Button text="CARD THREE" name="card-2" style="width: 275px; height: 170px; font-size: 17px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
+            </ui:VisualElement>
+            <ui:Label text="CHOOSE A CARD, THEN CHOOSE WHERE TO APPLY IT" name="draft-help" style="font-size: 15px; color: rgb(220, 220, 220); -unity-text-align: middle-center; margin-top: 14px;"/>
+            <ui:VisualElement name="draft-targets" style="flex-direction: row; justify-content: center; margin-top: 8px;">
+                <ui:Button text="LEFT HAND" name="target-left" style="width: 180px; margin-right: 10px;"/>
+                <ui:Button text="SELF" name="target-self" style="width: 180px; margin-right: 10px;"/>
+                <ui:Button text="RIGHT HAND" name="target-right" style="width: 180px;"/>
+            </ui:VisualElement>
+            <ui:Label text="" name="draft-pick-result" style="font-size: 19px; color: rgb(120, 255, 170); -unity-font-style: bold; -unity-text-align: middle-center; margin-top: 12px;"/>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

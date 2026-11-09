@@ -287,8 +287,17 @@ namespace Unity.MP_FPS
                     var networkId = ghostOwner.ValueRO.NetworkId;
                     var connectionEntity = clientsMap[ghostOwner.ValueRO.NetworkId].ConnectionEntity;
 
-                    // Add a respawn timer to the connection
-                    if (!SystemAPI.HasComponent<PendingRespawn>(connectionEntity))
+                    // Weapon kills have already been reported by the damage system.
+                    // This also captures environmental and self-inflicted deaths.
+                    LeaderboardManager.ServerInstance?.AddDeath(networkId);
+
+                    // In the round-card mode a death eliminates the player until every
+                    // draft pick is complete. The round director queues all players at
+                    // once when the next round is ready to begin.
+                    bool shouldRespawnNow =
+                        LeaderboardManager.ShouldScheduleImmediateRespawn(networkId);
+                    if (shouldRespawnNow &&
+                        !SystemAPI.HasComponent<PendingRespawn>(connectionEntity))
                     {
                         Debug.Log($"[Server] Player {entity} has died. Starting respawn timer for connection {connectionEntity}.");
                         ecb.AddComponent(connectionEntity, new PendingRespawn
@@ -297,11 +306,16 @@ namespace Unity.MP_FPS
                         });
                         SendRespawnState(ecb, connectionEntity, true, RespawnDelay);
 
-                        if (overgrown && VisualEffectManager.ServerInstance != null)
-                        {
-                            VisualEffectManager.ServerInstance.Server_RequestPlayerExplosion(
-                                (Vector3)transform.ValueRO.Position + Vector3.up);
-                        }
+                    }
+                    else if (!shouldRespawnNow)
+                    {
+                        Debug.Log($"[Server] Player {networkId} is eliminated until the next round.");
+                    }
+
+                    if (overgrown && VisualEffectManager.ServerInstance != null)
+                    {
+                        VisualEffectManager.ServerInstance.Server_RequestPlayerExplosion(
+                            (Vector3)transform.ValueRO.Position + Vector3.up);
                     }
                     
                     if (SystemAPI.HasComponent<PlayerClientCommandInputLookup>(entity))

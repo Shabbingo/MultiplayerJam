@@ -194,6 +194,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WeaponManager
   WeaponRegistry: {fileID: 11400000, guid: 137b66a812624a745ae73bf6e6506c77, type: 2}
   m_CardModifierCatalog: {fileID: 11400000, guid: 9a9ef28123f34b5a9160356906190be9, type: 2}
+  m_RoundCardRules: {fileID: 11400000, guid: 1bf6517b953c411ab5f5e5c538254251, type: 2}
   m_ScatterWeaponProfile: {fileID: 11400000, guid: 2627ff970f7557b4aab66af8c7ce0bb1, type: 2}
   m_ModifierTuning:
     DamagePerStack: 0.1
