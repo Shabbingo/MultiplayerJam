@@ -538,8 +538,12 @@ namespace Unity.MP_FPS
                             abilityWeaponId,
                             out weaponBeforeAbility);
 
+                    // The click that triggered this cast is the source of truth for the
+                    // hand. Do not derive the muzzle from temporary equipped-weapon state:
+                    // left click must always launch from the left hand and right click
+                    // must always launch from the right hand.
                     var runtimeProfile = WeaponManager.Instance.ResolveRuntimeProfile(
-                        predictedPlayer.ValueRO.EquippedWeaponID, in modifiers.ValueRO);
+                        abilityWeaponId, in modifiers.ValueRO);
                     var weaponData = runtimeProfile.SourceProfile;
                     if (weaponData != null)
                     {
@@ -581,26 +585,26 @@ namespace Unity.MP_FPS
                             // Keep aim centered on the crosshair, but originate each ability
                             // from its matching hand: primary/left, secondary/right.
                             float3 handShotOffset = playerGhost.GetScaledHandShotOffset(
-                                predictedPlayer.ValueRO.EquippedWeaponID);
+                                abilityWeaponId);
                             float3 shotOriginPosition = eyePosition +
                                                         math.mul(aimRotation, handShotOffset);
                             shotOriginPosition = playerGhost.ApplyShotOriginClearance(
                                 shotOriginPosition,
-                                predictedPlayer.ValueRO.EquippedWeaponID);
+                                abilityWeaponId);
                             playerGhost.Controller.ApplyAirborneShotThrust(
                                 ref predictedPlayer.ValueRW, aimDirection);
 
                             if (VisualEffectManager.ServerInstance != null)
                             {
                                 VisualEffectManager.ServerInstance.Server_RequestVfx(shooterNetworkId,
-                                    predictedPlayer.ValueRO.EquippedWeaponID);
+                                    abilityWeaponId);
                             }
 
                             int pelletCount = Mathf.Max(1, runtimeProfile.PelletCount);
                             uint shotTick = commandInput.Tick.TickIndexForValidTick;
                             uint sourceWeaponId = WeaponManager.Instance.GetWeaponId(
                                 runtimeProfile.SourceProfile,
-                                predictedPlayer.ValueRO.EquippedWeaponID);
+                                abilityWeaponId);
                             for (int pelletIndex = 0; pelletIndex < pelletCount; pelletIndex++)
                             {
                                 Vector3 shotDirection = pelletCount > 1

@@ -48,7 +48,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 632742445966127312}
-  m_Enabled: 0
+  m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -140,6 +140,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GhostGameObject
   <RequireTransformSync>k__BackingField: 0
   <UpdateGroup>k__BackingField: 0
+  logDestroyBeforeLinked: 0
 --- !u!114 &2540794594431969772
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -176,12 +177,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c79d771cedb4794bf100ce60df5f764, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.NetCode.Authoring.Hybrid::Unity.NetCode.GhostAuthoringComponent
-  DefaultGhostMode: 1
-  SupportedGhostModes: 3
-  OptimizationMode: 0
-  Importance: 1
-  MaxSendRate: 0
-  prefabId: 83a79bf5320972c46ae675e08e77534b
   HasOwner: 0
   SupportAutoCommandTarget: 0
   TrackInterpolationDelay: 0
@@ -190,3 +185,9 @@ MonoBehaviour:
   UseSingleBaseline: 0
   RollbackPredictedSpawnedGhostState: 1
   RollbackPredictionOnStructuralChanges: 1
+  DefaultGhostMode: 1
+  SupportedGhostModes: 3
+  OptimizationMode: 0
+  Importance: 1
+  MaxSendRate: 0
+  prefabId: 83a79bf5320972c46ae675e08e77534b

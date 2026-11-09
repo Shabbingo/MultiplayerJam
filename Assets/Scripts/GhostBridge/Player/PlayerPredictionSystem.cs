@@ -297,8 +297,11 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 abilityWeaponId,
                                 out weaponBeforeAbility);
 
+                        // Resolve the cast and its muzzle from the input hand directly.
+                        // This keeps left-click projectiles attached to the left-hand
+                        // origin even while the temporary weapon state is being restored.
                         var runtimeProfile = WeaponManager.Instance.ResolveRuntimeProfile(
-                            predictedPlayer.ValueRO.EquippedWeaponID, in modifiers.ValueRO);
+                            abilityWeaponId, in modifiers.ValueRO);
                         var weaponData = runtimeProfile.SourceProfile;
                         if (weaponData != null)
                         {
@@ -350,20 +353,21 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         0)
                                     : (Vector3)aimDirection;
                                 // Match the server's deterministic hand origin exactly so predicted
-                                // right-hand projectiles reconcile without a sideways correction.
+                                // projectiles reconcile without a sideways correction.
                                 float3 handShotOffset = playerGhost.GetScaledHandShotOffset(
-                                    predictedPlayer.ValueRO.EquippedWeaponID);
+                                    abilityWeaponId);
                                 var shotOriginPosition = eyePosition +
                                                          math.mul(aimRotation, handShotOffset);
                                 shotOriginPosition = playerGhost.ApplyShotOriginClearance(
                                     shotOriginPosition,
-                                    predictedPlayer.ValueRO.EquippedWeaponID);
+                                    abilityWeaponId);
                                 controllerLink.Controller.ApplyAirborneShotThrust(
                                     ref predictedPlayer.ValueRW, aimDirection);
                                     
                                 if (VisualEffectManager.ClientInstance != null)
                                 {
-                                    VisualEffectManager.ClientInstance.SpawnMuzzleFlash(playerGhost, predictedPlayer.ValueRO.EquippedWeaponID, true);
+                                    VisualEffectManager.ClientInstance.SpawnMuzzleFlash(playerGhost,
+                                        abilityWeaponId, true);
                                 }
 
                                 if (weaponData.Type == WeaponType.Hitscan)
@@ -404,7 +408,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
                                     uint sourceWeaponId = WeaponManager.Instance.GetWeaponId(
                                         runtimeProfile.SourceProfile,
-                                        predictedPlayer.ValueRO.EquippedWeaponID);
+                                        abilityWeaponId);
                                     controllerLink.Controller.SpawnPredictedProjectile(
                                         shotTick,
                                         sourceWeaponId,

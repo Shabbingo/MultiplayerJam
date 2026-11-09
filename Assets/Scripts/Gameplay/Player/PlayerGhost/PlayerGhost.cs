@@ -45,9 +45,13 @@ namespace Unity.MP_FPS
         [Header("First-Person Wizard Hands")]
         [SerializeField, Tooltip("Hides the gun meshes while retaining the first- and third-person arms.")]
         private bool m_HideWeaponVisuals = true;
-        [SerializeField, Tooltip("Camera-local origin used by the left-click shrink ability.")]
+        [SerializeField, Tooltip("Move this transform in the player prefab to set where left-click projectiles and muzzle effects originate.")]
+        private Transform m_LeftHandProjectileOrigin;
+        [SerializeField, Tooltip("Move this transform in the player prefab to set where right-click projectiles and muzzle effects originate.")]
+        private Transform m_RightHandProjectileOrigin;
+        [SerializeField, Tooltip("Fallback camera-local origin used when no left-hand projectile origin is assigned.")]
         private Vector3 m_LeftHandShotOffset = new(-0.39f, -0.47f, 0.35f);
-        [SerializeField, Tooltip("Camera-local origin used by the right-click grow ability.")]
+        [SerializeField, Tooltip("Fallback camera-local origin used when no right-hand projectile origin is assigned.")]
         private Vector3 m_RightHandShotOffset = new(0.39f, -0.47f, 0.35f);
         [SerializeField, Min(0f),
          Tooltip("Minimum guided-projectile origin height above the player's feet. Keep this above the projectile's 0.2 radius so tiny players do not spawn it in the floor.")]
@@ -131,8 +135,10 @@ namespace Unity.MP_FPS
             GetRequiredComponent(out m_Controller);
             m_ReticleVector = ReticlePoint.localPosition;
             m_InitialScale = transform.localScale;
-            m_LeftHandShotOrigin = CreateHandShotOrigin("LeftHandShotOrigin", m_LeftHandShotOffset);
-            m_RightHandShotOrigin = CreateHandShotOrigin("RightHandShotOrigin", m_RightHandShotOffset);
+            m_LeftHandShotOrigin = CreateHandShotOrigin("LeftHandShotOrigin",
+                GetHandShotOffset(WeaponManager.PrimaryWeaponId));
+            m_RightHandShotOrigin = CreateHandShotOrigin("RightHandShotOrigin",
+                GetHandShotOffset(WeaponManager.SecondaryWeaponId));
         }
 
         private Transform CreateHandShotOrigin(string originName, Vector3 localPosition)
@@ -151,9 +157,18 @@ namespace Unity.MP_FPS
 
         public Vector3 GetHandShotOffset(uint weaponId)
         {
-            return weaponId == WeaponManager.SecondaryWeaponId
-                ? m_RightHandShotOffset
-                : m_LeftHandShotOffset;
+            bool useRightHand = weaponId == WeaponManager.SecondaryWeaponId;
+            Transform authoredOrigin = useRightHand
+                ? m_RightHandProjectileOrigin
+                : m_LeftHandProjectileOrigin;
+            if (authoredOrigin != null)
+            {
+                return CameraTarget != null
+                    ? CameraTarget.InverseTransformPoint(authoredOrigin.position)
+                    : authoredOrigin.localPosition;
+            }
+
+            return useRightHand ? m_RightHandShotOffset : m_LeftHandShotOffset;
         }
 
         public Vector3 GetScaledHandShotOffset(uint weaponId)
@@ -164,11 +179,8 @@ namespace Unity.MP_FPS
 
         public Vector3 ApplyShotOriginClearance(Vector3 shotOrigin, uint weaponId)
         {
-            if (weaponId != WeaponManager.SecondaryWeaponId)
-            {
-                return shotOrigin;
-            }
-
+            // Both hands now fire physical projectiles. Keep either hand's muzzle
+            // above the collision floor, especially while the player is small.
             float minimumY = transform.position.y + m_MinimumGuidedProjectileSpawnHeight;
             shotOrigin.y = Mathf.Max(shotOrigin.y, minimumY);
             return shotOrigin;
@@ -189,19 +201,29 @@ namespace Unity.MP_FPS
             var origin = useRightHand ? m_RightHandShotOrigin : m_LeftHandShotOrigin;
             if (origin != null)
             {
-                // Keep inspector changes live while playing.
-                origin.localPosition = useRightHand
-                    ? m_RightHandShotOffset
-                    : m_LeftHandShotOffset;
-                if (useRightHand)
-                {
-                    origin.position = ApplyShotOriginClearance(
-                        origin.position, WeaponManager.SecondaryWeaponId);
-                }
+                // Keep projectile-origin marker changes live while playing.
+                origin.localPosition = GetHandShotOffset(weaponId);
+                origin.position = ApplyShotOriginClearance(origin.position, weaponId);
                 return origin;
             }
 
             return VisualShotOrigin1P;
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            DrawProjectileOriginGizmo(m_LeftHandProjectileOrigin,
+                new Color(0.2f, 0.8f, 1f, 1f));
+            DrawProjectileOriginGizmo(m_RightHandProjectileOrigin,
+                new Color(1f, 0.55f, 0.15f, 1f));
+        }
+
+        private static void DrawProjectileOriginGizmo(Transform origin, Color colour)
+        {
+            if (origin == null) return;
+            Gizmos.color = colour;
+            Gizmos.DrawSphere(origin.position, 0.035f);
+            Gizmos.DrawLine(origin.position, origin.position + origin.forward * 0.3f);
         }
         
         private void LateUpdate()

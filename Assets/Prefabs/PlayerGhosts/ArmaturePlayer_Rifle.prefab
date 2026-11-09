@@ -1,5 +1,67 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &910000000000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 910000000000000002}
+  m_Layer: 0
+  m_Name: LeftHandProjectileOrigin
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &910000000000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 910000000000000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.31442037, y: 0.6470463, z: 0.44660297, w: 0.53199315}
+  m_LocalPosition: {x: -0.3208794, y: 0.34975213, z: 0.5766876}
+  m_LocalScale: {x: 0.50000024, y: 0.5000001, z: 0.50000006}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3966846280191675990}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &910000000000000003
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 910000000000000004}
+  m_Layer: 0
+  m_Name: RightHandProjectileOrigin
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &910000000000000004
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 910000000000000003}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.53191686, y: -0.44800234, z: 0.6450997, w: -0.31655154}
+  m_LocalPosition: {x: 0.3153829, y: 0.34997934, z: 0.5754453}
+  m_LocalScale: {x: 0.50000006, y: 0.49999997, z: 0.49999997}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3966846280191675990}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1128995382255953754
 GameObject:
   m_ObjectHideFlags: 0
@@ -355,6 +417,8 @@ MonoBehaviour:
   <VisualShotOrigin1P>k__BackingField: {fileID: 696101458029249202}
   <VisualShotOrigin3P>k__BackingField: {fileID: 5761123598763691873}
   m_HideWeaponVisuals: 1
+  m_LeftHandProjectileOrigin: {fileID: 910000000000000002}
+  m_RightHandProjectileOrigin: {fileID: 910000000000000004}
   m_LeftHandShotOffset: {x: -0.39, y: -0.47, z: 0.35}
   m_RightHandShotOffset: {x: 0.39, y: -0.47, z: 0.35}
   m_MinimumGuidedProjectileSpawnHeight: 0.25
@@ -1438,6 +1502,12 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 8381663870071400123, guid: 27920c0d8fc9347b5ac92d1aa38d440f, type: 3}
+      insertIndex: 0
+      addedObject: {fileID: 910000000000000002}
+    - targetCorrespondingSourceObject: {fileID: 8381663870071400123, guid: 27920c0d8fc9347b5ac92d1aa38d440f, type: 3}
+      insertIndex: 1
+      addedObject: {fileID: 910000000000000004}
     - targetCorrespondingSourceObject: {fileID: -3333394021457481789, guid: 27920c0d8fc9347b5ac92d1aa38d440f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7772199473603441604}
@@ -1454,6 +1524,11 @@ Animator:
 --- !u!4 &1360597815409952558 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -3333394021457481789, guid: 27920c0d8fc9347b5ac92d1aa38d440f, type: 3}
+  m_PrefabInstance: {fileID: 4853956041671665901}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &3966846280191675990 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8381663870071400123, guid: 27920c0d8fc9347b5ac92d1aa38d440f, type: 3}
   m_PrefabInstance: {fileID: 4853956041671665901}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &4960167639143812870 stripped
