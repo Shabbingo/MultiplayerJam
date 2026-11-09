@@ -23,8 +23,8 @@ MonoBehaviour:
   HitscanSpreadPerShotDegrees: 0.12
   HitscanMaxSpreadDegrees: 1
   HitscanSpreadRecoveryDegreesPerSecond: 2
-  MagazineSize: 15
-  ReloadTime: 1
+  MagazineSize: 3
+  ReloadTime: 1.5
   ProjectileGhostPrefab:
     <GhostPrefab>k__BackingField:
       m_AssetGUID: 83a79bf5320972c46ae675e08e77534b
@@ -70,8 +70,8 @@ MonoBehaviour:
   ResizeEffectDuration: 5
   Behavior: 1
   AoeRadius: 3
-  ProjectileSpeed: 40
-  IsGuidedProjectile: 1
+  ProjectileSpeed: 80
+  IsGuidedProjectile: 0
   GuidedTurnSpeed: 150
   GuidedAcceleration: 35
   GuidedLaunchUpwardSpeed: 8
