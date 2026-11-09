@@ -44,6 +44,7 @@ namespace Unity.MP_FPS
             [GhostField] public float SignedSizeDelta;
             [GhostField] public byte IsHoming;
             [GhostField] public byte TracksPlayers;
+            [GhostField] public byte TracksAim;
             [GhostField] public float HomingTurnSpeed;
             [GhostField] public byte HasExplosion;
             [GhostField] public float ExplosionRadius;
@@ -128,17 +129,22 @@ namespace Unity.MP_FPS
                 var movementSystem = GhostGameObject.World
                     .GetExistingSystemManaged<ServerPlayerMovementSystem>();
                 Vector3 liveAimPoint = default;
-                bool foundTarget = movementSystem != null &&
-                    (projectileData.TracksPlayers != 0
-                        ? movementSystem.TryGetNearestOpponentAimPoint(
+                bool foundTarget = false;
+                if (movementSystem != null && projectileData.TracksPlayers != 0)
+                {
+                    foundTarget = movementSystem.TryGetNearestOpponentAimPoint(
                             projectileData.OwnerNetworkId,
                             transform.position,
                             weaponData.GuidedTargetRange,
-                            out liveAimPoint)
-                        : movementSystem.TryGetGuidedAimPoint(
+                            out liveAimPoint);
+                }
+                else if (movementSystem != null && projectileData.TracksAim != 0)
+                {
+                    foundTarget = movementSystem.TryGetGuidedAimPoint(
                             projectileData.OwnerNetworkId,
                             weaponData.GuidedTargetRange,
-                            out liveAimPoint));
+                            out liveAimPoint);
+                }
                 if (foundTarget)
                 {
                     SetGuidedTarget(liveAimPoint);
@@ -499,7 +505,8 @@ namespace Unity.MP_FPS
                     ? -_velocity.normalized
                     : Vector3.up;
                 SpawnImpactEffect(weaponData, detonationPosition, effectDirection,
-                    GetExplosionRadius(weaponData, projectileData));
+                    GetExplosionRadius(weaponData, projectileData),
+                    GetSignedSizeDelta(weaponData, projectileData));
             }
         }
 
@@ -541,12 +548,13 @@ namespace Unity.MP_FPS
             {
                 var normal = impactNormal.sqrMagnitude > 0.0001f ? impactNormal : -transform.forward;
                 SpawnImpactEffect(weaponData, impactPosition, normal,
-                    GetExplosionRadius(weaponData, projectileData));
+                    GetExplosionRadius(weaponData, projectileData),
+                    GetSignedSizeDelta(weaponData, projectileData));
             }
         }
 
         private static void SpawnImpactEffect(WeaponData weaponData, Vector3 position,
-            Vector3 effectDirection, float explosionRadius)
+            Vector3 effectDirection, float explosionRadius, float signedSizeDelta)
         {
             float effectScale = explosionRadius > 0f
                 ? Mathf.Max(0.01f, explosionRadius)
@@ -556,7 +564,8 @@ namespace Unity.MP_FPS
             {
                 // Explosive Payload uses the existing expanding AOE-range effect so
                 // every player can read the card's actual gameplay radius.
-                effectPrefab = WeaponManager.Instance.GetExplosionImpactVfx() ?? effectPrefab;
+                effectPrefab = WeaponManager.Instance.GetExplosionImpactVfx(signedSizeDelta) ??
+                               effectPrefab;
             }
 
             if (effectPrefab == null) return;

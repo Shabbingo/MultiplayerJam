@@ -3,16 +3,23 @@
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8ea0d67bb85b448c8ea2f83f32a65fb1, type: 3}
   m_Name: Homing Projectiles
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 5
   m_DisplayName: Homing Projectiles
-  m_Description: Adds 15 degrees per second of player-tracking turn speed to the selected hand.
+  m_Description: Adds 15 degrees per second of player-tracking turn speed to the
+    selected hand.
   m_Icon: {fileID: 0}
   m_StrengthScore: 3
   m_BaseOfferWeight: 1
   m_Kind: 4
   m_AllowedTargets: 3
   m_StackLimit: 5
-  m_ValuePerStack: 15
+  m_ValuePerStack: 25

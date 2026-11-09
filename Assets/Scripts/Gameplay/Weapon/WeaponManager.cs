@@ -39,6 +39,7 @@ namespace Unity.MP_FPS
             SlowPercent = 0.5f,
             SlowDuration = 3f,
             AddedHomingTurnSpeed = 15f,
+            WireGuidedTurnSpeed = 120f,
             ReloadTimeReductionPerStack = 0.15f,
             AmmoPerStack = 10
         };
@@ -96,6 +97,7 @@ namespace Unity.MP_FPS
             var scatter = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.ScatterWeapon);
             var slow = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.SlowTarget);
             var homing = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.HomingProjectiles);
+            var wireGuided = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.WireGuided);
             var reload = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.ReloadSpeed);
             var ammo = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.MagazineCapacity);
             if (damage != null) tuning.DamagePerStack = damage.ValuePerStack;
@@ -104,15 +106,22 @@ namespace Unity.MP_FPS
                 Mathf.RoundToInt(scatter.ValuePerStack));
             if (slow != null) tuning.SlowPercent = slow.ValuePerStack;
             if (homing != null) tuning.AddedHomingTurnSpeed = homing.ValuePerStack;
+            if (wireGuided != null) tuning.WireGuidedTurnSpeed = wireGuided.ValuePerStack;
             if (reload != null) tuning.ReloadTimeReductionPerStack = reload.ValuePerStack;
             if (ammo != null) tuning.AmmoPerStack = Mathf.Max(0,
                 Mathf.RoundToInt(ammo.ValuePerStack));
             return tuning;
         }
 
-        public GhostSpawner.GhostReference GetExplosionImpactVfx()
+        public GhostSpawner.GhostReference GetExplosionImpactVfx(float signedSizeDelta)
         {
-            return WeaponRegistry.GetWeaponData(SecondaryWeaponId)?.ProjectileHitVfxPrefab;
+            // Runtime profiles preserve the hand in the sign even when a card swaps
+            // the underlying weapon profile (for example Scatter). Shrink/left is
+            // negative and grow/right is positive, so each hand keeps its own colour.
+            uint effectWeaponId = signedSizeDelta > 0f
+                ? SecondaryWeaponId
+                : PrimaryWeaponId;
+            return WeaponRegistry.GetWeaponData(effectWeaponId)?.ProjectileHitVfxPrefab;
         }
 
         public bool TryEquipWeapon(ref PredictedPlayerGhost player, uint weaponId)

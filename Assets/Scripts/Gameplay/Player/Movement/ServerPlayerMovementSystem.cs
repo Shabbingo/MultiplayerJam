@@ -26,6 +26,7 @@ namespace Unity.MP_FPS
         public float SignedSizeDelta;
         public byte IsHoming;
         public byte TracksPlayers;
+        public byte TracksAim;
         public float HomingTurnSpeed;
         public byte HasExplosion;
         public float ExplosionRadius;
@@ -714,6 +715,7 @@ namespace Unity.MP_FPS
                                             SignedSizeDelta = runtimeProfile.SignedSizeDelta,
                                             IsHoming = runtimeProfile.IsHoming ? (byte)1 : (byte)0,
                                             TracksPlayers = runtimeProfile.TracksPlayers ? (byte)1 : (byte)0,
+                                            TracksAim = runtimeProfile.TracksAim ? (byte)1 : (byte)0,
                                             HomingTurnSpeed = runtimeProfile.HomingTurnSpeed,
                                             HasExplosion = runtimeProfile.HasExplosion ? (byte)1 : (byte)0,
                                             ExplosionRadius = runtimeProfile.ExplosionRadius,
@@ -761,6 +763,7 @@ namespace Unity.MP_FPS
                             SignedSizeDelta = spawnData.SignedSizeDelta,
                             IsHoming = spawnData.IsHoming,
                             TracksPlayers = spawnData.TracksPlayers,
+                            TracksAim = spawnData.TracksAim,
                             HomingTurnSpeed = spawnData.HomingTurnSpeed,
                             HasExplosion = spawnData.HasExplosion,
                             ExplosionRadius = spawnData.ExplosionRadius,

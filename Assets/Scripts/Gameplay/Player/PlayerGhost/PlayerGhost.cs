@@ -489,8 +489,10 @@ namespace Unity.MP_FPS
 
         private void CreateClientCamera()
         {
-            //Disable current camera
-            var existingCamera = FindAnyObjectByType<Camera>();
+            // Disable the persistent menu camera specifically. An arbitrary camera
+            // lookup can select and disable the active spectator camera while the
+            // next-round player ghost is being created.
+            var existingCamera = MainCameraSingleton.Instance;
             if (existingCamera != null)
             {
                 existingCamera.enabled = false;

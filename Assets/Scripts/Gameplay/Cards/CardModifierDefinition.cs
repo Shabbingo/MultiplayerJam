@@ -29,7 +29,8 @@ namespace Unity.MP_FPS.Cards
         ExplosionRadius,
         ScatterWeapon,
         ReloadSpeed,
-        MagazineCapacity
+        MagazineCapacity,
+        WireGuided
     }
 
     [CreateAssetMenu(fileName = "CardModifier", menuName = "Multiplayer Jam/Card Modifier")]
@@ -79,7 +80,8 @@ namespace Unity.MP_FPS.Cards
             m_StackLimit = Mathf.Clamp(m_StackLimit, 1, 5);
 
             if (m_Kind is CardModifierKind.SlowTarget or
-                CardModifierKind.ScatterWeapon)
+                CardModifierKind.ScatterWeapon or
+                CardModifierKind.WireGuided)
             {
                 m_StackLimit = 1;
             }

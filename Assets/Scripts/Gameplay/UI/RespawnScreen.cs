@@ -97,6 +97,10 @@ namespace Unity.MP_FPS.UI
             }
 
             RespawnCamera.gameObject.SetActive(true);
+            // Player camera setup disables the camera that was active previously.
+            // Reassert this explicitly so a camera disabled during a round transition
+            // cannot leave the spectator UI rendering over an empty frame.
+            RespawnCamera.enabled = true;
             if (m_SpectatorAudioListener != null) m_SpectatorAudioListener.enabled = isSpectating;
             if (isSpectating && GameManager.Instance?.SoundSystem != null)
             {

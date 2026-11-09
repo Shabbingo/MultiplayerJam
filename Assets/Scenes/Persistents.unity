@@ -204,6 +204,7 @@ MonoBehaviour:
     SlowPercent: 0.5
     SlowDuration: 3
     AddedHomingTurnSpeed: 15
+    WireGuidedTurnSpeed: 120
     ReloadTimeReductionPerStack: 0.15
     AmmoPerStack: 10
 --- !u!4 &897885690

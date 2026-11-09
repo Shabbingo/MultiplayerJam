@@ -19,6 +19,7 @@ namespace Unity.MP_FPS.Cards
         [Range(0f, 1f)] public float SlowPercent;
         [Min(0f)] public float SlowDuration;
         [Min(0f)] public float AddedHomingTurnSpeed;
+        [Min(0f)] public float WireGuidedTurnSpeed;
         [Range(0f, 0.5f)] public float ReloadTimeReductionPerStack;
         [Min(0)] public int AmmoPerStack;
 
@@ -31,6 +32,7 @@ namespace Unity.MP_FPS.Cards
             SlowPercent = 0.5f,
             SlowDuration = 3f,
             AddedHomingTurnSpeed = 15f,
+            WireGuidedTurnSpeed = 120f,
             ReloadTimeReductionPerStack = 0.15f,
             AmmoPerStack = 10
         };
@@ -55,6 +57,7 @@ namespace Unity.MP_FPS.Cards
         public readonly float ScatterHalfAngleDegrees;
         public readonly bool IsHoming;
         public readonly bool TracksPlayers;
+        public readonly bool TracksAim;
         public readonly float HomingTurnSpeed;
         public readonly bool HasExplosion;
         public readonly float ExplosionRadius;
@@ -70,7 +73,8 @@ namespace Unity.MP_FPS.Cards
             WeaponFireMode fireMode, float damage, float fireInterval,
             float projectileReleaseDelay, int magazineSize, float reloadTime,
             float projectileSpeed, int pelletCount, float scatterHalfAngleDegrees,
-            bool isHoming, bool tracksPlayers, float homingTurnSpeed, bool hasExplosion,
+            bool isHoming, bool tracksPlayers, bool tracksAim, float homingTurnSpeed,
+            bool hasExplosion,
             float explosionRadius, bool appliesSlow, float slowPercent,
             float slowDuration)
         {
@@ -87,6 +91,7 @@ namespace Unity.MP_FPS.Cards
             ScatterHalfAngleDegrees = scatterHalfAngleDegrees;
             IsHoming = isHoming;
             TracksPlayers = tracksPlayers;
+            TracksAim = tracksAim;
             HomingTurnSpeed = homingTurnSpeed;
             HasExplosion = hasExplosion;
             ExplosionRadius = explosionRadius;
@@ -118,6 +123,7 @@ namespace Unity.MP_FPS.Cards
             int damageStacks = modifiers.GetStacks(CardModifierKind.DamagePercent, target);
             int explosionStacks = modifiers.GetStacks(CardModifierKind.ExplosionRadius, target);
             int homingStacks = modifiers.GetStacks(CardModifierKind.HomingProjectiles, target);
+            int wireGuidedStacks = modifiers.GetStacks(CardModifierKind.WireGuided, target);
             int reloadStacks = modifiers.GetStacks(CardModifierKind.ReloadSpeed, target);
             int ammoStacks = modifiers.GetStacks(CardModifierKind.MagazineCapacity, target);
             float damage = source.Damage * (1f + damageStacks * Mathf.Max(0f, tuning.DamagePerStack));
@@ -127,12 +133,15 @@ namespace Unity.MP_FPS.Cards
             float explosionRadius = baseExplosionRadius + explosionStacks *
                 Mathf.Max(0f, tuning.ExplosionRadiusPerStack);
             bool tracksPlayers = homingStacks > 0;
-            bool isHoming = source.IsGuidedProjectile || tracksPlayers;
+            bool tracksAim = wireGuidedStacks > 0;
+            bool isHoming = source.IsGuidedProjectile || tracksPlayers || tracksAim;
             // Once the Homing card is present it owns player-tracking strength for
             // either hand. Do not add the right weapon's strong live-aim guidance
             // rate on top, otherwise its first Homing stack becomes nearly perfect.
             float homingTurnSpeed = tracksPlayers
                 ? homingStacks * Mathf.Max(0f, tuning.AddedHomingTurnSpeed)
+                : tracksAim
+                    ? Mathf.Max(0f, tuning.WireGuidedTurnSpeed)
                 : source.IsGuidedProjectile
                     ? Mathf.Max(0f, source.GuidedTurnSpeed)
                     : 0f;
@@ -156,6 +165,7 @@ namespace Unity.MP_FPS.Cards
                 scatter ? Mathf.Max(0f, tuning.ScatterHalfAngleDegrees) : 0f,
                 isHoming,
                 tracksPlayers,
+                tracksAim,
                 homingTurnSpeed,
                 explosionRadius > 0f,
                 explosionRadius,

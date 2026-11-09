@@ -13,6 +13,8 @@ namespace Unity.MP_FPS.Cards
         [GhostField] public byte RightDamage;
         [GhostField] public byte LeftHoming;
         [GhostField] public byte RightHoming;
+        [GhostField] public byte LeftWireGuided;
+        [GhostField] public byte RightWireGuided;
         [GhostField] public byte LeftSlow;
         [GhostField] public byte RightSlow;
         [GhostField] public byte LeftExplosion;
@@ -35,6 +37,8 @@ namespace Unity.MP_FPS.Cards
                 (CardModifierKind.DamagePercent, ModifierTarget.RightHand) => RightDamage,
                 (CardModifierKind.HomingProjectiles, ModifierTarget.LeftHand) => LeftHoming,
                 (CardModifierKind.HomingProjectiles, ModifierTarget.RightHand) => RightHoming,
+                (CardModifierKind.WireGuided, ModifierTarget.LeftHand) => LeftWireGuided,
+                (CardModifierKind.WireGuided, ModifierTarget.RightHand) => RightWireGuided,
                 (CardModifierKind.SlowTarget, ModifierTarget.LeftHand) => LeftSlow,
                 (CardModifierKind.SlowTarget, ModifierTarget.RightHand) => RightSlow,
                 (CardModifierKind.ExplosionRadius, ModifierTarget.LeftHand) => LeftExplosion,
@@ -77,6 +81,10 @@ namespace Unity.MP_FPS.Cards
                     return Increment(ref LeftHoming, limit);
                 case (CardModifierKind.HomingProjectiles, ModifierTarget.RightHand):
                     return Increment(ref RightHoming, limit);
+                case (CardModifierKind.WireGuided, ModifierTarget.LeftHand):
+                    return Increment(ref LeftWireGuided, limit);
+                case (CardModifierKind.WireGuided, ModifierTarget.RightHand):
+                    return Increment(ref RightWireGuided, limit);
                 case (CardModifierKind.SlowTarget, ModifierTarget.LeftHand):
                     return Increment(ref LeftSlow, limit);
                 case (CardModifierKind.SlowTarget, ModifierTarget.RightHand):

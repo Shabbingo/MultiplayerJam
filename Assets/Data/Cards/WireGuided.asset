@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ea0d67bb85b448c8ea2f83f32a65fb1, type: 3}
+  m_Name: Wire Guided
+  m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
+  m_CardId: 11
+  m_DisplayName: Wire Guided
+  m_Description: Projectiles from the selected hand continuously steer toward your live crosshair.
+  m_Icon: {fileID: 0}
+  m_StrengthScore: 3
+  m_BaseOfferWeight: 1
+  m_Kind: 10
+  m_AllowedTargets: 3
+  m_StackLimit: 1
+  m_ValuePerStack: 120
