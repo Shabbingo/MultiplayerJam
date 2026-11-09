@@ -17,14 +17,14 @@ MonoBehaviour:
   ReticleType: 0
   CooldownInMs: 0.75
   ProjectileReleaseDelay: 0.25
-  Damage: 25
+  Damage: 40
   HitscanRange: 100
   HitscanBaseSpreadDegrees: 0.15
   HitscanSpreadPerShotDegrees: 0.12
   HitscanMaxSpreadDegrees: 1
   HitscanSpreadRecoveryDegreesPerSecond: 2
   MagazineSize: 3
-  ReloadTime: 1.5
+  ReloadTime: 2.5
   ProjectileGhostPrefab:
     <GhostPrefab>k__BackingField:
       m_AssetGUID: 83a79bf5320972c46ae675e08e77534b
