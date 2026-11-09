@@ -125,9 +125,10 @@ public partial class ClientInputReaderSystem : SystemBase
 
     private void ProcessGameplayInput(in InputSystem_Actions controls, ref PlayerInput playerInput)
     {
-        var keyboard = UnityEngine.InputSystem.Keyboard.current;
-        bool gameplayKeysEnabled = keyboard != null && !GameSettings.Instance.IsPauseMenuOpen;
-        bool reflectPressed = gameplayKeysEnabled && keyboard.fKey.wasPressedThisFrame;
+        bool gameplayKeysEnabled = !GameSettings.Instance.IsPauseMenuOpen;
+        bool reflectPressed = gameplayKeysEnabled &&
+            InputSystemManager.GetGameplayAction(controls,
+                InputSystemManager.ReflectActionName).WasPressedThisFrame();
 
         playerInput.SetFlag(PlayerInput.InputFlag.Jump, controls.Player.Jump.triggered);
         playerInput.SetFlag(PlayerInput.InputFlag.Shoot, controls.FPS.ShootSingle.IsPressed());
@@ -141,10 +142,12 @@ public partial class ClientInputReaderSystem : SystemBase
 
         playerInput.SetFlag(PlayerInput.InputFlag.SelfShrinkPressed,
             gameplayKeysEnabled &&
-            (keyboard.leftCtrlKey.wasPressedThisFrame || keyboard.rightCtrlKey.wasPressedThisFrame));
+            InputSystemManager.GetGameplayAction(controls,
+                InputSystemManager.SelfShrinkActionName).WasPressedThisFrame());
         playerInput.SetFlag(PlayerInput.InputFlag.SelfGrowPressed,
             gameplayKeysEnabled &&
-            (keyboard.leftShiftKey.wasPressedThisFrame || keyboard.rightShiftKey.wasPressedThisFrame));
+            InputSystemManager.GetGameplayAction(controls,
+                InputSystemManager.SelfGrowActionName).WasPressedThisFrame());
         playerInput.SetFlag(PlayerInput.InputFlag.ReflectPressed,
             reflectPressed);
     }

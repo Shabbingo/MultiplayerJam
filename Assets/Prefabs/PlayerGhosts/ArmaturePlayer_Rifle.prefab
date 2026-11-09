@@ -211,7 +211,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FirstPersonController
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
   m_ManualShrinkHealthMultiplier: 0.2
-  m_ReflectDuration: 0.25
+  m_ReflectDuration: 1
   m_ReflectCooldown: 15
   m_SelfShrinkUses: 2
   m_SelfGrowUses: 2

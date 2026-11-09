@@ -13,7 +13,7 @@ public static class GameInput
     static void RuntimeInitializeOnLoad()
     {
         Actions = new InputSystem_Actions();
-        InputSystemManager.ApplySavedGrenadeBinding(Actions);
+        InputSystemManager.ConfigureGameplayBindings(Actions);
         Actions.Enable();
     }
 

@@ -16,6 +16,9 @@ namespace Unity.MP_FPS
             public const string QuitButton = "QuitButton";
             public const string SensitivitySlider = "MouseSensitivitySlider";
             public const string CameraFovSlider = "CameraFovSlider";
+            public const string SelfShrinkBindingButton = "SelfShrinkBindingButton";
+            public const string SelfGrowBindingButton = "SelfGrowBindingButton";
+            public const string ReflectBindingButton = "ReflectBindingButton";
             public const string GrenadeBindingButton = "GrenadeBindingButton";
         }
 
@@ -24,8 +27,11 @@ namespace Unity.MP_FPS
         Button m_QuitButton;
         Slider m_SensitivitySlider;
         Slider m_CameraFovSlider;
+        Button m_SelfShrinkBindingButton;
+        Button m_SelfGrowBindingButton;
+        Button m_ReflectBindingButton;
         Button m_GrenadeBindingButton;
-        InputActionRebindingExtensions.RebindingOperation m_GrenadeRebindOperation;
+        InputActionRebindingExtensions.RebindingOperation m_RebindOperation;
         int m_IgnorePauseToggleFrame = -1;
 
         void OnEnable()
@@ -58,9 +64,15 @@ namespace Unity.MP_FPS
             RefreshCameraFovSlider();
             m_CameraFovSlider.RegisterValueChangedCallback(OnCameraFovChanged);
 
+            m_SelfShrinkBindingButton = root.Q<Button>(UIElementNames.SelfShrinkBindingButton);
+            m_SelfGrowBindingButton = root.Q<Button>(UIElementNames.SelfGrowBindingButton);
+            m_ReflectBindingButton = root.Q<Button>(UIElementNames.ReflectBindingButton);
             m_GrenadeBindingButton = root.Q<Button>(UIElementNames.GrenadeBindingButton);
+            m_SelfShrinkBindingButton.clicked += StartSelfShrinkRebind;
+            m_SelfGrowBindingButton.clicked += StartSelfGrowRebind;
+            m_ReflectBindingButton.clicked += StartReflectRebind;
             m_GrenadeBindingButton.clicked += StartGrenadeRebind;
-            RefreshGrenadeBinding();
+            RefreshBindings();
         }
 
         void OnDisable()
@@ -71,17 +83,20 @@ namespace Unity.MP_FPS
             m_QuitButton.clicked -= OnQuitPressed;
             m_SensitivitySlider.UnregisterValueChangedCallback(OnSensitivityChanged);
             m_CameraFovSlider.UnregisterValueChangedCallback(OnCameraFovChanged);
+            m_SelfShrinkBindingButton.clicked -= StartSelfShrinkRebind;
+            m_SelfGrowBindingButton.clicked -= StartSelfGrowRebind;
+            m_ReflectBindingButton.clicked -= StartReflectRebind;
             m_GrenadeBindingButton.clicked -= StartGrenadeRebind;
 
-            if (m_GrenadeRebindOperation != null)
+            if (m_RebindOperation != null)
             {
-                m_GrenadeRebindOperation.Cancel();
+                m_RebindOperation.Cancel();
             }
         }
 
         void TogglePauseMenuVisibility(InputAction.CallbackContext obj)
         {
-            if (m_GrenadeRebindOperation != null ||
+            if (m_RebindOperation != null ||
                 m_IgnorePauseToggleFrame == Time.frameCount)
             {
                 return;
@@ -92,7 +107,7 @@ namespace Unity.MP_FPS
             {
                 RefreshSensitivitySlider();
                 RefreshCameraFovSlider();
-                RefreshGrenadeBinding();
+                RefreshBindings();
             }
             GameSettings.Instance.IsPauseMenuOpen = !GameSettings.Instance.IsPauseMenuOpen;
         }
@@ -123,9 +138,20 @@ namespace Unity.MP_FPS
             m_CameraFovSlider.label = $"Camera FOV: {GameSettings.Instance.CameraFov:0}";
         }
 
-        void StartGrenadeRebind()
+        void StartSelfShrinkRebind() => StartRebind(
+            InputSystemManager.SelfShrinkActionName, m_SelfShrinkBindingButton);
+
+        void StartSelfGrowRebind() => StartRebind(
+            InputSystemManager.SelfGrowActionName, m_SelfGrowBindingButton);
+
+        void StartReflectRebind() => StartRebind(
+            InputSystemManager.ReflectActionName, m_ReflectBindingButton);
+
+        void StartGrenadeRebind() => StartRebind("ShootGrenade", m_GrenadeBindingButton);
+
+        void StartRebind(string actionName, Button bindingButton)
         {
-            if (m_GrenadeRebindOperation != null)
+            if (m_RebindOperation != null)
             {
                 return;
             }
@@ -136,60 +162,88 @@ namespace Unity.MP_FPS
             }
 
             var controls = (InputSystem_Actions)user.actions;
-            var grenadeAction = controls.FPS.ShootGrenade;
-            grenadeAction.Disable();
-            m_GrenadeBindingButton.text = "Press a key or mouse button...";
+            var action = GetAction(controls, actionName);
+            action.Disable();
+            bindingButton.text = "Press a key or mouse button...";
 
-            m_GrenadeRebindOperation = grenadeAction.PerformInteractiveRebinding(0)
+            m_RebindOperation = action.PerformInteractiveRebinding(0)
                 .WithControlsExcluding("<Mouse>/position")
                 .WithControlsExcluding("<Mouse>/delta")
                 .WithControlsExcluding("<Mouse>/scroll")
-                .WithControlsExcluding("<Keyboard>/f")
                 .WithCancelingThrough("<Keyboard>/escape")
-                .OnCancel(_ => FinishGrenadeRebind(false))
-                .OnComplete(_ => FinishGrenadeRebind(true))
+                .OnCancel(_ => FinishRebind(false))
+                .OnComplete(_ => FinishRebind(true))
                 .Start();
         }
 
-        void FinishGrenadeRebind(bool saveBinding)
+        void FinishRebind(bool saveBinding)
         {
-            if (m_GrenadeRebindOperation == null)
+            if (m_RebindOperation == null)
             {
                 return;
             }
 
-            var grenadeAction = m_GrenadeRebindOperation.action;
+            var action = m_RebindOperation.action;
             if (!saveBinding)
             {
                 m_IgnorePauseToggleFrame = Time.frameCount;
             }
 
-            m_GrenadeRebindOperation.Dispose();
-            m_GrenadeRebindOperation = null;
-            grenadeAction.Enable();
+            m_RebindOperation.Dispose();
+            m_RebindOperation = null;
+            action.Enable();
 
             if (saveBinding && InputSystemManager.TryGetFirstInputUser(out var user))
             {
                 var controls = (InputSystem_Actions)user.actions;
-                InputSystemManager.SaveGrenadeBinding(controls);
+                if (action == controls.FPS.ShootGrenade)
+                {
+                    InputSystemManager.SaveGrenadeBinding(controls);
+                }
+                else
+                {
+                    InputSystemManager.SaveGameplayBinding(action);
+                }
             }
 
-            RefreshGrenadeBinding();
+            RefreshBindings();
         }
 
-        void RefreshGrenadeBinding()
+        void RefreshBindings()
         {
             if (!InputSystemManager.TryGetFirstInputUser(out var user))
             {
+                m_SelfShrinkBindingButton.text = "Self Shrink Binding: Unavailable";
+                m_SelfGrowBindingButton.text = "Self Grow Binding: Unavailable";
+                m_ReflectBindingButton.text = "Reflect Shield Binding: Unavailable";
                 m_GrenadeBindingButton.text = "Growth Missile Alt Binding: Unavailable";
                 return;
             }
 
             var controls = (InputSystem_Actions)user.actions;
-            string bindingPath = controls.FPS.ShootGrenade.bindings[0].effectivePath;
-            string displayName = InputControlPath.ToHumanReadableString(bindingPath,
-                InputControlPath.HumanReadableStringOptions.OmitDevice);
-            m_GrenadeBindingButton.text = $"Growth Missile Alt Binding: {displayName}";
+            SetBindingButtonText(m_SelfShrinkBindingButton, "Self Shrink Binding",
+                InputSystemManager.GetGameplayAction(controls,
+                    InputSystemManager.SelfShrinkActionName));
+            SetBindingButtonText(m_SelfGrowBindingButton, "Self Grow Binding",
+                InputSystemManager.GetGameplayAction(controls,
+                    InputSystemManager.SelfGrowActionName));
+            SetBindingButtonText(m_ReflectBindingButton, "Reflect Shield Binding",
+                InputSystemManager.GetGameplayAction(controls,
+                    InputSystemManager.ReflectActionName));
+            SetBindingButtonText(m_GrenadeBindingButton, "Growth Missile Alt Binding",
+                controls.FPS.ShootGrenade);
+        }
+
+        static InputAction GetAction(InputSystem_Actions controls, string actionName)
+        {
+            return actionName == "ShootGrenade"
+                ? controls.FPS.ShootGrenade
+                : InputSystemManager.GetGameplayAction(controls, actionName);
+        }
+
+        static void SetBindingButtonText(Button button, string label, InputAction action)
+        {
+            button.text = $"{label}: {InputSystemManager.GetBindingDisplayName(action)}";
         }
 
         static void OnResumePressed() => GameSettings.Instance.IsPauseMenuOpen = false;

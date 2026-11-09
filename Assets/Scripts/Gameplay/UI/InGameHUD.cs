@@ -161,10 +161,23 @@ namespace Unity.MP_FPS
 
             if (m_SelfShrinkUsesLabel != null && m_SelfGrowUsesLabel != null)
             {
+                string shrinkBinding = "CTRL";
+                string growBinding = "SHIFT";
+                if (InputSystemManager.TryGetFirstInputUser(out var inputUser))
+                {
+                    var controls = (InputSystem_Actions)inputUser.actions;
+                    shrinkBinding = InputSystemManager.GetBindingDisplayName(
+                        InputSystemManager.GetGameplayAction(controls,
+                            InputSystemManager.SelfShrinkActionName)).ToUpperInvariant();
+                    growBinding = InputSystemManager.GetBindingDisplayName(
+                        InputSystemManager.GetGameplayAction(controls,
+                            InputSystemManager.SelfGrowActionName)).ToUpperInvariant();
+                }
+
                 m_SelfShrinkUsesLabel.text =
-                    $"CTRL SELF SHRINK: {playerData.SelfShrinkCharges} / {playerData.MaxSelfShrinkCharges}";
+                    $"{shrinkBinding} SELF SHRINK: {playerData.SelfShrinkCharges} / {playerData.MaxSelfShrinkCharges}";
                 m_SelfGrowUsesLabel.text =
-                    $"SHIFT SELF GROW: {playerData.SelfGrowCharges} / {playerData.MaxSelfGrowCharges}";
+                    $"{growBinding} SELF GROW: {playerData.SelfGrowCharges} / {playerData.MaxSelfGrowCharges}";
                 m_SelfShrinkUsesLabel.style.color = playerData.SelfShrinkCharges > 0
                     ? Color.white
                     : Color.red;

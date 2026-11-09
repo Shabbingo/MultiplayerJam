@@ -3,12 +3,12 @@
     <ui:VisualElement name="left-ability-container" picking-mode="Ignore" class="ability-side-panel">
         <ui:Label name="shrink-ammo-label" text="LMB SHRINK 0 / 0" class="ability-ammo-label side-label-left"/>
         <ui:ProgressBar value="0" title="SHRINK" name="shrink-ammo-bar" class="kits-progress-bar kits-ammo-bar ability-ammo-bar"/>
-        <ui:Label name="self-shrink-uses-label" text="CTRL SELF SHRINK: 3 / 3" class="self-resize-ammo-label side-label-left"/>
+        <ui:Label name="self-shrink-uses-label" text="SELF SHRINK" class="self-resize-ammo-label side-label-left"/>
     </ui:VisualElement>
     <ui:VisualElement name="right-ability-container" picking-mode="Ignore" class="ability-side-panel">
         <ui:Label name="grow-ammo-label" text="RMB GROW 0 / 0" class="ability-ammo-label side-label-right"/>
         <ui:ProgressBar value="0" title="GROW" name="grow-ammo-bar" class="kits-progress-bar kits-grow-ammo-bar ability-ammo-bar"/>
-        <ui:Label name="self-grow-uses-label" text="SHIFT SELF GROW: 3 / 3" class="self-resize-ammo-label side-label-right"/>
+        <ui:Label name="self-grow-uses-label" text="SELF GROW" class="self-resize-ammo-label side-label-right"/>
     </ui:VisualElement>
     <ui:VisualElement name="health-info-container" picking-mode="Ignore">
         <ui:VisualElement name="reflect-shield-frame" picking-mode="Ignore">

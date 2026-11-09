@@ -6,6 +6,13 @@ using UnityEngine;
 public class InputSystemManager : Singleton<InputSystemManager>
 {
     private const string k_GrenadeBindingOverridesKey = "GrenadeBindingOverrides";
+    private const string k_SelfShrinkBindingOverridesKey = "SelfShrinkBindingOverrides";
+    private const string k_SelfGrowBindingOverridesKey = "SelfGrowBindingOverrides";
+    private const string k_ReflectBindingOverridesKey = "ReflectBindingOverrides";
+
+    public const string SelfShrinkActionName = "SelfShrink";
+    public const string SelfGrowActionName = "SelfGrow";
+    public const string ReflectActionName = "Reflect";
 
     protected override bool Persistent => true;
 
@@ -136,7 +143,7 @@ public class InputSystemManager : Singleton<InputSystemManager>
         Debug.Log($"[InputSystemManager]: Pairing device {device.name} user index {user.index} id {user.id}");
 
         var gameControls = new InputSystem_Actions();
-        ApplySavedGrenadeBinding(gameControls);
+        ConfigureGameplayBindings(gameControls);
         gameControls.Enable();
         user.AssociateActionsWithUser(gameControls);
 
@@ -174,6 +181,82 @@ public class InputSystemManager : Singleton<InputSystemManager>
     {
         PlayerPrefs.SetString(k_GrenadeBindingOverridesKey,
             controls.FPS.ShootGrenade.SaveBindingOverridesAsJson());
+        PlayerPrefs.Save();
+    }
+
+    public static void ConfigureGameplayBindings(InputSystem_Actions controls)
+    {
+        var fpsMap = controls.asset.FindActionMap("FPS", true);
+        EnsureAction(fpsMap, SelfShrinkActionName, "<Keyboard>/leftCtrl");
+        EnsureAction(fpsMap, SelfGrowActionName, "<Keyboard>/leftShift");
+        EnsureAction(fpsMap, ReflectActionName, "<Keyboard>/f");
+
+        ApplySavedGrenadeBinding(controls);
+        ApplySavedBinding(GetGameplayAction(controls, SelfShrinkActionName),
+            k_SelfShrinkBindingOverridesKey);
+        ApplySavedBinding(GetGameplayAction(controls, SelfGrowActionName),
+            k_SelfGrowBindingOverridesKey);
+        ApplySavedBinding(GetGameplayAction(controls, ReflectActionName),
+            k_ReflectBindingOverridesKey);
+    }
+
+    public static InputAction GetGameplayAction(InputSystem_Actions controls,
+        string actionName)
+    {
+        return controls.asset.FindAction($"FPS/{actionName}", true);
+    }
+
+    public static void SaveGameplayBinding(InputAction action)
+    {
+        string preferencesKey = GetPreferencesKey(action.name);
+        PlayerPrefs.SetString(preferencesKey,
+            action.bindings[0].effectivePath);
+        PlayerPrefs.Save();
+    }
+
+    public static string GetBindingDisplayName(InputAction action)
+    {
+        if (action == null || action.bindings.Count == 0)
+        {
+            return "Unavailable";
+        }
+
+        return InputControlPath.ToHumanReadableString(
+            action.bindings[0].effectivePath,
+            InputControlPath.HumanReadableStringOptions.OmitDevice);
+    }
+
+    private static void EnsureAction(InputActionMap map, string actionName,
+        string defaultBinding)
+    {
+        if (map.FindAction(actionName, false) != null)
+        {
+            return;
+        }
+
+        map.AddAction(actionName, InputActionType.Button)
+            .AddBinding(defaultBinding, groups: "Keyboard&Mouse");
+    }
+
+    private static void ApplySavedBinding(InputAction action, string preferencesKey)
+    {
+        string bindingPath = PlayerPrefs.GetString(preferencesKey, string.Empty);
+        if (!string.IsNullOrEmpty(bindingPath))
+        {
+            action.ApplyBindingOverride(0, bindingPath);
+        }
+    }
+
+    private static string GetPreferencesKey(string actionName)
+    {
+        return actionName switch
+        {
+            SelfShrinkActionName => k_SelfShrinkBindingOverridesKey,
+            SelfGrowActionName => k_SelfGrowBindingOverridesKey,
+            ReflectActionName => k_ReflectBindingOverridesKey,
+            _ => throw new System.ArgumentOutOfRangeException(nameof(actionName), actionName,
+                "No saved binding key is registered for this action.")
+        };
     }
 
     private bool TryFindUserWithLostDevice(InputDevice desiredDevice, out InputUser existingUser)
