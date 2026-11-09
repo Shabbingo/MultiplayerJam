@@ -5,6 +5,7 @@ namespace Unity.MP_FPS
     public class WeaponManager : MonoBehaviour
     {
         public const uint PrimaryWeaponId = 0;
+        public const uint ScatterWeaponId = 1;
         public const uint SecondaryWeaponId = 2;
 
         public static WeaponManager Instance { get; private set; }
@@ -67,6 +68,17 @@ namespace Unity.MP_FPS
             Cards.ModifierGameplayTuning tuning = GetModifierTuning();
             return Cards.WeaponModifierResolver.Resolve(baseProfile, scatterProfile, hand,
                 in modifiers, in tuning);
+        }
+
+        public uint GetWeaponId(WeaponData weaponData, uint fallbackId)
+        {
+            if (weaponData == null || WeaponRegistry?.Weapons == null)
+            {
+                return fallbackId;
+            }
+
+            int index = WeaponRegistry.Weapons.IndexOf(weaponData);
+            return index >= 0 ? (uint)index : fallbackId;
         }
 
         private Cards.ModifierGameplayTuning GetModifierTuning()

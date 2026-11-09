@@ -19,7 +19,6 @@ namespace Unity.MP_FPS
         private int _hitLayerMask;
         private readonly Collider[] _overlapResults = new Collider[16];
         private readonly RaycastHit[] _castResults = new RaycastHit[16];
-        private readonly HashSet<Entity> _aoeHitEntities = new HashSet<Entity>();
         private const float ProjectileRadius = 0.2f;
         private const float BounceSurfaceOffset = 0.025f;
         private const float BounceCollisionGrace = 0.04f;
@@ -42,6 +41,15 @@ namespace Unity.MP_FPS
             [GhostField] public int BounceCount;
             [GhostField] public float Age;
             [GhostField] public uint MotionRevision;
+            [GhostField] public float SignedSizeDelta;
+            [GhostField] public byte IsHoming;
+            [GhostField] public byte TracksPlayers;
+            [GhostField] public float HomingTurnSpeed;
+            [GhostField] public byte HasExplosion;
+            [GhostField] public float ExplosionRadius;
+            [GhostField] public byte AppliesSlow;
+            [GhostField] public float SlowPercent;
+            [GhostField] public float SlowDuration;
         }
 
         public class PredictedProjectileInfo
@@ -78,6 +86,8 @@ namespace Unity.MP_FPS
         private uint _lastServerMotionRevision;
         private Vector3 _guidedTarget;
         private bool _hasGuidedTarget;
+        private bool _runtimeHoming;
+        private float _runtimeHomingTurnSpeed;
 
         public void SetGuidedTarget(Vector3 targetPosition)
         {
@@ -85,11 +95,19 @@ namespace Unity.MP_FPS
             _hasGuidedTarget = true;
         }
 
+        public void SetRuntimeMotion(bool isHoming, float homingTurnSpeed)
+        {
+            _runtimeHoming = isHoming;
+            _runtimeHomingTurnSpeed = Mathf.Max(0f, homingTurnSpeed);
+        }
+
         public override void OnGhostLinked()
         {
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             _weaponId = projectileData.WeaponID;
             SetGuidedTarget(projectileData.TargetPosition);
+            SetRuntimeMotion(projectileData.IsHoming != 0,
+                projectileData.HomingTurnSpeed);
             ApplyServerMotionState(projectileData);
         }
 
@@ -101,16 +119,27 @@ namespace Unity.MP_FPS
                 return;
             }
 
+            var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+            SetRuntimeMotion(projectileData.IsHoming != 0,
+                projectileData.HomingTurnSpeed);
             EnsureMotionInitialized(weaponData);
-            if (weaponData.IsGuidedProjectile)
+            if (_runtimeHoming)
             {
-                var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
                 var movementSystem = GhostGameObject.World
                     .GetExistingSystemManaged<ServerPlayerMovementSystem>();
-                if (movementSystem != null && movementSystem.TryGetGuidedAimPoint(
-                        projectileData.OwnerNetworkId,
-                        weaponData.GuidedTargetRange,
-                        out Vector3 liveAimPoint))
+                Vector3 liveAimPoint = default;
+                bool foundTarget = movementSystem != null &&
+                    (projectileData.TracksPlayers != 0
+                        ? movementSystem.TryGetNearestOpponentAimPoint(
+                            projectileData.OwnerNetworkId,
+                            transform.position,
+                            weaponData.GuidedTargetRange,
+                            out liveAimPoint)
+                        : movementSystem.TryGetGuidedAimPoint(
+                            projectileData.OwnerNetworkId,
+                            weaponData.GuidedTargetRange,
+                            out liveAimPoint));
+                if (foundTarget)
                 {
                     SetGuidedTarget(liveAimPoint);
                 }
@@ -145,7 +174,7 @@ namespace Unity.MP_FPS
             }
 
             _velocity = transform.forward * weaponData.ProjectileSpeed;
-            if (weaponData.IsGuidedProjectile)
+            if (_runtimeHoming)
             {
                 _velocity += Vector3.up * weaponData.GuidedLaunchUpwardSpeed;
             }
@@ -159,7 +188,7 @@ namespace Unity.MP_FPS
 
         private void UpdateVelocity(float deltaTime, WeaponData weaponData)
         {
-            if (weaponData.IsGuidedProjectile && _hasGuidedTarget)
+            if (_runtimeHoming && _hasGuidedTarget)
             {
                 Vector3 toTarget = _guidedTarget - transform.position;
                 if (toTarget.sqrMagnitude > 0.0001f)
@@ -170,7 +199,7 @@ namespace Unity.MP_FPS
                     Vector3 steeredDirection = Vector3.RotateTowards(
                         currentDirection,
                         toTarget.normalized,
-                        Mathf.Deg2Rad * weaponData.GuidedTurnSpeed * deltaTime,
+                        Mathf.Deg2Rad * Mathf.Max(0f, _runtimeHomingTurnSpeed) * deltaTime,
                         0f);
                     float currentSpeed = Mathf.Max(_velocity.magnitude, 0.01f);
                     float targetSpeed = Mathf.Max(0.01f, weaponData.ProjectileSpeed);
@@ -201,6 +230,8 @@ namespace Unity.MP_FPS
             if (GhostGameObject != null && GhostGameObject.IsGhostLinked())
             {
                 var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+                SetRuntimeMotion(projectileData.IsHoming != 0,
+                    projectileData.HomingTurnSpeed);
                 ApplyServerMotionState(projectileData);
             }
 
@@ -451,7 +482,7 @@ namespace Unity.MP_FPS
             var ghostOwnerLookup = movementSystem.GetComponentLookup<GhostOwner>();
             Vector3 detonationPosition = transform.position;
 
-            if (weaponData.Behavior == ProjectileBehavior.AreaOfEffect)
+            if (HasExplosion(weaponData, projectileData))
             {
                 HandleAreaOfEffectImpact(detonationPosition, weaponData, projectileData, world,
                     playerGhostLookup, ghostOwnerLookup);
@@ -467,7 +498,8 @@ namespace Unity.MP_FPS
                 Vector3 effectDirection = _velocity.sqrMagnitude > 0.0001f
                     ? -_velocity.normalized
                     : Vector3.up;
-                SpawnImpactEffect(weaponData, detonationPosition, effectDirection);
+                SpawnImpactEffect(weaponData, detonationPosition, effectDirection,
+                    GetExplosionRadius(weaponData, projectileData));
             }
         }
 
@@ -490,7 +522,7 @@ namespace Unity.MP_FPS
             ComponentLookup<GhostOwner> ghostOwnerLookup)
         {
             var hitObject = hitCollider.gameObject;
-            if (weaponData.Behavior == ProjectileBehavior.AreaOfEffect)
+            if (HasExplosion(weaponData, projectileData))
             {
                 HandleAreaOfEffectImpact(impactPosition, weaponData, projectileData, world,
                     playerGhostLookup, ghostOwnerLookup);
@@ -508,15 +540,16 @@ namespace Unity.MP_FPS
             if (weaponData.ProjectileHitVfxPrefab != null)
             {
                 var normal = impactNormal.sqrMagnitude > 0.0001f ? impactNormal : -transform.forward;
-                SpawnImpactEffect(weaponData, impactPosition, normal);
+                SpawnImpactEffect(weaponData, impactPosition, normal,
+                    GetExplosionRadius(weaponData, projectileData));
             }
         }
 
         private static void SpawnImpactEffect(WeaponData weaponData, Vector3 position,
-            Vector3 effectDirection)
+            Vector3 effectDirection, float explosionRadius)
         {
-            float effectScale = weaponData.Behavior == ProjectileBehavior.AreaOfEffect
-                ? Mathf.Max(0.01f, weaponData.AoeRadius)
+            float effectScale = explosionRadius > 0f
+                ? Mathf.Max(0.01f, explosionRadius)
                 : 1f;
             GhostSpawner.SpawnGhostPrefab(weaponData.ProjectileHitVfxPrefab,
                 position,
@@ -530,41 +563,20 @@ namespace Unity.MP_FPS
             ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
             ComponentLookup<GhostOwner> ghostOwnerLookup)
         {
-            var playersInRadius = UnityEngine.Physics.OverlapSphere(
-                impactPosition,
-                weaponData.AoeRadius,
-                LayerMask.GetMask("ServerPlayer"),
-                QueryTriggerInteraction.Ignore);
-
-            _aoeHitEntities.Clear();
             var movementSystem = world.GetExistingSystemManaged<ServerPlayerMovementSystem>();
             var serverCurrentTick = GhostGameObject.GetCurrentTick();
-
-            foreach (var playerCollider in playersInRadius)
-            {
-                if (!GhostGameObject.TryFindGhostGameObject(playerCollider.gameObject, out var hitGhostObject))
-                {
-                    continue;
-                }
-
-                var targetEntity = hitGhostObject.LinkedEntity;
-                if (!_aoeHitEntities.Add(targetEntity) ||
-                    !playerGhostLookup.HasComponent(targetEntity) ||
-                    !ghostOwnerLookup.HasComponent(targetEntity))
-                {
-                    continue;
-                }
-
-                int targetNetworkId = ghostOwnerLookup[targetEntity].NetworkId;
-                if (targetNetworkId == projectileData.OwnerNetworkId)
-                {
-                    continue;
-                }
-
-                movementSystem.ApplyIncomingWeaponDamage(targetEntity,
-                    projectileData.OwnerNetworkId, weaponData, serverCurrentTick,
-                    playerGhostLookup, ghostOwnerLookup);
-            }
+            movementSystem.ApplyRuntimeAreaDamage(
+                impactPosition,
+                GetExplosionRadius(weaponData, projectileData),
+                projectileData.OwnerNetworkId,
+                GetSignedSizeDelta(weaponData, projectileData),
+                weaponData.ResizeEffect,
+                weaponData.ResizeEffectDuration,
+                projectileData.AppliesSlow != 0 ? projectileData.SlowPercent : 0f,
+                projectileData.AppliesSlow != 0 ? projectileData.SlowDuration : 0f,
+                serverCurrentTick,
+                playerGhostLookup,
+                ghostOwnerLookup);
 
             DrawGizmoAtPosition(impactPosition);
             GhostGameObject.DestroyEntity();
@@ -598,13 +610,45 @@ namespace Unity.MP_FPS
                         $"2 hitPlayerOwner.NetworkId: {hitPlayerOwner.NetworkId.ToString()}, projectileData.OwnerNetworkId: {projectileData.OwnerNetworkId.ToString()}");
                     world.GetExistingSystemManaged<ServerPlayerMovementSystem>()
                         .ApplyIncomingWeaponDamage(hitGhostObject.LinkedEntity,
-                            shooterNetworkId, weaponData, serverCurrentTick,
-                            playerGhostLookup, ghostOwnerLookup);
+                            shooterNetworkId,
+                            GetSignedSizeDelta(weaponData, projectileData),
+                            weaponData.ResizeEffect,
+                            weaponData.ResizeEffectDuration,
+                            projectileData.AppliesSlow != 0 ? projectileData.SlowPercent : 0f,
+                            projectileData.AppliesSlow != 0 ? projectileData.SlowDuration : 0f,
+                            serverCurrentTick,
+                            playerGhostLookup,
+                            ghostOwnerLookup);
 
                     DrawGizmoAtPosition(impactPosition);
                     GhostGameObject.DestroyEntity();
                 }
             }
+        }
+
+        private static bool HasExplosion(WeaponData weaponData,
+            in ProjectileData projectileData)
+        {
+            return projectileData.HasExplosion != 0 ||
+                   weaponData.Behavior == ProjectileBehavior.AreaOfEffect;
+        }
+
+        private static float GetExplosionRadius(WeaponData weaponData,
+            in ProjectileData projectileData)
+        {
+            return projectileData.HasExplosion != 0
+                ? Mathf.Max(0f, projectileData.ExplosionRadius)
+                : weaponData.Behavior == ProjectileBehavior.AreaOfEffect
+                    ? Mathf.Max(0f, weaponData.AoeRadius)
+                    : 0f;
+        }
+
+        private static float GetSignedSizeDelta(WeaponData weaponData,
+            in ProjectileData projectileData)
+        {
+            return Mathf.Abs(projectileData.SignedSizeDelta) > Mathf.Epsilon
+                ? projectileData.SignedSizeDelta
+                : weaponData.PlayerSizeDelta;
         }
 
         private static void DrawGizmoAtPosition(Vector3 position)

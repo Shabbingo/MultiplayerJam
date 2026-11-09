@@ -23,6 +23,15 @@ namespace Unity.MP_FPS
         public uint SpawnTick;
         public uint WeaponId;
         public float3 TargetPosition;
+        public float SignedSizeDelta;
+        public byte IsHoming;
+        public byte TracksPlayers;
+        public float HomingTurnSpeed;
+        public byte HasExplosion;
+        public float ExplosionRadius;
+        public byte AppliesSlow;
+        public float SlowPercent;
+        public float SlowDuration;
     }
 
     struct VfxSpawnData
@@ -58,9 +67,9 @@ namespace Unity.MP_FPS
         private readonly Dictionary<int, HitscanBloomState> m_HitscanBloomByPlayer = new();
         private readonly List<int> m_HitscanBloomPlayersScratch = new();
         private readonly Dictionary<int, float> m_ReflectActiveTimers = new();
-        private readonly Dictionary<int, float> m_ReflectCooldownTimers = new();
         private readonly List<int> m_ReflectPlayersScratch = new();
         private readonly Dictionary<int, Entity> m_PlayerEntitiesByNetworkId = new();
+        private readonly HashSet<Entity> m_RuntimeAreaHitEntities = new();
 
         private struct HitscanBloomState
         {
@@ -187,9 +196,9 @@ namespace Unity.MP_FPS
             m_HitscanBloomByPlayer.Clear();
             m_HitscanBloomPlayersScratch.Clear();
             m_ReflectActiveTimers.Clear();
-            m_ReflectCooldownTimers.Clear();
             m_ReflectPlayersScratch.Clear();
             m_PlayerEntitiesByNetworkId.Clear();
+            m_RuntimeAreaHitEntities.Clear();
 
             var query = GetEntityQuery(typeof(PlayerControllerLink));
             foreach (var entity in query.ToEntityArray(Allocator.Temp))
@@ -215,7 +224,7 @@ namespace Unity.MP_FPS
             uint serverTick = networkTime.ServerTick.TickIndexForValidTick;
             UpdateForcedFullSizeEffects(deltaTime);
             UpdateHitscanBloom(deltaTime);
-            UpdateReflectTimers(deltaTime);
+            UpdateReflectTimerDictionary(m_ReflectActiveTimers, deltaTime);
 
             s_PlayerMovementActive = true;
             s_PlayerMovementTick = serverTick;
@@ -352,6 +361,8 @@ namespace Unity.MP_FPS
                 m_PlayerEntitiesByNetworkId[owner.ValueRO.NetworkId] = entity;
             }
 
+            UpdateReflectChargeTimers(deltaTime);
+
             // Resolve every shield press before processing any player's attack this
             // tick, so protection never depends on ECS entity iteration order.
             foreach (var (predictedPlayer, inputLookup, entity) in
@@ -378,8 +389,9 @@ namespace Unity.MP_FPS
             var projectileSpawnList = new NativeList<ProjectileSpawnData>(Allocator.Temp);
             var vfxSpawnList = new NativeList<VfxSpawnData>(Allocator.Temp);
 
-            foreach (var (predictedPlayer, owner) in
-                     SystemAPI.Query<RefRW<PredictedPlayerGhost>, RefRO<GhostOwner>>()
+            foreach (var (predictedPlayer, owner, modifiers) in
+                     SystemAPI.Query<RefRW<PredictedPlayerGhost>, RefRO<GhostOwner>,
+                         RefRO<Cards.PlayerModifierStacks>>()
                          .WithAll<Simulate>())
             {
                 predictedPlayer.ValueRW.ReflectShieldTimeRemaining =
@@ -387,12 +399,6 @@ namespace Unity.MP_FPS
                         owner.ValueRO.NetworkId, out float shieldTimeRemaining)
                         ? shieldTimeRemaining
                         : 0f;
-                predictedPlayer.ValueRW.ReflectCooldownTimeRemaining =
-                    m_ReflectCooldownTimers.TryGetValue(
-                        owner.ValueRO.NetworkId, out float cooldownTimeRemaining)
-                        ? cooldownTimeRemaining
-                        : 0f;
-
                 if (predictedPlayer.ValueRO.WeaponCooldown < float.MaxValue)
                 {
                     predictedPlayer.ValueRW.WeaponCooldown += deltaTime;
@@ -410,10 +416,12 @@ namespace Unity.MP_FPS
                     predictedPlayer.ValueRW.SecondaryReloadTimer -= deltaTime;
                     if (predictedPlayer.ValueRO.SecondaryReloadTimer <= 0f)
                     {
-                        var secondaryWeapon = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
-                            WeaponManager.SecondaryWeaponId);
+                        var secondaryWeapon = WeaponManager.Instance.ResolveRuntimeProfile(
+                            WeaponManager.SecondaryWeaponId, in modifiers.ValueRO);
                         predictedPlayer.ValueRW.ControllerState.SecondaryWeaponAmmo =
-                            secondaryWeapon != null ? secondaryWeapon.MagazineSize : 0;
+                            secondaryWeapon.SourceProfile != null
+                                ? secondaryWeapon.MagazineSize
+                                : 0;
                         predictedPlayer.ValueRW.SecondaryReloadTimer = 0f;
                         predictedPlayer.ValueRW.SecondaryIsReloading = false;
                     }
@@ -425,20 +433,22 @@ namespace Unity.MP_FPS
                     if (predictedPlayer.ValueRO.ReloadTimer <= 0f)
                     {
                         predictedPlayer.ValueRW.ControllerState.IsReloadingState = false;
-                        var weaponData =
-                            WeaponManager.Instance.WeaponRegistry.GetWeaponData(
-                                predictedPlayer.ValueRO.EquippedWeaponID);
-                        if (weaponData != null)
+                        var weaponProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+                            predictedPlayer.ValueRO.EquippedWeaponID,
+                            in modifiers.ValueRO);
+                        if (weaponProfile.SourceProfile != null)
                         {
-                            predictedPlayer.ValueRW.CurrentAmmo = weaponData.MagazineSize;
+                            predictedPlayer.ValueRW.CurrentAmmo = weaponProfile.MagazineSize;
                         }
                     }
                 }
             }
 
-            foreach (var (predictedPlayer, inputLookup,
+            foreach (var (predictedPlayer, inputLookup, modifiers,
                          entity)
-                     in SystemAPI.Query<RefRW<PredictedPlayerGhost>, RefRO<PlayerClientCommandInputLookup>>()
+                     in SystemAPI.Query<RefRW<PredictedPlayerGhost>,
+                             RefRO<PlayerClientCommandInputLookup>,
+                             RefRO<Cards.PlayerModifierStacks>>()
                          .WithEntityAccess()
                          .WithAll<Simulate, GhostGameObjectLink>())
             {
@@ -469,20 +479,21 @@ namespace Unity.MP_FPS
 
                     bool growthInputRequested = commandInput.PlayerInput.GrowShot ||
                                                 commandInput.PlayerInput.TossGrenade;
-                    var secondaryWeaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
-                        WeaponManager.SecondaryWeaponId);
+                    var secondaryWeaponProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+                        WeaponManager.SecondaryWeaponId, in modifiers.ValueRO);
+                    var secondaryWeaponData = secondaryWeaponProfile.SourceProfile;
                     if (growthInputRequested &&
                         !predictedPlayer.ValueRO.GrowShotPending &&
                         !predictedPlayer.ValueRO.SecondaryIsReloading &&
                         predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo > 0 &&
                         secondaryWeaponData != null &&
                         predictedPlayer.ValueRO.SecondaryWeaponCooldown >=
-                        Mathf.Max(0f, secondaryWeaponData.CooldownInMs -
-                                      secondaryWeaponData.ProjectileReleaseDelay))
+                            Mathf.Max(0f, secondaryWeaponProfile.FireInterval -
+                                      secondaryWeaponProfile.ProjectileReleaseDelay))
                     {
                         predictedPlayer.ValueRW.GrowShotPending = true;
                         predictedPlayer.ValueRW.GrowShotReleaseTimer =
-                            secondaryWeaponData.ProjectileReleaseDelay;
+                            secondaryWeaponProfile.ProjectileReleaseDelay;
                         predictedPlayer.ValueRW.LastGrenadeShotTick = serverTick;
                     }
 
@@ -493,7 +504,8 @@ namespace Unity.MP_FPS
                         secondaryWeaponData != null)
                     {
                         predictedPlayer.ValueRW.SecondaryIsReloading = true;
-                        predictedPlayer.ValueRW.SecondaryReloadTimer = secondaryWeaponData.ReloadTime;
+                        predictedPlayer.ValueRW.SecondaryReloadTimer =
+                            secondaryWeaponProfile.ReloadTime;
                         predictedPlayer.ValueRW.LastReloadTick = serverTick;
                     }
 
@@ -526,8 +538,9 @@ namespace Unity.MP_FPS
                             abilityWeaponId,
                             out weaponBeforeAbility);
 
-                    var weaponData =
-                        WeaponManager.Instance.WeaponRegistry.GetWeaponData(predictedPlayer.ValueRO.EquippedWeaponID);
+                    var runtimeProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+                        predictedPlayer.ValueRO.EquippedWeaponID, in modifiers.ValueRO);
+                    var weaponData = runtimeProfile.SourceProfile;
                     if (weaponData != null)
                     {
                         bool wantsToReload = commandInput.PlayerInput.Reload;
@@ -536,10 +549,10 @@ namespace Unity.MP_FPS
 
                         if ((wantsToReload || mustReload) &&
                             !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
-                            predictedPlayer.ValueRO.CurrentAmmo < weaponData.MagazineSize)
+                            predictedPlayer.ValueRO.CurrentAmmo < runtimeProfile.MagazineSize)
                         {
                             predictedPlayer.ValueRW.ControllerState.IsReloadingState = true;
-                            predictedPlayer.ValueRW.ReloadTimer = weaponData.ReloadTime;
+                            predictedPlayer.ValueRW.ReloadTimer = runtimeProfile.ReloadTime;
                             predictedPlayer.ValueRW.LastReloadTick = serverTick;
                         }
 
@@ -547,7 +560,7 @@ namespace Unity.MP_FPS
                             !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
                             predictedPlayer.ValueRO.CurrentAmmo > 0 &&
                             (useGrowthProjectile ||
-                             predictedPlayer.ValueRO.WeaponCooldown >= weaponData.CooldownInMs))
+                             predictedPlayer.ValueRO.WeaponCooldown >= runtimeProfile.FireInterval))
                         {
                             predictedPlayer.ValueRW.WeaponCooldown = 0f;
                             predictedPlayer.ValueRW.CurrentAmmo--;
@@ -583,12 +596,25 @@ namespace Unity.MP_FPS
                                     predictedPlayer.ValueRO.EquippedWeaponID);
                             }
 
-                            switch (weaponData.Type)
+                            int pelletCount = Mathf.Max(1, runtimeProfile.PelletCount);
+                            uint shotTick = commandInput.Tick.TickIndexForValidTick;
+                            uint sourceWeaponId = WeaponManager.Instance.GetWeaponId(
+                                runtimeProfile.SourceProfile,
+                                predictedPlayer.ValueRO.EquippedWeaponID);
+                            for (int pelletIndex = 0; pelletIndex < pelletCount; pelletIndex++)
                             {
-                                case WeaponType.Hitscan:
+                                Vector3 shotDirection = pelletCount > 1
+                                    ? Cards.WeaponModifierResolver.ApplyScatterDirection(
+                                        aimDirection, runtimeProfile.ScatterHalfAngleDegrees,
+                                        shotTick, shooterNetworkId, pelletIndex)
+                                    : (Vector3)aimDirection;
+
+                                if (weaponData.Type == WeaponType.Hitscan)
                                 {
-                                    Vector3 hitscanDirection = ApplyHitscanBloom(
-                                        aimDirection, weaponData, shooterNetworkId, serverTick);
+                                    Vector3 hitscanDirection = pelletCount > 1
+                                        ? shotDirection
+                                        : ApplyHitscanBloom(shotDirection, weaponData,
+                                            shooterNetworkId, serverTick);
                                     uint rewindTick = commandInput.ClientInterpolationTick.IsValid
                                         ? commandInput.ClientInterpolationTick.TickIndexForValidTick
                                         : serverTick;
@@ -596,20 +622,38 @@ namespace Unity.MP_FPS
                                             weaponData.HitscanRange, shooterNetworkId, rewindTick,
                                             out var hit))
                                     {
-                                        if (hit.PlayerEntity != Entity.Null &&
+                                        if (runtimeProfile.HasExplosion)
+                                        {
+                                            ApplyRuntimeAreaDamage(hit.Point,
+                                                runtimeProfile.ExplosionRadius,
+                                                shooterNetworkId,
+                                                runtimeProfile.SignedSizeDelta,
+                                                weaponData.ResizeEffect,
+                                                weaponData.ResizeEffectDuration,
+                                                runtimeProfile.SlowPercent,
+                                                runtimeProfile.SlowDuration,
+                                                serverTick,
+                                                playerGhostLookup,
+                                                ghostOwnerLookup);
+                                        }
+                                        else if (hit.PlayerEntity != Entity.Null &&
                                             playerGhostLookup.HasComponent(hit.PlayerEntity))
                                         {
                                             var targetNetworkId = ghostOwnerLookup[hit.PlayerEntity].NetworkId;
 
-                                            if (shooterNetworkId == targetNetworkId)
+                                            if (shooterNetworkId != targetNetworkId)
                                             {
-                                                //skip hitting self
-                                                continue;
+                                                ApplyIncomingWeaponDamage(hit.PlayerEntity,
+                                                    shooterNetworkId,
+                                                    runtimeProfile.SignedSizeDelta,
+                                                    weaponData.ResizeEffect,
+                                                    weaponData.ResizeEffectDuration,
+                                                    runtimeProfile.SlowPercent,
+                                                    runtimeProfile.SlowDuration,
+                                                    serverTick,
+                                                    playerGhostLookup,
+                                                    ghostOwnerLookup);
                                             }
-
-                                            ApplyIncomingWeaponDamage(hit.PlayerEntity,
-                                                shooterNetworkId, weaponData, serverTick,
-                                                playerGhostLookup, ghostOwnerLookup);
                                         }
 
                                         if (weaponData.ProjectileHitVfxPrefab != null)
@@ -624,9 +668,8 @@ namespace Unity.MP_FPS
                                         }
                                     }
 
-                                    break;
                                 }
-                                case WeaponType.Projectile:
+                                else if (weaponData.Type == WeaponType.Projectile)
                                 {
                                     var prefabEntity =
                                         GhostSpawner.FindGhostPrefabEntity(weaponData.ProjectileGhostPrefab.GhostGuid);
@@ -635,10 +678,10 @@ namespace Unity.MP_FPS
                                         // Determine target point
                                         Vector3 targetPoint;
                                         // Use calculated eyePosition and aimDirection for the raycast
-                                        float targetRange = weaponData.IsGuidedProjectile
+                                        float targetRange = runtimeProfile.IsHoming
                                             ? weaponData.GuidedTargetRange
                                             : 1000f;
-                                        if (UnityEngine.Physics.Raycast(eyePosition, aimDirection,
+                                        if (UnityEngine.Physics.Raycast(eyePosition, shotDirection,
                                                 out RaycastHit aimHit, targetRange,
                                                 s_ShootableLayerMask))
                                         {
@@ -646,12 +689,12 @@ namespace Unity.MP_FPS
                                         }
                                         else
                                         {
-                                            targetPoint = eyePosition + aimDirection * targetRange;
+                                            targetPoint = eyePosition + (float3)shotDirection * targetRange;
                                         }
 
                                         // Use calculated shotOriginPosition for direction calculation
                                         Vector3 directionToTarget = weaponData.IsLobbedProjectile
-                                            ? (Vector3)aimDirection
+                                            ? shotDirection
                                             : (targetPoint - (Vector3)shotOriginPosition).normalized;
                                         Quaternion spawnRotation = Quaternion.LookRotation(directionToTarget);
 
@@ -662,8 +705,17 @@ namespace Unity.MP_FPS
                                             Rotation = spawnRotation,
                                             OwnerNetworkId = ghostOwnerLookup[entity].NetworkId,
                                             SpawnTick = commandInput.Tick.TickIndexForValidTick,
-                                            WeaponId = predictedPlayer.ValueRO.EquippedWeaponID,
-                                            TargetPosition = targetPoint
+                                            WeaponId = sourceWeaponId,
+                                            TargetPosition = targetPoint,
+                                            SignedSizeDelta = runtimeProfile.SignedSizeDelta,
+                                            IsHoming = runtimeProfile.IsHoming ? (byte)1 : (byte)0,
+                                            TracksPlayers = runtimeProfile.TracksPlayers ? (byte)1 : (byte)0,
+                                            HomingTurnSpeed = runtimeProfile.HomingTurnSpeed,
+                                            HasExplosion = runtimeProfile.HasExplosion ? (byte)1 : (byte)0,
+                                            ExplosionRadius = runtimeProfile.ExplosionRadius,
+                                            AppliesSlow = runtimeProfile.AppliesSlow ? (byte)1 : (byte)0,
+                                            SlowPercent = runtimeProfile.SlowPercent,
+                                            SlowDuration = runtimeProfile.SlowDuration
                                         });
                                     }
                                     else
@@ -672,7 +724,6 @@ namespace Unity.MP_FPS
                                             $"[Server] Projectile ghost for weapon '{weaponData.WeaponName}' is not registered in GhostPrefabsAuthoring.");
                                     }
 
-                                    break;
                                 }
                             }
                         }
@@ -702,7 +753,16 @@ namespace Unity.MP_FPS
                             OwnerNetworkId = spawnData.OwnerNetworkId,
                             SpawnTick = spawnData.SpawnTick,
                             WeaponID = spawnData.WeaponId,
-                            TargetPosition = spawnData.TargetPosition
+                            TargetPosition = spawnData.TargetPosition,
+                            SignedSizeDelta = spawnData.SignedSizeDelta,
+                            IsHoming = spawnData.IsHoming,
+                            TracksPlayers = spawnData.TracksPlayers,
+                            HomingTurnSpeed = spawnData.HomingTurnSpeed,
+                            HasExplosion = spawnData.HasExplosion,
+                            ExplosionRadius = spawnData.ExplosionRadius,
+                            AppliesSlow = spawnData.AppliesSlow,
+                            SlowPercent = spawnData.SlowPercent,
+                            SlowDuration = spawnData.SlowDuration
                         });
                     });
             }
@@ -718,16 +778,20 @@ namespace Unity.MP_FPS
 
             predictedClientInputComponentLookup.Update(this);
 
-            foreach (var (predictedPlayer, inputLookup, controllerConsts, entity)
+            foreach (var (predictedPlayer, inputLookup, controllerConsts, modifiers, entity)
                      in SystemAPI
                          .Query<RefRW<PredictedPlayerGhost>, RefRO<PlayerClientCommandInputLookup>,
-                             RefRO<PredictedPlayerControllerConsts>>()
+                             RefRO<PredictedPlayerControllerConsts>, RefRO<Cards.PlayerModifierStacks>>()
                          .WithAll<Simulate, PlayerControllerLink>()
                          .WithEntityAccess())
             {
                 var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+                predictedPlayer.ValueRW.MoveSlowTimeRemaining = Mathf.Max(0f,
+                    predictedPlayer.ValueRO.MoveSlowTimeRemaining - deltaTime);
+                if (predictedPlayer.ValueRW.MoveSlowTimeRemaining <= 0f)
+                    predictedPlayer.ValueRW.MoveSlowPercent = 0f;
                 controllerLink.Controller.UpdateSelfResizeAmmo(
-                    ref predictedPlayer.ValueRW, deltaTime);
+                    ref predictedPlayer.ValueRW, deltaTime, in modifiers.ValueRO);
                 var predictedClient = predictedClientInputComponentLookup[inputLookup.ValueRO.ClientCommandInputEntity];
                 if (predictedClient.InputCount > 0)
                 {
@@ -738,7 +802,8 @@ namespace Unity.MP_FPS
                         if (commandInput.TryGetPlayerMovementInput(predictedPlayer.ValueRO.InputIndex, out var input))
                         {
                             controllerLink.Controller.ProcessSelfResize(
-                                ref predictedPlayer.ValueRW, input, movementDt);
+                                ref predictedPlayer.ValueRW, input, movementDt,
+                                in modifiers.ValueRO);
                             controllerLink.Controller.GetSizeMovementMultipliers(
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,
@@ -1113,7 +1178,8 @@ namespace Unity.MP_FPS
             }
 
             int playerNetworkId = ghostOwnerLookup[playerEntity].NetworkId;
-            if (m_ReflectCooldownTimers.ContainsKey(playerNetworkId))
+            if (m_ReflectActiveTimers.ContainsKey(playerNetworkId) ||
+                predictedPlayer.ReflectCharges <= 0)
             {
                 return;
             }
@@ -1131,16 +1197,57 @@ namespace Unity.MP_FPS
             }
 
             m_ReflectActiveTimers[playerNetworkId] = reflectDuration;
-            m_ReflectCooldownTimers[playerNetworkId] = reflectCooldown;
+            predictedPlayer.ReflectCharges = Mathf.Max(0,
+                predictedPlayer.ReflectCharges - 1);
+            if (predictedPlayer.ReflectCharges < predictedPlayer.MaxReflectCharges &&
+                predictedPlayer.ReflectCooldownTimeRemaining <= 0f)
+            {
+                predictedPlayer.ReflectCooldownTimeRemaining = reflectCooldown;
+            }
             predictedPlayer.ReflectShieldTimeRemaining = reflectDuration;
-            predictedPlayer.ReflectCooldownTimeRemaining = reflectCooldown;
             predictedPlayer.ReflectCooldownDuration = reflectCooldown;
         }
 
-        private void UpdateReflectTimers(float deltaTime)
+        private void UpdateReflectChargeTimers(float deltaTime)
         {
-            UpdateReflectTimerDictionary(m_ReflectActiveTimers, deltaTime);
-            UpdateReflectTimerDictionary(m_ReflectCooldownTimers, deltaTime);
+            foreach (var (player, modifiers) in
+                     SystemAPI.Query<RefRW<PredictedPlayerGhost>,
+                         RefRO<Cards.PlayerModifierStacks>>().WithAll<Simulate>())
+            {
+                int desiredMaximum = 1 + modifiers.ValueRO.ExtraReflectCharges;
+                if (player.ValueRO.MaxReflectCharges <= 0)
+                {
+                    player.ValueRW.MaxReflectCharges = desiredMaximum;
+                    player.ValueRW.ReflectCharges = desiredMaximum;
+                }
+
+                int maximum = Mathf.Max(1, desiredMaximum);
+                int charges = Mathf.Clamp(player.ValueRO.ReflectCharges, 0, maximum);
+                player.ValueRW.MaxReflectCharges = maximum;
+                if (charges >= maximum)
+                {
+                    player.ValueRW.ReflectCharges = maximum;
+                    player.ValueRW.ReflectCooldownTimeRemaining = 0f;
+                    continue;
+                }
+
+                float duration = Mathf.Max(0.01f,
+                    player.ValueRO.ReflectCooldownDuration > 0f
+                        ? player.ValueRO.ReflectCooldownDuration
+                        : 15f);
+                float remaining = player.ValueRO.ReflectCooldownTimeRemaining - deltaTime;
+                while (remaining <= 0f && charges < maximum)
+                {
+                    charges++;
+                    remaining += duration;
+                }
+
+                player.ValueRW.ReflectCharges = charges;
+                player.ValueRW.ReflectCooldownTimeRemaining =
+                    charges >= maximum
+                        ? 0f
+                        : remaining;
+            }
         }
 
         private void UpdateReflectTimerDictionary(Dictionary<int, float> timers,
@@ -1172,6 +1279,26 @@ namespace Unity.MP_FPS
         /// </summary>
         public bool ApplyIncomingWeaponDamage(Entity intendedTargetEntity,
             int attackerNetworkId, WeaponData weaponData, uint hitTick,
+            ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
+            ComponentLookup<GhostOwner> ownerLookup)
+        {
+            return weaponData != null && ApplyIncomingWeaponDamage(
+                intendedTargetEntity,
+                attackerNetworkId,
+                weaponData.PlayerSizeDelta,
+                weaponData.ResizeEffect,
+                weaponData.ResizeEffectDuration,
+                0f,
+                0f,
+                hitTick,
+                playerGhostLookup,
+                ownerLookup);
+        }
+
+        public bool ApplyIncomingWeaponDamage(Entity intendedTargetEntity,
+            int attackerNetworkId, float signedSizeDelta,
+            PlayerResizeEffect resizeEffect, float resizeEffectDuration,
+            float slowPercent, float slowDuration, uint hitTick,
             ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
             ComponentLookup<GhostOwner> ownerLookup)
         {
@@ -1214,13 +1341,23 @@ namespace Unity.MP_FPS
 
             int damagedPlayerNetworkId = ownerLookup[damageTargetEntity].NetworkId;
             float healthBeforeDamage = damagedPlayer.ValueRO.CurrentHealth;
-            float appliedDelta = weaponData.PlayerSizeDelta;
+            float appliedDelta = signedSizeDelta;
             damagedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
                 damagedPlayer.ValueRO.CurrentHealth + appliedDelta,
                 0f,
                 damagedPlayer.ValueRO.MaxHealth);
-            ApplyWeaponResizeEffect(damageTargetEntity, weaponData,
-                ref damagedPlayer.ValueRW);
+            ApplyWeaponResizeEffect(damageTargetEntity, resizeEffect,
+                resizeEffectDuration, ref damagedPlayer.ValueRW);
+            if (slowPercent > 0f && slowDuration > 0f &&
+                damagedPlayer.ValueRO.CurrentHealth > 0f)
+            {
+                damagedPlayer.ValueRW.MoveSlowPercent = Mathf.Max(
+                    damagedPlayer.ValueRO.MoveSlowPercent,
+                    Mathf.Clamp01(slowPercent));
+                damagedPlayer.ValueRW.MoveSlowTimeRemaining = Mathf.Max(
+                    damagedPlayer.ValueRO.MoveSlowTimeRemaining,
+                    slowDuration);
+            }
             damagedPlayer.ValueRW.ControllerState.IsHit = true;
             damagedPlayer.ValueRW.LastDamageAmount = Mathf.Abs(appliedDelta);
             damagedPlayer.ValueRW.LastHitTick = hitTick;
@@ -1249,6 +1386,44 @@ namespace Unity.MP_FPS
             return true;
         }
 
+        public void ApplyRuntimeAreaDamage(Vector3 impactPosition, float radius,
+            int attackerNetworkId, float signedSizeDelta,
+            PlayerResizeEffect resizeEffect, float resizeEffectDuration,
+            float slowPercent, float slowDuration, uint hitTick,
+            ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
+            ComponentLookup<GhostOwner> ownerLookup)
+        {
+            if (radius <= 0f) return;
+            var colliders = UnityEngine.Physics.OverlapSphere(
+                impactPosition,
+                radius,
+                LayerMask.GetMask("ServerPlayer"),
+                QueryTriggerInteraction.Ignore);
+            m_RuntimeAreaHitEntities.Clear();
+            foreach (var collider in colliders)
+            {
+                if (!GhostGameObject.TryFindGhostGameObject(collider.gameObject,
+                        out var hitGhost) ||
+                    !m_RuntimeAreaHitEntities.Add(hitGhost.LinkedEntity) ||
+                    !ownerLookup.HasComponent(hitGhost.LinkedEntity) ||
+                    ownerLookup[hitGhost.LinkedEntity].NetworkId == attackerNetworkId)
+                {
+                    continue;
+                }
+
+                ApplyIncomingWeaponDamage(hitGhost.LinkedEntity,
+                    attackerNetworkId,
+                    signedSizeDelta,
+                    resizeEffect,
+                    resizeEffectDuration,
+                    slowPercent,
+                    slowDuration,
+                    hitTick,
+                    playerGhostLookup,
+                    ownerLookup);
+            }
+        }
+
         public bool TryGetGuidedAimPoint(int ownerNetworkId, float range, out Vector3 targetPoint)
         {
             if (!m_GuidedAimRays.TryGetValue(ownerNetworkId, out var aimRay))
@@ -1271,10 +1446,49 @@ namespace Unity.MP_FPS
             return true;
         }
 
+        public bool TryGetNearestOpponentAimPoint(int ownerNetworkId,
+            Vector3 projectilePosition, float range, out Vector3 targetPoint)
+        {
+            float bestDistanceSq = Mathf.Max(1f, range) * Mathf.Max(1f, range);
+            bool found = false;
+            targetPoint = default;
+            foreach (var pair in m_PlayerEntitiesByNetworkId)
+            {
+                if (pair.Key == ownerNetworkId ||
+                    !EntityManager.Exists(pair.Value) ||
+                    !EntityManager.HasComponent<LocalTransform>(pair.Value) ||
+                    !EntityManager.HasComponent<PredictedPlayerGhost>(pair.Value) ||
+                    EntityManager.GetComponentData<PredictedPlayerGhost>(pair.Value)
+                        .CurrentHealth <= 0f)
+                {
+                    continue;
+                }
+
+                Vector3 candidate = EntityManager.GetComponentData<LocalTransform>(pair.Value)
+                    .Position + new float3(0f, 1f, 0f);
+                float distanceSq = (candidate - projectilePosition).sqrMagnitude;
+                if (distanceSq >= bestDistanceSq) continue;
+                bestDistanceSq = distanceSq;
+                targetPoint = candidate;
+                found = true;
+            }
+
+            return found;
+        }
+
         public void ApplyWeaponResizeEffect(Entity targetEntity, WeaponData weaponData,
             ref PredictedPlayerGhost player)
         {
-            if (weaponData.ResizeEffect != PlayerResizeEffect.RestoreFullSize ||
+            if (weaponData == null) return;
+            ApplyWeaponResizeEffect(targetEntity, weaponData.ResizeEffect,
+                weaponData.ResizeEffectDuration, ref player);
+        }
+
+        private void ApplyWeaponResizeEffect(Entity targetEntity,
+            PlayerResizeEffect resizeEffect, float resizeEffectDuration,
+            ref PredictedPlayerGhost player)
+        {
+            if (resizeEffect != PlayerResizeEffect.RestoreFullSize ||
                 player.CurrentHealth <= 0f)
             {
                 return;
@@ -1287,7 +1501,8 @@ namespace Unity.MP_FPS
 
             player.ControllerState.IsManualShrinkActive = false;
             player.ControllerState.IsForcedFullSize = true;
-            m_ForcedFullSizeTimers[targetEntity] = Mathf.Max(0.1f, weaponData.ResizeEffectDuration);
+            m_ForcedFullSizeTimers[targetEntity] = Mathf.Max(0.1f,
+                resizeEffectDuration);
         }
 
         private bool TryHandleSelfGrowthInObstruction(Entity playerEntity,

@@ -86,7 +86,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
         s_PlayerMovementTick = tick;
 
-        foreach (var predictedPlayer in SystemAPI.Query<RefRW<PredictedPlayerGhost>>().WithAll<Simulate>()) 
+        foreach (var (predictedPlayer, modifiers) in
+                 SystemAPI.Query<RefRW<PredictedPlayerGhost>,
+                     RefRO<Unity.MP_FPS.Cards.PlayerModifierStacks>>().WithAll<Simulate>())
         {
             if (predictedPlayer.ValueRO.WeaponCooldown < float.MaxValue)
             {
@@ -104,10 +106,12 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                 predictedPlayer.ValueRW.SecondaryReloadTimer -= dt;
                 if (predictedPlayer.ValueRO.SecondaryReloadTimer <= 0f)
                 {
-                    var secondaryWeapon = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
-                        WeaponManager.SecondaryWeaponId);
+                    var secondaryWeapon = WeaponManager.Instance.ResolveRuntimeProfile(
+                        WeaponManager.SecondaryWeaponId, in modifiers.ValueRO);
                     predictedPlayer.ValueRW.ControllerState.SecondaryWeaponAmmo =
-                        secondaryWeapon != null ? secondaryWeapon.MagazineSize : 0;
+                        secondaryWeapon.SourceProfile != null
+                            ? secondaryWeapon.MagazineSize
+                            : 0;
                     predictedPlayer.ValueRW.SecondaryReloadTimer = 0f;
                     predictedPlayer.ValueRW.SecondaryIsReloading = false;
                 }
@@ -119,10 +123,11 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                 if (predictedPlayer.ValueRO.ReloadTimer <= 0f)
                 {
                     predictedPlayer.ValueRW.ControllerState.IsReloadingState = false;
-                    var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(predictedPlayer.ValueRO.EquippedWeaponID);
-                    if (weaponData != null)
+                    var weaponProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+                        predictedPlayer.ValueRO.EquippedWeaponID, in modifiers.ValueRO);
+                    if (weaponProfile.SourceProfile != null)
                     {
-                        predictedPlayer.ValueRW.CurrentAmmo = weaponData.MagazineSize;
+                        predictedPlayer.ValueRW.CurrentAmmo = weaponProfile.MagazineSize;
                     }
                 }
             }
@@ -199,16 +204,21 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
         var allowTickBatching = AllowPredictedTickBatching();
 
-        foreach(var (predictedPlayer, 
-                    controllerConsts, entity) 
+        foreach(var (predictedPlayer,
+                    controllerConsts, modifiers, entity)
                 in SystemAPI.Query<RefRW<PredictedPlayerGhost>,
-                    RefRO<PredictedPlayerControllerConsts>>()
+                    RefRO<PredictedPlayerControllerConsts>,
+                    RefRO<Unity.MP_FPS.Cards.PlayerModifierStacks>>()
                     .WithEntityAccess()
                     .WithAll<Simulate, PlayerControllerLink>())
         {
             var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+            predictedPlayer.ValueRW.MoveSlowTimeRemaining = Mathf.Max(0f,
+                predictedPlayer.ValueRO.MoveSlowTimeRemaining - dt);
+            if (predictedPlayer.ValueRW.MoveSlowTimeRemaining <= 0f)
+                predictedPlayer.ValueRW.MoveSlowPercent = 0f;
             controllerLink.Controller.UpdateSelfResizeAmmo(
-                ref predictedPlayer.ValueRW, dt);
+                ref predictedPlayer.ValueRW, dt, in modifiers.ValueRO);
             // GameDebug.BurstLog("[PlayerPredictionSystem] PredictedPlayerGhost is Simulate");
 
             predictedPlayer.ValueRW.RequestApplyMovement = false;
@@ -226,20 +236,21 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         predictedPlayer.ValueRW.LocalLookYawPitchDegrees = input.LookYawPitchDegrees;
 
                         bool growthInputRequested = input.GrowShot || input.TossGrenade;
-                        var secondaryWeaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
-                            WeaponManager.SecondaryWeaponId);
+                        var secondaryWeaponProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+                            WeaponManager.SecondaryWeaponId, in modifiers.ValueRO);
+                        var secondaryWeaponData = secondaryWeaponProfile.SourceProfile;
                         if (growthInputRequested &&
                             !predictedPlayer.ValueRO.GrowShotPending &&
                             !predictedPlayer.ValueRO.SecondaryIsReloading &&
                             predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo > 0 &&
                             secondaryWeaponData != null &&
                             predictedPlayer.ValueRO.SecondaryWeaponCooldown >=
-                            Mathf.Max(0f, secondaryWeaponData.CooldownInMs -
-                                           secondaryWeaponData.ProjectileReleaseDelay))
+                            Mathf.Max(0f, secondaryWeaponProfile.FireInterval -
+                                           secondaryWeaponProfile.ProjectileReleaseDelay))
                         {
                             predictedPlayer.ValueRW.GrowShotPending = true;
                             predictedPlayer.ValueRW.GrowShotReleaseTimer =
-                                secondaryWeaponData.ProjectileReleaseDelay;
+                                secondaryWeaponProfile.ProjectileReleaseDelay;
                             predictedPlayer.ValueRW.LastGrenadeShotTick =
                                 commandInput.Tick.TickIndexForValidTick;
                         }
@@ -251,7 +262,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             secondaryWeaponData != null)
                         {
                             predictedPlayer.ValueRW.SecondaryIsReloading = true;
-                            predictedPlayer.ValueRW.SecondaryReloadTimer = secondaryWeaponData.ReloadTime;
+                            predictedPlayer.ValueRW.SecondaryReloadTimer =
+                                secondaryWeaponProfile.ReloadTime;
                             predictedPlayer.ValueRW.LastReloadTick =
                                 commandInput.Tick.TickIndexForValidTick;
                         }
@@ -285,7 +297,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 abilityWeaponId,
                                 out weaponBeforeAbility);
 
-                        var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(predictedPlayer.ValueRO.EquippedWeaponID);
+                        var runtimeProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+                            predictedPlayer.ValueRO.EquippedWeaponID, in modifiers.ValueRO);
+                        var weaponData = runtimeProfile.SourceProfile;
                         if (weaponData != null)
                         {
                             bool wantsToReload = input.Reload;
@@ -294,17 +308,17 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
                             if ((wantsToReload || mustReload) &&
                                 !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
-                                predictedPlayer.ValueRO.CurrentAmmo < weaponData.MagazineSize)
+                                predictedPlayer.ValueRO.CurrentAmmo < runtimeProfile.MagazineSize)
                             {
                                 predictedPlayer.ValueRW.ControllerState.IsReloadingState = true;
-                                predictedPlayer.ValueRW.ReloadTimer = weaponData.ReloadTime;
+                                predictedPlayer.ValueRW.ReloadTimer = runtimeProfile.ReloadTime;
                                 predictedPlayer.ValueRW.LastReloadTick = commandInput.Tick.TickIndexForValidTick;
                             }
                             
                             if (wantsToShoot && !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
                                 predictedPlayer.ValueRO.CurrentAmmo > 0 &&
                                 (useGrowthProjectile ||
-                                 predictedPlayer.ValueRO.WeaponCooldown >= weaponData.CooldownInMs))
+                                 predictedPlayer.ValueRO.WeaponCooldown >= runtimeProfile.FireInterval))
                             {
                                 predictedPlayer.ValueRW.WeaponCooldown = 0f;
                                 predictedPlayer.ValueRW.CurrentAmmo--;
@@ -323,6 +337,18 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
                                 float3 eyePosition = playerGhost.CameraTarget.position;
                                 var aimDirection = math.mul(aimRotation, new float3(0, 0, 1));
+                                uint shotTick = commandInput.Tick.TickIndexForValidTick;
+                                int localNetworkId = EntityManager.HasComponent<GhostOwner>(entity)
+                                    ? EntityManager.GetComponentData<GhostOwner>(entity).NetworkId
+                                    : 0;
+                                Vector3 cosmeticDirection = runtimeProfile.PelletCount > 1
+                                    ? Unity.MP_FPS.Cards.WeaponModifierResolver.ApplyScatterDirection(
+                                        aimDirection,
+                                        runtimeProfile.ScatterHalfAngleDegrees,
+                                        shotTick,
+                                        localNetworkId,
+                                        0)
+                                    : (Vector3)aimDirection;
                                 // Match the server's deterministic hand origin exactly so predicted
                                 // right-hand projectiles reconcile without a sideways correction.
                                 float3 handShotOffset = playerGhost.GetScaledHandShotOffset(
@@ -342,44 +368,51 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
                                 if (weaponData.Type == WeaponType.Hitscan)
                                 {
-                                    if (Physics.Raycast(eyePosition, aimDirection, out RaycastHit cosmeticHit,
+                                    if (Physics.Raycast(eyePosition, cosmeticDirection, out RaycastHit cosmeticHit,
                                         weaponData.HitscanRange, s_HitscanLayerMask))
                                     {
                                         Debug.DrawLine(shotOriginPosition, cosmeticHit.point, Color.yellow, 0.3f);
                                     }
                                     else
                                     {
-                                        Vector3 endPoint = eyePosition + aimDirection * weaponData.HitscanRange;
+                                        Vector3 endPoint = eyePosition +
+                                                           (float3)cosmeticDirection * weaponData.HitscanRange;
                                         Debug.DrawLine(shotOriginPosition, endPoint, Color.cyan, 0.3f);
                                     }
                                 }
                                 else if (weaponData.Type == WeaponType.Projectile)
                                 {
                                     Vector3 targetPoint;
-                                    float targetRange = weaponData.IsGuidedProjectile
+                                    float targetRange = runtimeProfile.IsHoming
                                         ? weaponData.GuidedTargetRange
                                         : 1000f;
-                                    if (Physics.Raycast(eyePosition, aimDirection, out RaycastHit aimHit,
+                                    if (Physics.Raycast(eyePosition, cosmeticDirection, out RaycastHit aimHit,
                                             targetRange, s_ProjectileTargetLayerMask))
                                     {
                                         targetPoint = aimHit.point;
                                     }
                                     else
                                     {
-                                        targetPoint = eyePosition + targetRange * aimDirection;
+                                        targetPoint = eyePosition + targetRange *
+                                            (float3)cosmeticDirection;
                                     }
 
                                     var directionToTarget = weaponData.IsLobbedProjectile
-                                        ? (Vector3)aimDirection
+                                        ? cosmeticDirection
                                         : (targetPoint - (Vector3)shotOriginPosition).normalized;
                                     var spawnRotation = Quaternion.LookRotation(directionToTarget);
 
+                                    uint sourceWeaponId = WeaponManager.Instance.GetWeaponId(
+                                        runtimeProfile.SourceProfile,
+                                        predictedPlayer.ValueRO.EquippedWeaponID);
                                     controllerLink.Controller.SpawnPredictedProjectile(
-                                        commandInput.Tick.TickIndexForValidTick,
-                                        predictedPlayer.ValueRO.EquippedWeaponID,
+                                        shotTick,
+                                        sourceWeaponId,
                                         shotOriginPosition,
                                         spawnRotation,
-                                        targetPoint);
+                                        targetPoint,
+                                        runtimeProfile.IsHoming,
+                                        runtimeProfile.HomingTurnSpeed);
                                 }
                             }
 
@@ -392,7 +425,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
                             FirstPersonController.ProcessInputs(ref predictedPlayer.ValueRW.ControllerState, input, accumulateDT);
                             controllerLink.Controller.ProcessSelfResize(
-                                ref predictedPlayer.ValueRW, input, accumulateDT);
+                                ref predictedPlayer.ValueRW, input, accumulateDT,
+                                in modifiers.ValueRO);
                             controllerLink.Controller.GetSizeMovementMultipliers(
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,

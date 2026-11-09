@@ -71,6 +71,10 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public float ReflectShieldTimeRemaining;
     [GhostField] public float ReflectCooldownTimeRemaining;
     [GhostField] public float ReflectCooldownDuration;
+    [GhostField] public int ReflectCharges;
+    [GhostField] public int MaxReflectCharges;
+    [GhostField] public float MoveSlowPercent;
+    [GhostField] public float MoveSlowTimeRemaining;
     [GhostField] public float3 RecoilVelocity;
     
     [GhostField] public uint EquippedWeaponID;

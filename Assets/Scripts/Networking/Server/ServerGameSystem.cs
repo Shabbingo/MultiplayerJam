@@ -216,14 +216,17 @@ namespace Unity.MP_FPS
             // Every player starts with the automatic rifle. Weapon selection is handled in-game.
             var weaponId = WeaponManager.PrimaryWeaponId;
             
-            var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(weaponId);
-            var magazineSize = weaponData != null ? weaponData.MagazineSize : 30; // Default to 30 if weapon not found
-            var secondaryWeaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
-                WeaponManager.SecondaryWeaponId);
+            var primaryProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+                weaponId, in modifiers);
+            var secondaryProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+                WeaponManager.SecondaryWeaponId, in modifiers);
+            int magazineSize = primaryProfile.SourceProfile != null
+                ? primaryProfile.MagazineSize
+                : 30;
             var initialControllerState = new FirstPersonController.ControllerState();
             initialControllerState.PrimaryWeaponAmmo = magazineSize;
-            initialControllerState.SecondaryWeaponAmmo = secondaryWeaponData != null
-                ? secondaryWeaponData.MagazineSize
+            initialControllerState.SecondaryWeaponAmmo = secondaryProfile.SourceProfile != null
+                ? secondaryProfile.MagazineSize
                 : 0;
 
             ecb.SetComponent(playerEntity, new GhostOwner { NetworkId = ownerNetworkId.Value });
@@ -238,9 +241,11 @@ namespace Unity.MP_FPS
                 ControllerState = initialControllerState,
                 EquippedWeaponID = weaponId,
                 CurrentAmmo = magazineSize,
-                SecondaryWeaponCooldown = secondaryWeaponData != null
-                    ? secondaryWeaponData.CooldownInMs
-                    : 0f
+                SecondaryWeaponCooldown = secondaryProfile.SourceProfile != null
+                    ? secondaryProfile.FireInterval
+                    : 0f,
+                MaxReflectCharges = 1 + modifiers.ExtraReflectCharges,
+                ReflectCharges = 1 + modifiers.ExtraReflectCharges
             });
             ecb.AddComponent(playerEntity, new PlayerCharacterInitialized());
             ecb.SetComponentEnabled<PlayerCharacterInitialized>(playerEntity, false);

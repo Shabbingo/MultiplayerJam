@@ -660,9 +660,10 @@ public class FirstPersonController : MonoBehaviour
     }
 
     public void ProcessSelfResize(ref PredictedPlayerGhost predictedPlayer,
-        in PlayerInput input, float deltaTime)
+        in PlayerInput input, float deltaTime,
+        in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers)
     {
-        InitializeSelfResizeAmmo(ref predictedPlayer);
+        InitializeSelfResizeAmmo(ref predictedPlayer, in modifiers);
 
         float chunkSize = Mathf.Max(1f, m_SelfResizeChunkSize);
         predictedPlayer.SelfResizeMaxCharge = chunkSize;
@@ -797,9 +798,10 @@ public class FirstPersonController : MonoBehaviour
             m_SelfResizeLensPulseCurve);
     }
 
-    public void UpdateSelfResizeAmmo(ref PredictedPlayerGhost predictedPlayer, float deltaTime)
+    public void UpdateSelfResizeAmmo(ref PredictedPlayerGhost predictedPlayer, float deltaTime,
+        in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers)
     {
-        InitializeSelfResizeAmmo(ref predictedPlayer);
+        InitializeSelfResizeAmmo(ref predictedPlayer, in modifiers);
         if (deltaTime <= 0f)
         {
             return;
@@ -819,15 +821,18 @@ public class FirstPersonController : MonoBehaviour
             deltaTime);
     }
 
-    private void InitializeSelfResizeAmmo(ref PredictedPlayerGhost predictedPlayer)
+    private void InitializeSelfResizeAmmo(ref PredictedPlayerGhost predictedPlayer,
+        in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers)
     {
         if (predictedPlayer.SelfResizeAmmoInitialized)
         {
             return;
         }
 
-        predictedPlayer.MaxSelfShrinkCharges = Mathf.Max(1, m_SelfShrinkUses);
-        predictedPlayer.MaxSelfGrowCharges = Mathf.Max(1, m_SelfGrowUses);
+        predictedPlayer.MaxSelfShrinkCharges = Mathf.Max(1,
+            m_SelfShrinkUses + modifiers.ExtraSelfShrinkCharges);
+        predictedPlayer.MaxSelfGrowCharges = Mathf.Max(1,
+            m_SelfGrowUses + modifiers.ExtraSelfGrowCharges);
         predictedPlayer.SelfShrinkCharges = predictedPlayer.MaxSelfShrinkCharges;
         predictedPlayer.SelfGrowCharges = predictedPlayer.MaxSelfGrowCharges;
         predictedPlayer.SelfShrinkRechargeTimer = 0f;
@@ -994,6 +999,10 @@ public class FirstPersonController : MonoBehaviour
             : 1f;
 
         speedMultiplier = Mathf.Lerp(1f, sizeMultiplier, m_SizeMovementSpeedInfluence);
+        if (predictedPlayer.MoveSlowTimeRemaining > 0f)
+        {
+            speedMultiplier *= 1f - Mathf.Clamp01(predictedPlayer.MoveSlowPercent);
+        }
         jumpHeightMultiplier = Mathf.Lerp(1f, sizeMultiplier, m_SizeJumpHeightInfluence);
     }
 
@@ -1775,7 +1784,8 @@ public class FirstPersonController : MonoBehaviour
     }
 
     public async void SpawnPredictedProjectile(uint spawnTick, uint weaponId, Vector3 spawnPosition,
-        Quaternion spawnRotation, Vector3 targetPosition)
+        Quaternion spawnRotation, Vector3 targetPosition,
+        bool isHoming = false, float homingTurnSpeed = 0f)
     {
         try
         {
@@ -1834,6 +1844,7 @@ public class FirstPersonController : MonoBehaviour
             var projectile = predictedProjectile.GetComponent<Projectile>();
             projectile.SetWeaponId(weaponId);
             projectile.SetGuidedTarget(targetPosition);
+            projectile.SetRuntimeMotion(isHoming, homingTurnSpeed);
 
             var projectileInfo = new Projectile.PredictedProjectileInfo
             {

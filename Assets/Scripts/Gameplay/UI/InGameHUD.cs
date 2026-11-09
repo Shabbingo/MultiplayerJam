@@ -22,6 +22,7 @@ namespace Unity.MP_FPS
         private VisualElement m_ReflectCooldownBottom;
         private VisualElement m_ReflectCooldownLeft;
         private VisualElement m_ReflectReadyGlow;
+        private Label m_ReflectChargeLabel;
         private ProgressBar m_SelfResizeChargeBar;
         private ProgressBar m_ShrinkAmmoBar;
         private ProgressBar m_GrowAmmoBar;
@@ -61,6 +62,7 @@ namespace Unity.MP_FPS
             m_ReflectCooldownBottom = m_RootElement.Q<VisualElement>("reflect-cooldown-bottom");
             m_ReflectCooldownLeft = m_RootElement.Q<VisualElement>("reflect-cooldown-left");
             m_ReflectReadyGlow = m_RootElement.Q<VisualElement>("reflect-ready-glow");
+            m_ReflectChargeLabel = m_RootElement.Q<Label>("reflect-charge-label");
             if (m_HealthBar != null)
             {
                 m_PlayerHealthBarFill = m_HealthBar.Q<VisualElement>(null, "unity-progress-bar__progress");
@@ -101,6 +103,7 @@ namespace Unity.MP_FPS
                 // and is owned by the local client.
                 m_LocalPlayerQuery = m_EntityManager.CreateEntityQuery(
                     ComponentType.ReadOnly<PredictedPlayerGhost>(),
+                    ComponentType.ReadOnly<Cards.PlayerModifierStacks>(),
                     ComponentType.ReadOnly<GhostOwnerIsLocal>()
                 );
             }
@@ -133,6 +136,8 @@ namespace Unity.MP_FPS
 
             // Get the player's data directly from the ECS component
             PredictedPlayerGhost playerData = m_LocalPlayerQuery.GetSingleton<PredictedPlayerGhost>();
+            Cards.PlayerModifierStacks modifiers =
+                m_LocalPlayerQuery.GetSingleton<Cards.PlayerModifierStacks>();
 
             m_ReflectShieldFrame?.EnableInClassList(
                 "reflect-shield-active", playerData.ReflectShieldTimeRemaining > 0f);
@@ -190,12 +195,16 @@ namespace Unity.MP_FPS
             // Both abilities are always available, so show both persistent magazines.
             if (m_ShrinkAmmoLabel != null && m_GrowAmmoLabel != null)
             {
-                var shrinkWeapon = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
-                    WeaponManager.PrimaryWeaponId);
-                var growWeapon = WeaponManager.Instance.WeaponRegistry.GetWeaponData(
-                    WeaponManager.SecondaryWeaponId);
-                int shrinkCapacity = shrinkWeapon != null ? shrinkWeapon.MagazineSize : 0;
-                int growCapacity = growWeapon != null ? growWeapon.MagazineSize : 0;
+                var shrinkWeapon = WeaponManager.Instance.ResolveRuntimeProfile(
+                    WeaponManager.PrimaryWeaponId, in modifiers);
+                var growWeapon = WeaponManager.Instance.ResolveRuntimeProfile(
+                    WeaponManager.SecondaryWeaponId, in modifiers);
+                int shrinkCapacity = shrinkWeapon.SourceProfile != null
+                    ? shrinkWeapon.MagazineSize
+                    : 0;
+                int growCapacity = growWeapon.SourceProfile != null
+                    ? growWeapon.MagazineSize
+                    : 0;
                 int shrinkAmmo = playerData.EquippedWeaponID == WeaponManager.PrimaryWeaponId
                     ? playerData.CurrentAmmo
                     : playerData.ControllerState.PrimaryWeaponAmmo;
@@ -217,7 +226,7 @@ namespace Unity.MP_FPS
             }
 
             // Update Reticle
-            UpdateReticleVisual(playerData);
+            UpdateReticleVisual(playerData, in modifiers);
         }
 
         private static void UpdateAbilityAmmoDisplay(Label label, ProgressBar bar,
@@ -257,7 +266,14 @@ namespace Unity.MP_FPS
             SetSegmentHeight(m_ReflectCooldownLeft,
                 Mathf.Clamp01(cooldownProgress * 4f - 3f));
 
-            bool isReady = playerData.ReflectCooldownTimeRemaining <= 0f;
+            bool isReady = playerData.ReflectCharges > 0;
+            m_ReflectCooldownWheel.tooltip =
+                $"REFLECT: {playerData.ReflectCharges} / {Mathf.Max(1, playerData.MaxReflectCharges)}";
+            if (m_ReflectChargeLabel != null)
+            {
+                m_ReflectChargeLabel.text =
+                    $"REFLECT {playerData.ReflectCharges} / {Mathf.Max(1, playerData.MaxReflectCharges)}";
+            }
             float pulse = 0.55f + 0.45f *
                 (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f));
             m_ReflectCooldownWheel.style.opacity = isReady ? pulse : 0.85f;
@@ -287,7 +303,8 @@ namespace Unity.MP_FPS
             }
         }
 
-        private void UpdateReticleVisual(PredictedPlayerGhost playerData)
+        private void UpdateReticleVisual(PredictedPlayerGhost playerData,
+            in Cards.PlayerModifierStacks modifiers)
         {
             if (m_Reticle == null)
                 return;
@@ -297,7 +314,8 @@ namespace Unity.MP_FPS
                 m_shotFeedbackTimer -= Time.deltaTime;
             }
 
-            var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(playerData.EquippedWeaponID);
+            var weaponData = WeaponManager.Instance.ResolveRuntimeProfile(
+                playerData.EquippedWeaponID, in modifiers).SourceProfile;
 
             if (weaponData == null)
             {

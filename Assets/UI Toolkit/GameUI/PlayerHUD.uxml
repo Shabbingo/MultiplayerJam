@@ -20,6 +20,7 @@
                 <ui:VisualElement name="reflect-cooldown-left" class="reflect-cooldown-segment" picking-mode="Ignore"/>
             </ui:VisualElement>
             <ui:ProgressBar value="63.8" title="HEALTH" name="player-health-bar" class="kits-progress-bar"/>
+            <ui:Label name="reflect-charge-label" text="REFLECT 1 / 1" picking-mode="Ignore" style="position: absolute; right: 10px; top: 7px; color: white; font-size: 11px; -unity-font-style: bold;"/>
         </ui:VisualElement>
         <ui:ProgressBar name="player-stamina-bar" low-value="0" high-value="5" value="5" title="SHRINK" class="kits-progress-bar kits-shrink-resource-bar"/>
         <ui:Label name="reloading-label" text="RELOADING"/>

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: AssaultRifle
   m_EditorClassIdentifier: Assembly-CSharp::WeaponData
   WeaponName: Assault Rifle
-  Type: 0
+  Type: 1
   ReticleType: 0
   CooldownInMs: 0.05
   ProjectileReleaseDelay: 0
@@ -27,17 +27,17 @@ MonoBehaviour:
   ReloadTime: 1.5
   ProjectileGhostPrefab:
     <GhostPrefab>k__BackingField:
-      m_AssetGUID: 
+      m_AssetGUID: 83a79bf5320972c46ae675e08e77534b
       m_SubObjectName: 
       m_SubObjectType: 
       m_SubObjectGUID: 
       m_EditorAssetChanged: 0
     m_GhostGuid:
       Value:
-        x: 0
-        y: 0
-        z: 0
-        w: 0
+        x: 1605990968
+        y: 1277661219
+        z: 240610982
+        w: 3023402984
   ProjectileHitVfxPrefab:
     <GhostPrefab>k__BackingField:
       m_AssetGUID: e0aa30b8adee8b44dac442776f34f5e7

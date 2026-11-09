@@ -1,4 +1,5 @@
 using UnityEngine;
+using Unity.Mathematics;
 
 namespace Unity.MP_FPS.Cards
 {
@@ -49,6 +50,7 @@ namespace Unity.MP_FPS.Cards
         public readonly int PelletCount;
         public readonly float ScatterHalfAngleDegrees;
         public readonly bool IsHoming;
+        public readonly bool TracksPlayers;
         public readonly float HomingTurnSpeed;
         public readonly bool HasExplosion;
         public readonly float ExplosionRadius;
@@ -64,7 +66,7 @@ namespace Unity.MP_FPS.Cards
             WeaponFireMode fireMode, float damage, float fireInterval,
             float projectileReleaseDelay, int magazineSize, float reloadTime,
             float projectileSpeed, int pelletCount, float scatterHalfAngleDegrees,
-            bool isHoming, float homingTurnSpeed, bool hasExplosion,
+            bool isHoming, bool tracksPlayers, float homingTurnSpeed, bool hasExplosion,
             float explosionRadius, bool appliesSlow, float slowPercent,
             float slowDuration)
         {
@@ -80,6 +82,7 @@ namespace Unity.MP_FPS.Cards
             PelletCount = pelletCount;
             ScatterHalfAngleDegrees = scatterHalfAngleDegrees;
             IsHoming = isHoming;
+            TracksPlayers = tracksPlayers;
             HomingTurnSpeed = homingTurnSpeed;
             HasExplosion = hasExplosion;
             ExplosionRadius = explosionRadius;
@@ -116,8 +119,9 @@ namespace Unity.MP_FPS.Cards
                 : 0f;
             float explosionRadius = baseExplosionRadius + explosionStacks *
                 Mathf.Max(0f, tuning.ExplosionRadiusPerStack);
-            bool isHoming = source.IsGuidedProjectile ||
-                            modifiers.GetStacks(CardModifierKind.HomingProjectiles, target) > 0;
+            bool tracksPlayers =
+                modifiers.GetStacks(CardModifierKind.HomingProjectiles, target) > 0;
+            bool isHoming = source.IsGuidedProjectile || tracksPlayers;
             float homingTurnSpeed = source.IsGuidedProjectile
                 ? source.GuidedTurnSpeed
                 : Mathf.Max(0f, tuning.AddedHomingTurnSpeed);
@@ -136,12 +140,44 @@ namespace Unity.MP_FPS.Cards
                 scatter ? Mathf.Max(1, tuning.ScatterPelletCount) : 1,
                 scatter ? Mathf.Max(0f, tuning.ScatterHalfAngleDegrees) : 0f,
                 isHoming,
+                tracksPlayers,
                 homingTurnSpeed,
                 explosionRadius > 0f,
                 explosionRadius,
                 appliesSlow,
                 appliesSlow ? Mathf.Clamp01(tuning.SlowPercent) : 0f,
                 appliesSlow ? Mathf.Max(0f, tuning.SlowDuration) : 0f);
+        }
+
+        public static Vector3 ApplyScatterDirection(Vector3 forward,
+            float halfAngleDegrees, uint shotTick, int shooterNetworkId,
+            int pelletIndex)
+        {
+            Vector3 normalizedForward = forward.sqrMagnitude > 0.0001f
+                ? forward.normalized
+                : Vector3.forward;
+            float maximumAngle = Mathf.Max(0f, halfAngleDegrees);
+            if (maximumAngle <= 0f)
+            {
+                return normalizedForward;
+            }
+
+            uint seed = math.hash(new uint4(
+                shotTick,
+                unchecked((uint)shooterNetworkId),
+                unchecked((uint)pelletIndex),
+                0x9E3779B9u)) | 1u;
+            var random = Unity.Mathematics.Random.CreateFromIndex(seed);
+            float coneRadius = Mathf.Sqrt(random.NextFloat());
+            float angle = Mathf.Deg2Rad * maximumAngle * coneRadius;
+            float azimuth = random.NextFloat(0f, Mathf.PI * 2f);
+            Vector3 referenceUp = Mathf.Abs(Vector3.Dot(normalizedForward, Vector3.up)) > 0.99f
+                ? Vector3.right
+                : Vector3.up;
+            Vector3 right = Vector3.Cross(referenceUp, normalizedForward).normalized;
+            Vector3 up = Vector3.Cross(normalizedForward, right).normalized;
+            Vector3 radial = right * Mathf.Cos(azimuth) + up * Mathf.Sin(azimuth);
+            return (normalizedForward * Mathf.Cos(angle) + radial * Mathf.Sin(angle)).normalized;
         }
     }
 }
