@@ -279,7 +279,7 @@ MonoBehaviour:
   m_SelfGrowUses: 2
   m_SelfShrinkRechargeSeconds: 4
   m_SelfGrowRechargeSeconds: 4
-  m_SelfResizeChunkSize: 25
+  m_SelfResizeChunkSize: 50
   m_SelfResizeSafetyMargin: 1
   m_AirGrowJumpSpeed: 5
   m_AirShrinkPushSpeed: 7
