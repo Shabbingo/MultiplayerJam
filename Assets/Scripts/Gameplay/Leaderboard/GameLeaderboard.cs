@@ -437,12 +437,12 @@ namespace Gameplay.Leaderboard
             }
 
             _phase = RoundPhase.Drafting;
-            int leaderNetworkId = GetMatchLeaderNetworkId(buffer);
             _draftOrder.Clear();
             foreach (int networkId in _finishingOrder)
             {
-                // The scoreboard leader sits out so trailing players get the comeback cards.
-                if (networkId != leaderNetworkId) _draftOrder.Add(networkId);
+                // Only the winner of this round sits out. Overall score and kills
+                // never influence draft eligibility.
+                if (networkId != winnerId) _draftOrder.Add(networkId);
             }
             _draftIndex = 0;
             _beginDraftPending = true;
@@ -802,26 +802,6 @@ namespace Gameplay.Leaderboard
             for (int i = 0; i < buffer.Length; i++)
                 if (buffer[i].NetworkId == networkId) return buffer[i].PlayerName;
             return new FixedString64Bytes(fallback);
-        }
-
-        private static int GetMatchLeaderNetworkId(
-            DynamicBuffer<PlayerScoreEntry> buffer)
-        {
-            if (buffer.Length == 0) return -1;
-            var leader = buffer[0];
-            for (int i = 1; i < buffer.Length; i++)
-            {
-                var candidate = buffer[i];
-                if (candidate.RoundWins > leader.RoundWins ||
-                    candidate.RoundWins == leader.RoundWins && candidate.Kills > leader.Kills ||
-                    candidate.RoundWins == leader.RoundWins && candidate.Kills == leader.Kills &&
-                    candidate.Deaths < leader.Deaths)
-                {
-                    leader = candidate;
-                }
-            }
-
-            return leader.NetworkId;
         }
 
         private static RoundCardRules GetRules()

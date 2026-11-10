@@ -16,3 +16,4 @@ MonoBehaviour:
   m_AllowedTargets: 3
   m_StackLimit: 5
   m_ValuePerStack: 1
+  m_BounceVelocityRetention: 1

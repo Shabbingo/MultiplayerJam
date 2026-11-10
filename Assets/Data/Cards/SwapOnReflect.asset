@@ -16,3 +16,4 @@ MonoBehaviour:
   m_AllowedTargets: 4
   m_StackLimit: 1
   m_ValuePerStack: 1
+  m_TeleportFreezeSeconds: 0.1

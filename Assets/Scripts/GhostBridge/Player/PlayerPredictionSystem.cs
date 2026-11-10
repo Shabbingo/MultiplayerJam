@@ -420,7 +420,10 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         runtimeProfile.ProjectileSpeed,
                                         runtimeProfile.ProjectileScale,
                                         runtimeProfile.GrowsOverDistance,
-                                        runtimeProfile.MaxBounces);
+                                        runtimeProfile.MaxBounces,
+                                        runtimeProfile.GrowthPerMetre,
+                                        runtimeProfile.BounceVelocityRetention,
+                                        !runtimeProfile.TracksPlayers);
                                 }
                             }
 
@@ -441,7 +444,12 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 out float jumpHeightMultiplier);
                             if (modifiers.ValueRO.ShieldSpeed > 0 &&
                                 predictedPlayer.ValueRO.ReflectShieldTimeRemaining > 0f)
-                                speedMultiplier *= 1.5f;
+                            {
+                                var shieldSpeedCard = WeaponManager.Instance?.CardModifierCatalog?
+                                    .FindByKind(Unity.MP_FPS.Cards.CardModifierKind.ShieldSpeed);
+                                speedMultiplier *= 1f + modifiers.ValueRO.ShieldSpeed *
+                                    Mathf.Max(0f, shieldSpeedCard?.ValuePerStack ?? 0.5f);
+                            }
                             controllerLink.Controller.ProcessResizeBounce(
                                 ref predictedPlayer.ValueRW,
                                 input,

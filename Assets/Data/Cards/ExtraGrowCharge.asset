@@ -16,3 +16,4 @@ MonoBehaviour:
   m_AllowedTargets: 4
   m_StackLimit: 1
   m_ValuePerStack: 0.5
+  m_EffectDurationSeconds: 3

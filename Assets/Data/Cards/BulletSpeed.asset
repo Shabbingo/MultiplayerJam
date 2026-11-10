@@ -16,3 +16,6 @@ MonoBehaviour:
   m_AllowedTargets: 8
   m_StackLimit: 5
   m_ValuePerStack: 0.3
+  m_ProjectileSpeedMultiplierPerStack: 1.3
+  m_ProjectileScaleMultiplierPerStack: 0.8
+  m_ExplosionRadiusMultiplierPerStack: 0.5

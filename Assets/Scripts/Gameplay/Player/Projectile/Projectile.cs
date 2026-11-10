@@ -17,6 +17,7 @@ namespace Unity.MP_FPS
 
         public static List<PredictedProjectileInfo> PredictedProjectiles = new List<PredictedProjectileInfo>();
         private int _hitLayerMask;
+        private int _homingObstructionLayerMask;
         private readonly Collider[] _overlapResults = new Collider[16];
         private readonly RaycastHit[] _castResults = new RaycastHit[16];
         private const float ProjectileRadius = 0.2f;
@@ -43,6 +44,7 @@ namespace Unity.MP_FPS
             [GhostField] public uint MotionRevision;
             [GhostField] public float SignedSizeDelta;
             [GhostField] public byte IsHoming;
+            [GhostField] public byte HasHomingTarget;
             [GhostField] public byte TracksPlayers;
             [GhostField] public byte TracksAim;
             [GhostField] public float HomingTurnSpeed;
@@ -58,6 +60,8 @@ namespace Unity.MP_FPS
             [GhostField] public float BleedDamagePerSecond;
             [GhostField] public float BleedDuration;
             [GhostField] public float LifeStealPercent;
+            [GhostField] public float GrowthPerMetre;
+            [GhostField] public float BounceVelocityRetention;
         }
 
         public class PredictedProjectileInfo
@@ -69,6 +73,7 @@ namespace Unity.MP_FPS
         private void Awake()
         {
             _hitLayerMask = LayerMask.GetMask("ServerPlayer", "Ground", "Default");
+            _homingObstructionLayerMask = LayerMask.GetMask("Ground", "Default");
         }
 
         private void Update()
@@ -101,11 +106,13 @@ namespace Unity.MP_FPS
         private bool _growsOverDistance;
         private int _runtimeMaxBounces;
         private float _distanceTravelled;
+        private float _growthPerMetre;
+        private float _bounceVelocityRetention = 1f;
 
-        public void SetGuidedTarget(Vector3 targetPosition)
+        public void SetGuidedTarget(Vector3 targetPosition, bool isActive = true)
         {
             _guidedTarget = targetPosition;
-            _hasGuidedTarget = true;
+            _hasGuidedTarget = isActive;
         }
 
         public void SetRuntimeMotion(bool isHoming, float homingTurnSpeed)
@@ -115,12 +122,15 @@ namespace Unity.MP_FPS
         }
 
         public void SetRuntimeProjectileProperties(float speed, float scale,
-            bool growsOverDistance, int maxBounces)
+            bool growsOverDistance, int maxBounces, float growthPerMetre,
+            float bounceVelocityRetention)
         {
             _runtimeProjectileSpeed = Mathf.Max(0f, speed);
             _runtimeProjectileScale = Mathf.Max(0.1f, scale);
             _growsOverDistance = growsOverDistance;
             _runtimeMaxBounces = Mathf.Max(0, maxBounces);
+            _growthPerMetre = Mathf.Max(0f, growthPerMetre);
+            _bounceVelocityRetention = Mathf.Clamp01(bounceVelocityRetention);
             transform.localScale = Vector3.one * _runtimeProjectileScale;
         }
 
@@ -128,13 +138,17 @@ namespace Unity.MP_FPS
         {
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             _weaponId = projectileData.WeaponID;
-            SetGuidedTarget(projectileData.TargetPosition);
+            SetGuidedTarget(projectileData.TargetPosition,
+                projectileData.HasHomingTarget != 0);
             SetRuntimeMotion(projectileData.IsHoming != 0,
                 projectileData.HomingTurnSpeed);
             _runtimeProjectileSpeed = projectileData.ProjectileSpeed;
             _runtimeProjectileScale = Mathf.Max(0.1f, projectileData.ProjectileScale);
             _growsOverDistance = projectileData.GrowsOverDistance != 0;
             _runtimeMaxBounces = Mathf.Max(0, projectileData.MaxBounces);
+            _growthPerMetre = Mathf.Max(0f, projectileData.GrowthPerMetre);
+            _bounceVelocityRetention = Mathf.Clamp01(
+                projectileData.BounceVelocityRetention);
             transform.localScale = Vector3.one * _runtimeProjectileScale;
             ApplyServerMotionState(projectileData);
         }
@@ -176,6 +190,11 @@ namespace Unity.MP_FPS
                 {
                     SetGuidedTarget(liveAimPoint);
                 }
+                else if (projectileData.TracksPlayers != 0 ||
+                         projectileData.TracksAim != 0)
+                {
+                    _hasGuidedTarget = false;
+                }
             }
             UpdateVelocity(deltaTime, weaponData);
             _collisionGraceTimer = Mathf.Max(0f, _collisionGraceTimer - deltaTime);
@@ -194,7 +213,7 @@ namespace Unity.MP_FPS
             _localTime += deltaTime;
             if (_growsOverDistance)
                 transform.localScale = Vector3.one * _runtimeProjectileScale *
-                                       (1f + _distanceTravelled * 0.01f);
+                                       (1f + _distanceTravelled * _growthPerMetre);
             PublishServerMotionState();
             if (_localTime > weaponData.ProjectileFuseTime)
             {
@@ -231,7 +250,8 @@ namespace Unity.MP_FPS
             if (_runtimeHoming && _hasGuidedTarget)
             {
                 Vector3 toTarget = _guidedTarget - transform.position;
-                if (toTarget.sqrMagnitude > 0.0001f)
+                if (toTarget.sqrMagnitude > 0.0001f &&
+                    HasClearLineOfSight(toTarget))
                 {
                     Vector3 currentDirection = _velocity.sqrMagnitude > 0.0001f
                         ? _velocity.normalized
@@ -256,6 +276,28 @@ namespace Unity.MP_FPS
             {
                 _velocity += Vector3.down * (weaponData.ProjectileGravity * deltaTime);
             }
+        }
+
+        private bool HasClearLineOfSight(Vector3 toTarget)
+        {
+            float targetDistance = toTarget.magnitude;
+            if (targetDistance <= 0.0001f)
+            {
+                return true;
+            }
+
+            // Leave a small endpoint tolerance so a guided aim point located on a
+            // visible wall is still valid. Geometry meaningfully before the target
+            // blocks homing until the target becomes visible again.
+            float obstructionDistance = Mathf.Max(0f,
+                targetDistance - BounceSurfaceOffset);
+            return obstructionDistance <= 0f ||
+                   !UnityEngine.Physics.Raycast(
+                       transform.position,
+                       toTarget / targetDistance,
+                       obstructionDistance,
+                       _homingObstructionLayerMask,
+                       QueryTriggerInteraction.Ignore);
         }
 
         private void Move(Vector3 displacement)
@@ -319,7 +361,7 @@ namespace Unity.MP_FPS
             _localTime += deltaTime;
             if (_growsOverDistance)
                 transform.localScale = Vector3.one * _runtimeProjectileScale *
-                                       (1f + _distanceTravelled * 0.01f);
+                                       (1f + _distanceTravelled * _growthPerMetre);
         }
 
         private bool CheckForCollision(WeaponData weaponData, Vector3 displacement)
@@ -436,7 +478,8 @@ namespace Unity.MP_FPS
                 ? impactNormal.normalized
                 : -_velocity.normalized;
             transform.position = impactPosition + normal * (ProjectileRadius + BounceSurfaceOffset);
-            _velocity = Vector3.Reflect(_velocity, normal);
+            _velocity = Vector3.Reflect(_velocity, normal) *
+                        _bounceVelocityRetention;
             _bounceCount++;
             _collisionGraceTimer = BounceCollisionGrace;
 
@@ -462,6 +505,7 @@ namespace Unity.MP_FPS
             projectileData.Position = transform.position;
             projectileData.Velocity = _velocity;
             projectileData.TargetPosition = _guidedTarget;
+            projectileData.HasHomingTarget = _hasGuidedTarget ? (byte)1 : (byte)0;
             projectileData.BounceCount = _bounceCount;
             projectileData.Age = _localTime;
             projectileData.MotionRevision++;
@@ -470,7 +514,8 @@ namespace Unity.MP_FPS
 
         private void ApplyServerMotionState(in ProjectileData projectileData)
         {
-            SetGuidedTarget(projectileData.TargetPosition);
+            SetGuidedTarget(projectileData.TargetPosition,
+                projectileData.HasHomingTarget != 0);
 
             if (GhostGameObject == null || GhostGameObject.Role == MultiplayerRole.Server ||
                 projectileData.MotionRevision == 0 ||
@@ -716,7 +761,7 @@ namespace Unity.MP_FPS
         {
             float baseDelta = projectileData.SignedSizeDelta;
             return _growsOverDistance
-                ? baseDelta * (1f + _distanceTravelled * 0.01f)
+                ? baseDelta * (1f + _distanceTravelled * _growthPerMetre)
                 : baseDelta;
         }
 

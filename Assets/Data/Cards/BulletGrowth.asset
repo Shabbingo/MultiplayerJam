@@ -15,4 +15,4 @@ MonoBehaviour:
   m_Kind: 16
   m_AllowedTargets: 8
   m_StackLimit: 1
-  m_ValuePerStack: 1
+  m_ValuePerStack: 0.01

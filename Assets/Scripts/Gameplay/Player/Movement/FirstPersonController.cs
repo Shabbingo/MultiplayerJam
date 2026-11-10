@@ -1793,7 +1793,9 @@ public class FirstPersonController : MonoBehaviour
         Quaternion spawnRotation, Vector3 targetPosition,
         bool isHoming = false, float homingTurnSpeed = 0f,
         float projectileSpeed = 0f, float projectileScale = 1f,
-        bool growsOverDistance = false, int maxBounces = 0)
+        bool growsOverDistance = false, int maxBounces = 0,
+        float growthPerMetre = 0f, float bounceVelocityRetention = 1f,
+        bool hasHomingTarget = true)
     {
         try
         {
@@ -1851,10 +1853,11 @@ public class FirstPersonController : MonoBehaviour
 
             var projectile = predictedProjectile.GetComponent<Projectile>();
             projectile.SetWeaponId(weaponId);
-            projectile.SetGuidedTarget(targetPosition);
+            projectile.SetGuidedTarget(targetPosition, hasHomingTarget);
             projectile.SetRuntimeMotion(isHoming, homingTurnSpeed);
             projectile.SetRuntimeProjectileProperties(projectileSpeed, projectileScale,
-                growsOverDistance, maxBounces);
+                growsOverDistance, maxBounces, growthPerMetre,
+                bounceVelocityRetention);
 
             var projectileInfo = new Projectile.PredictedProjectileInfo
             {

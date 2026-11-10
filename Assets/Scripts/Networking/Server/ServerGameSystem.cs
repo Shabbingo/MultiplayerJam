@@ -227,6 +227,15 @@ namespace Unity.MP_FPS
                 weaponId, in modifiers);
             var secondaryProfile = WeaponManager.Instance.ResolveRuntimeProfile(
                 WeaponManager.SecondaryWeaponId, in modifiers);
+            var cardCatalog = WeaponManager.Instance.CardModifierCatalog;
+            float bigCapacityPerStack = cardCatalog?
+                .FindByKind(CardModifierKind.BigHealthCapacity)?.ValuePerStack ?? 0f;
+            float smallCapacityPerStack = cardCatalog?
+                .FindByKind(CardModifierKind.SmallHealthCapacity)?.ValuePerStack ?? 0f;
+            float bigCapacity = 100f * modifiers.BigHealthCapacity *
+                                Mathf.Max(0f, bigCapacityPerStack);
+            float smallCapacity = 100f * modifiers.SmallHealthCapacity *
+                                  Mathf.Max(0f, smallCapacityPerStack);
             int magazineSize = primaryProfile.SourceProfile != null
                 ? primaryProfile.MagazineSize
                 : 30;
@@ -243,10 +252,9 @@ namespace Unity.MP_FPS
             {
                 InputIndex = 0,
                 // Each capacity card extends its side of the normal-size point by 50%.
-                MaxHealth = 200f + 50f * modifiers.BigHealthCapacity +
-                            50f * modifiers.SmallHealthCapacity,
-                NormalSizeHealth = 100f + 50f * modifiers.SmallHealthCapacity,
-                CurrentHealth = 100f + 50f * modifiers.SmallHealthCapacity,
+                MaxHealth = 200f + bigCapacity + smallCapacity,
+                NormalSizeHealth = 100f + smallCapacity,
+                CurrentHealth = 100f + smallCapacity,
                 ControllerState = initialControllerState,
                 EquippedWeaponID = weaponId,
                 CurrentAmmo = magazineSize,

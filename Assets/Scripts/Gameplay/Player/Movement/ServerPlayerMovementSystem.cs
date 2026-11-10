@@ -25,6 +25,7 @@ namespace Unity.MP_FPS
         public float3 TargetPosition;
         public float SignedSizeDelta;
         public byte IsHoming;
+        public byte HasHomingTarget;
         public byte TracksPlayers;
         public byte TracksAim;
         public float HomingTurnSpeed;
@@ -40,6 +41,8 @@ namespace Unity.MP_FPS
         public float BleedDamagePerSecond;
         public float BleedDuration;
         public float LifeStealPercent;
+        public float GrowthPerMetre;
+        public float BounceVelocityRetention;
     }
 
     struct VfxSpawnData
@@ -647,7 +650,7 @@ namespace Unity.MP_FPS
                                     {
                                         float distanceMultiplier = runtimeProfile.GrowsOverDistance
                                             ? 1f + Vector3.Distance((Vector3)eyePosition,
-                                                hit.Point) * 0.01f
+                                                hit.Point) * runtimeProfile.GrowthPerMetre
                                             : 1f;
                                         float distanceScaledDelta =
                                             runtimeProfile.SignedSizeDelta * distanceMultiplier;
@@ -748,6 +751,8 @@ namespace Unity.MP_FPS
                                             TargetPosition = targetPoint,
                                             SignedSizeDelta = runtimeProfile.SignedSizeDelta,
                                             IsHoming = runtimeProfile.IsHoming ? (byte)1 : (byte)0,
+                                            HasHomingTarget = runtimeProfile.IsHoming &&
+                                                !runtimeProfile.TracksPlayers ? (byte)1 : (byte)0,
                                             TracksPlayers = runtimeProfile.TracksPlayers ? (byte)1 : (byte)0,
                                             TracksAim = runtimeProfile.TracksAim ? (byte)1 : (byte)0,
                                             HomingTurnSpeed = runtimeProfile.HomingTurnSpeed,
@@ -762,7 +767,9 @@ namespace Unity.MP_FPS
                                             GrowsOverDistance = runtimeProfile.GrowsOverDistance ? (byte)1 : (byte)0,
                                             BleedDamagePerSecond = runtimeProfile.BleedDamagePerSecond,
                                             BleedDuration = runtimeProfile.BleedDuration,
-                                            LifeStealPercent = runtimeProfile.LifeStealPercent
+                                            LifeStealPercent = runtimeProfile.LifeStealPercent,
+                                            GrowthPerMetre = runtimeProfile.GrowthPerMetre,
+                                            BounceVelocityRetention = runtimeProfile.BounceVelocityRetention
                                         });
                                     }
                                     else
@@ -803,6 +810,7 @@ namespace Unity.MP_FPS
                             TargetPosition = spawnData.TargetPosition,
                             SignedSizeDelta = spawnData.SignedSizeDelta,
                             IsHoming = spawnData.IsHoming,
+                            HasHomingTarget = spawnData.HasHomingTarget,
                             TracksPlayers = spawnData.TracksPlayers,
                             TracksAim = spawnData.TracksAim,
                             HomingTurnSpeed = spawnData.HomingTurnSpeed,
@@ -817,7 +825,9 @@ namespace Unity.MP_FPS
                             GrowsOverDistance = spawnData.GrowsOverDistance,
                             BleedDamagePerSecond = spawnData.BleedDamagePerSecond,
                             BleedDuration = spawnData.BleedDuration,
-                            LifeStealPercent = spawnData.LifeStealPercent
+                            LifeStealPercent = spawnData.LifeStealPercent,
+                            GrowthPerMetre = spawnData.GrowthPerMetre,
+                            BounceVelocityRetention = spawnData.BounceVelocityRetention
                         });
                     });
             }
@@ -865,7 +875,12 @@ namespace Unity.MP_FPS
                                 out float jumpHeightMultiplier);
                             if (modifiers.ValueRO.ShieldSpeed > 0 &&
                                 predictedPlayer.ValueRO.ReflectShieldTimeRemaining > 0f)
-                                speedMultiplier *= 1.5f;
+                            {
+                                var shieldSpeedCard = WeaponManager.Instance?.CardModifierCatalog?
+                                    .FindByKind(Cards.CardModifierKind.ShieldSpeed);
+                                speedMultiplier *= 1f + modifiers.ValueRO.ShieldSpeed *
+                                    Mathf.Max(0f, shieldSpeedCard?.ValuePerStack ?? 0.5f);
+                            }
                             controllerLink.Controller.ProcessResizeBounce(
                                 ref predictedPlayer.ValueRW,
                                 input,
@@ -1409,10 +1424,17 @@ namespace Unity.MP_FPS
             int damagedPlayerNetworkId = ownerLookup[damageTargetEntity].NetworkId;
             float healthBeforeDamage = damagedPlayer.ValueRO.CurrentHealth;
             float appliedDelta = signedSizeDelta;
-            if (appliedDelta < 0f &&
-                (defenderModifiers.BigHealthCapacity > 0 ||
-                 defenderModifiers.SmallHealthCapacity > 0))
-                appliedDelta *= 0.9f;
+            if (appliedDelta < 0f)
+            {
+                var catalog = WeaponManager.Instance?.CardModifierCatalog;
+                float damageReduction = defenderModifiers.BigHealthCapacity *
+                    (catalog?.FindByKind(Cards.CardModifierKind.BigHealthCapacity)?
+                        .DamageReductionPercent ?? 0f);
+                damageReduction += defenderModifiers.SmallHealthCapacity *
+                    (catalog?.FindByKind(Cards.CardModifierKind.SmallHealthCapacity)?
+                        .DamageReductionPercent ?? 0f);
+                appliedDelta *= 1f - Mathf.Clamp01(damageReduction);
+            }
             damagedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
                 damagedPlayer.ValueRO.CurrentHealth + appliedDelta,
                 0f,
@@ -1481,30 +1503,66 @@ namespace Unity.MP_FPS
             {
                 if (defenderModifiers.SlowShield > 0)
                 {
+                    var slowShieldCard = WeaponManager.Instance?.CardModifierCatalog?
+                        .FindByKind(Cards.CardModifierKind.SlowShield);
                     damagedPlayer.ValueRW.MoveSlowPercent = Mathf.Max(
-                        damagedPlayer.ValueRO.MoveSlowPercent, 0.5f);
+                        damagedPlayer.ValueRO.MoveSlowPercent,
+                        Mathf.Clamp01(slowShieldCard?.ValuePerStack ?? 0f));
                     damagedPlayer.ValueRW.MoveSlowTimeRemaining = Mathf.Max(
-                        damagedPlayer.ValueRO.MoveSlowTimeRemaining, 3f);
+                        damagedPlayer.ValueRO.MoveSlowTimeRemaining,
+                        Mathf.Max(0f, slowShieldCard?.EffectDurationSeconds ?? 0f));
                 }
                 if (defenderModifiers.ReflectHealing > 0)
                 {
+                    var reflectHealingCard = WeaponManager.Instance?.CardModifierCatalog?
+                        .FindByKind(Cards.CardModifierKind.ReflectHealing);
                     var defender = playerGhostLookup.GetRefRW(intendedTargetEntity);
                     defender.ValueRW.CurrentHealth = Mathf.Min(defender.ValueRO.MaxHealth,
-                        defender.ValueRO.CurrentHealth + Mathf.Abs(signedSizeDelta) * 0.5f);
+                        defender.ValueRO.CurrentHealth + Mathf.Abs(signedSizeDelta) *
+                        Mathf.Clamp01(reflectHealingCard?.ValuePerStack ?? 0f));
                 }
                 if (defenderModifiers.SwapOnReflect > 0 &&
+                    playerGhostLookup.HasComponent(intendedTargetEntity) &&
                     EntityManager.HasComponent<LocalTransform>(intendedTargetEntity) &&
                     EntityManager.HasComponent<LocalTransform>(damageTargetEntity))
                 {
+                    var defenderPlayer = playerGhostLookup.GetRefRW(intendedTargetEntity);
+                    var defenderState = defenderPlayer.ValueRO.ControllerState;
+                    var attackerState = damagedPlayer.ValueRO.ControllerState;
+                    var swapCard = WeaponManager.Instance?.CardModifierCatalog?
+                        .FindByKind(Cards.CardModifierKind.SwapOnReflect);
+                    float teleportFreeze = swapCard?.TeleportFreezeSeconds ?? 0f;
+                    float3 defenderPosition = defenderState.CurrentPosition;
+                    defenderState.CurrentPosition = attackerState.CurrentPosition;
+                    attackerState.CurrentPosition = defenderPosition;
+                    defenderState.TeleportFreeze = teleportFreeze;
+                    attackerState.TeleportFreeze = teleportFreeze;
+                    defenderPlayer.ValueRW.ControllerState = defenderState;
+                    damagedPlayer.ValueRW.ControllerState = attackerState;
+                    defenderPlayer.ValueRW.AccumulatedMovement = float3.zero;
+                    damagedPlayer.ValueRW.AccumulatedMovement = float3.zero;
+
                     var defenderTransform = EntityManager.GetComponentData<LocalTransform>(
                         intendedTargetEntity);
                     var attackerTransform = EntityManager.GetComponentData<LocalTransform>(
                         damageTargetEntity);
-                    float3 defenderPosition = defenderTransform.Position;
-                    defenderTransform.Position = attackerTransform.Position;
-                    attackerTransform.Position = defenderPosition;
+                    defenderTransform.Position = defenderState.CurrentPosition;
+                    attackerTransform.Position = attackerState.CurrentPosition;
                     EntityManager.SetComponentData(intendedTargetEntity, defenderTransform);
                     EntityManager.SetComponentData(damageTargetEntity, attackerTransform);
+
+                    if (EntityManager.HasComponent<PlayerControllerLink>(intendedTargetEntity))
+                    {
+                        var link = EntityManager.GetComponentObject<PlayerControllerLink>(
+                            intendedTargetEntity);
+                        link?.Controller?.ApplyPosRotImmediate(defenderState);
+                    }
+                    if (EntityManager.HasComponent<PlayerControllerLink>(damageTargetEntity))
+                    {
+                        var link = EntityManager.GetComponentObject<PlayerControllerLink>(
+                            damageTargetEntity);
+                        link?.Controller?.ApplyPosRotImmediate(attackerState);
+                    }
                 }
                 Debug.Log($"[Server] Player {intendedTargetNetworkId} reflected " +
                           $"player {attackerNetworkId}'s hit.");
@@ -1674,6 +1732,18 @@ namespace Unity.MP_FPS
                 }
                 float distanceSq = (candidate - projectilePosition).sqrMagnitude;
                 if (distanceSq >= bestDistanceSq) continue;
+                float distance = Mathf.Sqrt(distanceSq);
+                float obstructionDistance = Mathf.Max(0f, distance - 0.025f);
+                if (obstructionDistance > 0f &&
+                    UnityEngine.Physics.Raycast(
+                        projectilePosition,
+                        (candidate - projectilePosition) / distance,
+                        obstructionDistance,
+                        s_ShootableLayerMask,
+                        QueryTriggerInteraction.Ignore))
+                {
+                    continue;
+                }
                 bestDistanceSq = distanceSq;
                 targetPoint = candidate;
                 found = true;
