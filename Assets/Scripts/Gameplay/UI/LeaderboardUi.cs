@@ -164,7 +164,8 @@ namespace Unity.MP_FPS.UI
             var manager = LeaderboardManager.ClientInstance;
             if (manager == null) return;
 
-            _matchTimerLabel.text = $"ROUND {manager.CurrentRound} / {manager.RoundsPerMatch}";
+            _matchTimerLabel.text =
+                $"ROUND {manager.CurrentRound} — FIRST TO {manager.RoundWinsToWin} WINS";
             if (manager.IsDrafting)
             {
                 if (!_cursorReleasedForDraft)

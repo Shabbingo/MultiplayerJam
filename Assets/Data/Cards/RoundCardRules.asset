@@ -6,7 +6,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b9be4f44297640a39c683fa830915ca2, type: 3}
   m_Name: Round Card Rules
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.RoundCardRules
-  m_RoundsPerMatch: 5
+  m_RoundWinsToWin: 5
   m_CardsPerOffer: 3
   m_SecondsPerDraftTurn: 20
   m_RoundStartDelay: 2

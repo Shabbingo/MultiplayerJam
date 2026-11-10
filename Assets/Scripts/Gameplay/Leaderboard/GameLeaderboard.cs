@@ -57,7 +57,7 @@ namespace Gameplay.Leaderboard
                                         _activeDraftNetworkId == _localNetworkId;
         public RoundPhase Phase => _phase;
         public int CurrentRound => _currentRound;
-        public int RoundsPerMatch => GetRules().RoundsPerMatch;
+        public int RoundWinsToWin => GetRules().RoundWinsToWin;
         public int ActiveDraftNetworkId => _activeDraftNetworkId;
         public string ActiveDraftPlayerName => _activeDraftPlayerName.ToString();
         public string LastPickMessage => _lastPickMessage.ToString();
@@ -415,29 +415,35 @@ namespace Gameplay.Leaderboard
                 _finishingOrder.Add(winnerId);
 
             _winnerName = FindPlayerName(buffer, winnerId, "No winner");
+            int winnerRoundWins = 0;
             for (int i = 0; i < buffer.Length; i++)
             {
                 if (buffer[i].NetworkId != winnerId) continue;
                 var entry = buffer[i];
                 entry.RoundWins++;
                 buffer[i] = entry;
+                winnerRoundWins = entry.RoundWins;
                 break;
             }
 
             _preparePlayersPending = true;
-            if (_currentRound >= GetRules().RoundsPerMatch)
+            if (winnerRoundWins >= GetRules().RoundWinsToWin)
             {
                 _phase = RoundPhase.MatchEnded;
                 _matchEnded = true;
-                _winnerName = GetMatchWinnerName(buffer);
                 _matchRestartTimeRemaining = FinalMatchRestartDelay;
                 _finalAnnouncementPending = true;
                 return;
             }
 
             _phase = RoundPhase.Drafting;
+            int leaderNetworkId = GetMatchLeaderNetworkId(buffer);
             _draftOrder.Clear();
-            _draftOrder.AddRange(_finishingOrder);
+            foreach (int networkId in _finishingOrder)
+            {
+                // The scoreboard leader sits out so trailing players get the comeback cards.
+                if (networkId != leaderNetworkId) _draftOrder.Add(networkId);
+            }
             _draftIndex = 0;
             _beginDraftPending = true;
         }
@@ -795,24 +801,24 @@ namespace Gameplay.Leaderboard
             return new FixedString64Bytes(fallback);
         }
 
-        private static FixedString64Bytes GetMatchWinnerName(
+        private static int GetMatchLeaderNetworkId(
             DynamicBuffer<PlayerScoreEntry> buffer)
         {
-            if (buffer.Length == 0) return new FixedString64Bytes("No winner");
-            var winner = buffer[0];
+            if (buffer.Length == 0) return -1;
+            var leader = buffer[0];
             for (int i = 1; i < buffer.Length; i++)
             {
                 var candidate = buffer[i];
-                if (candidate.RoundWins > winner.RoundWins ||
-                    candidate.RoundWins == winner.RoundWins && candidate.Kills > winner.Kills ||
-                    candidate.RoundWins == winner.RoundWins && candidate.Kills == winner.Kills &&
-                    candidate.Deaths < winner.Deaths)
+                if (candidate.RoundWins > leader.RoundWins ||
+                    candidate.RoundWins == leader.RoundWins && candidate.Kills > leader.Kills ||
+                    candidate.RoundWins == leader.RoundWins && candidate.Kills == leader.Kills &&
+                    candidate.Deaths < leader.Deaths)
                 {
-                    winner = candidate;
+                    leader = candidate;
                 }
             }
 
-            return winner.PlayerName;
+            return leader.NetworkId;
         }
 
         private static RoundCardRules GetRules()

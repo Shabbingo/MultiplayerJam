@@ -11,7 +11,7 @@ namespace Unity.MP_FPS.Cards
     {
         [GhostField] public RoundPhase Phase;
         [GhostField] public int CurrentRound;
-        [GhostField] public int RoundsPerMatch;
+        [GhostField] public int RoundWinsToWin;
         [GhostField] public int ActiveDraftNetworkId;
         [GhostField] public float DraftSecondsRemaining;
     }

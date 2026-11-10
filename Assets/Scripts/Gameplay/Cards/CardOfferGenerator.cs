@@ -6,7 +6,7 @@ namespace Unity.MP_FPS.Cards
 {
     /// <summary>
     /// Server-side deterministic offer generation. Finishing position zero is the
-    /// first player eliminated; the final position is the round winner.
+    /// first player eliminated; later positions receive less comeback weighting.
     /// </summary>
     public static class CardOfferGenerator
     {
@@ -72,7 +72,7 @@ namespace Unity.MP_FPS.Cards
             float placement01 = playerCount <= 1
                 ? 0.5f
                 : Mathf.Clamp01(finishingPosition / (float)(playerCount - 1));
-            // +1 for first eliminated, -1 for the winner.
+            // +1 for first eliminated, -1 for the final player in the draft.
             float comebackBias = 1f - placement01 * 2f;
             double totalWeight = 0d;
             for (int i = 0; i < candidates.Count; i++)
