@@ -111,7 +111,7 @@ Material:
     - _BlendModePreserveSpecular: 1
     - _Brightness_B_Stamp: 1
     - _Brightness_G_TeamStripe: 1
-    - _Brightness_R_Base: 1
+    - _Brightness_R_Base: 0.5
     - _BumpScale: 1
     - _CastShadows: 1
     - _ClearCoatMask: 0
