@@ -217,8 +217,6 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                 predictedPlayer.ValueRO.MoveSlowTimeRemaining - dt);
             if (predictedPlayer.ValueRW.MoveSlowTimeRemaining <= 0f)
                 predictedPlayer.ValueRW.MoveSlowPercent = 0f;
-            controllerLink.Controller.UpdateSelfResizeAmmo(
-                ref predictedPlayer.ValueRW, dt, in modifiers.ValueRO);
             // GameDebug.BurstLog("[PlayerPredictionSystem] PredictedPlayerGhost is Simulate");
 
             predictedPlayer.ValueRW.RequestApplyMovement = false;
@@ -438,6 +436,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             controllerLink.Controller.ProcessSelfResize(
                                 ref predictedPlayer.ValueRW, input, accumulateDT,
                                 in modifiers.ValueRO);
+                            controllerLink.Controller.ProcessResizeBounce(
+                                ref predictedPlayer.ValueRW, input, accumulateDT);
                             controllerLink.Controller.GetSizeMovementMultipliers(
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,
@@ -450,10 +450,6 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 speedMultiplier *= 1f + modifiers.ValueRO.ShieldSpeed *
                                     Mathf.Max(0f, shieldSpeedCard?.ValuePerStack ?? 0.5f);
                             }
-                            controllerLink.Controller.ProcessResizeBounce(
-                                ref predictedPlayer.ValueRW,
-                                input,
-                                accumulateDT);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,

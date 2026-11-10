@@ -855,8 +855,6 @@ namespace Unity.MP_FPS
                     predictedPlayer.ValueRO.MoveSlowTimeRemaining - deltaTime);
                 if (predictedPlayer.ValueRW.MoveSlowTimeRemaining <= 0f)
                     predictedPlayer.ValueRW.MoveSlowPercent = 0f;
-                controllerLink.Controller.UpdateSelfResizeAmmo(
-                    ref predictedPlayer.ValueRW, deltaTime, in modifiers.ValueRO);
                 var predictedClient = predictedClientInputComponentLookup[inputLookup.ValueRO.ClientCommandInputEntity];
                 if (predictedClient.InputCount > 0)
                 {
@@ -869,6 +867,8 @@ namespace Unity.MP_FPS
                             controllerLink.Controller.ProcessSelfResize(
                                 ref predictedPlayer.ValueRW, input, movementDt,
                                 in modifiers.ValueRO);
+                            controllerLink.Controller.ProcessResizeBounce(
+                                ref predictedPlayer.ValueRW, input, movementDt);
                             controllerLink.Controller.GetSizeMovementMultipliers(
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,
@@ -881,10 +881,6 @@ namespace Unity.MP_FPS
                                 speedMultiplier *= 1f + modifiers.ValueRO.ShieldSpeed *
                                     Mathf.Max(0f, shieldSpeedCard?.ValuePerStack ?? 0.5f);
                             }
-                            controllerLink.Controller.ProcessResizeBounce(
-                                ref predictedPlayer.ValueRW,
-                                input,
-                                movementDt);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
@@ -1236,10 +1232,9 @@ namespace Unity.MP_FPS
             return distance >= 0f;
         }
 
-        private static bool IsSizeLethal(float previous, float current, float maximum)
+        private static bool IsHealthLethal(float previous, float current)
         {
-            bool wasAlive = previous > 0f && previous < maximum;
-            return wasAlive && (current <= 0f || current >= maximum);
+            return previous > 0f && current <= 0f;
         }
 
         private void TryActivateReflect(Entity playerEntity,
@@ -1348,8 +1343,8 @@ namespace Unity.MP_FPS
         }
 
         /// <summary>
-        /// Applies a weapon size delta to its intended target, or redirects it to the
-        /// attacker when the intended target's reflect shield is active.
+        /// Applies ordinary weapon damage to the intended target, or redirects it to
+        /// the attacker when the intended target's reflect shield is active.
         /// </summary>
         public bool ApplyIncomingWeaponDamage(Entity intendedTargetEntity,
             int attackerNetworkId, WeaponData weaponData, uint hitTick,
@@ -1424,24 +1419,28 @@ namespace Unity.MP_FPS
 
             int damagedPlayerNetworkId = ownerLookup[damageTargetEntity].NetworkId;
             float healthBeforeDamage = damagedPlayer.ValueRO.CurrentHealth;
-            float appliedDelta = signedSizeDelta;
+            float appliedDelta = -Mathf.Abs(signedSizeDelta);
             if (appliedDelta < 0f)
             {
                 var catalog = WeaponManager.Instance?.CardModifierCatalog;
-                float damageReduction = defenderModifiers.BigHealthCapacity *
-                    (catalog?.FindByKind(Cards.CardModifierKind.BigHealthCapacity)?
-                        .DamageReductionPercent ?? 0f);
-                damageReduction += defenderModifiers.SmallHealthCapacity *
-                    (catalog?.FindByKind(Cards.CardModifierKind.SmallHealthCapacity)?
-                        .DamageReductionPercent ?? 0f);
+                float damageReduction = damagedPlayer.ValueRO.SizeState switch
+                {
+                    FirstPersonController.LargeSizeState =>
+                        defenderModifiers.BigHealthCapacity *
+                        (catalog?.FindByKind(Cards.CardModifierKind.BigHealthCapacity)?
+                            .DamageReductionPercent ?? 0f),
+                    FirstPersonController.SmallSizeState =>
+                        defenderModifiers.SmallHealthCapacity *
+                        (catalog?.FindByKind(Cards.CardModifierKind.SmallHealthCapacity)?
+                            .DamageReductionPercent ?? 0f),
+                    _ => 0f
+                };
                 appliedDelta *= 1f - Mathf.Clamp01(damageReduction);
             }
             damagedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
                 damagedPlayer.ValueRO.CurrentHealth + appliedDelta,
                 0f,
                 damagedPlayer.ValueRO.MaxHealth);
-            ApplyWeaponResizeEffect(damageTargetEntity, resizeEffect,
-                resizeEffectDuration, ref damagedPlayer.ValueRW);
             if (slowPercent > 0f && slowDuration > 0f &&
                 damagedPlayer.ValueRO.CurrentHealth > 0f)
             {
@@ -1463,7 +1462,7 @@ namespace Unity.MP_FPS
                 {
                     Target = damageTargetEntity,
                     SourceNetworkId = damageSourceNetworkId,
-                    DamagePerSecond = bleedDamagePerSecond,
+                    DamagePerSecond = -Mathf.Abs(bleedDamagePerSecond),
                     Remaining = bleedDuration
                 });
             }
@@ -1479,14 +1478,12 @@ namespace Unity.MP_FPS
                                  Mathf.Clamp01(lifeStealPercent);
                 sourcePlayer.ValueRW.CurrentHealth = Mathf.MoveTowards(
                     sourcePlayer.ValueRO.CurrentHealth,
-                    sourcePlayer.ValueRO.NormalSizeHealth > 0f
-                        ? sourcePlayer.ValueRO.NormalSizeHealth
-                        : 100f,
+                    sourcePlayer.ValueRO.MaxHealth,
                     restored);
             }
 
-            if (IsSizeLethal(healthBeforeDamage, damagedPlayer.ValueRO.CurrentHealth,
-                    damagedPlayer.ValueRO.MaxHealth))
+            if (IsHealthLethal(healthBeforeDamage,
+                    damagedPlayer.ValueRO.CurrentHealth))
             {
                 if (LeaderboardManager.ServerInstance != null)
                 {
@@ -1666,7 +1663,7 @@ namespace Unity.MP_FPS
                 EntityManager.SetComponentData(effect.Target, player);
                 effect.Remaining -= deltaTime;
 
-                if (IsSizeLethal(previous, player.CurrentHealth, player.MaxHealth))
+                if (IsHealthLethal(previous, player.CurrentHealth))
                 {
                     int victimId = EntityManager.HasComponent<GhostOwner>(effect.Target)
                         ? EntityManager.GetComponentData<GhostOwner>(effect.Target).NetworkId

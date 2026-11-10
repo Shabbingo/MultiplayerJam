@@ -40,7 +40,10 @@ public partial class ClientInputSenderSystem : SystemBase
                         { Tick = tick, ClientInterpolationTick = networkTime.InterpolationTick, };
 
                     commandInput.SetFrom(in input.ValueRO);
-                    commandInput.UpdateFrom(inProgressCommandInput);
+                    // The current sample owns held-key state. Only carry transient
+                    // actions forward from frames collected between network ticks;
+                    // otherwise a default/older sample makes held stances flicker.
+                    commandInput.MergeTransientFlagsFrom(inProgressCommandInput);
                     buffer.AddCommandData(commandInput);
 
                     // we can now start a new inprogress input

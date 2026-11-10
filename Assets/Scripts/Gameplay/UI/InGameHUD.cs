@@ -149,11 +149,11 @@ namespace Unity.MP_FPS
                 m_HealthBar.highValue = playerData.MaxHealth > 0 ? playerData.MaxHealth : 100;
                 m_HealthBar.value = playerData.CurrentHealth;
 
-                float sizeHealth = playerData.CurrentHealth;
-                Color healthColor = sizeHealth <= 100f
-                    ? Color.Lerp(Color.red, k_HealthBarColor, Mathf.Clamp01(sizeHealth / 100f))
-                    : Color.Lerp(k_HealthBarColor, new Color(1f, 0.35f, 0.05f, 0.9f),
-                        Mathf.Clamp01((sizeHealth - 100f) / 100f));
+                float healthRatio = playerData.MaxHealth > 0f
+                    ? Mathf.Clamp01(playerData.CurrentHealth / playerData.MaxHealth)
+                    : 0f;
+                Color healthColor = Color.Lerp(Color.red, k_HealthBarColor,
+                    healthRatio);
 
                 // Apply the calculated color to the fill element's background
                 m_PlayerHealthBarFill.style.backgroundColor = healthColor;
@@ -179,16 +179,10 @@ namespace Unity.MP_FPS
                             InputSystemManager.SelfGrowActionName)).ToUpperInvariant();
                 }
 
-                m_SelfShrinkUsesLabel.text =
-                    $"{shrinkBinding} SELF SHRINK: {playerData.SelfShrinkCharges} / {playerData.MaxSelfShrinkCharges}";
-                m_SelfGrowUsesLabel.text =
-                    $"{growBinding} SELF GROW: {playerData.SelfGrowCharges} / {playerData.MaxSelfGrowCharges}";
-                m_SelfShrinkUsesLabel.style.color = playerData.SelfShrinkCharges > 0
-                    ? Color.white
-                    : Color.red;
-                m_SelfGrowUsesLabel.style.color = playerData.SelfGrowCharges > 0
-                    ? Color.white
-                    : Color.red;
+                m_SelfShrinkUsesLabel.text = $"HOLD {shrinkBinding}: SMALL / FAST";
+                m_SelfGrowUsesLabel.text = $"HOLD {growBinding}: LARGE / TOUGH";
+                m_SelfShrinkUsesLabel.style.color = Color.white;
+                m_SelfGrowUsesLabel.style.color = Color.white;
             }
 
 
@@ -213,9 +207,9 @@ namespace Unity.MP_FPS
                     : playerData.ControllerState.SecondaryWeaponAmmo;
 
                 UpdateAbilityAmmoDisplay(m_ShrinkAmmoLabel, m_ShrinkAmmoBar,
-                    "LMB SHRINK", shrinkAmmo, shrinkCapacity);
+                    "LMB WEAPON", shrinkAmmo, shrinkCapacity);
                 UpdateAbilityAmmoDisplay(m_GrowAmmoLabel, m_GrowAmmoBar,
-                    "RMB GROW", growAmmo, growCapacity);
+                    "RMB WEAPON", growAmmo, growCapacity);
             }
 
             // Update Reloading Indicator

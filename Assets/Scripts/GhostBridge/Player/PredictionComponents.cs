@@ -57,12 +57,14 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public float CurrentHealth;
     [GhostField] public float MaxHealth;
     [GhostField] public float NormalSizeHealth;
+    [GhostField] public int SizeState;
 
     // Replicated and predicted so each player owns an authoritative shrink resource
     // while the local HUD can respond immediately.
     [GhostField] public float CurrentShrinkResource;
     [GhostField] public float MaxShrinkResource;
     [GhostField] public float ResizeBounceWindowRemaining;
+    [GhostField] public int ResizeAirPopsSinceGrounded;
     [GhostField] public float SelfResizeChargeAmount;
     [GhostField] public float SelfResizeMaxCharge;
     [GhostField] public int SelfResizeChargeDirection;

@@ -8,7 +8,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierCatalog
   m_Cards:
   - {fileID: 11400000, guid: d52cf40ff8e24f1a8cfe9320ba4e8f01, type: 2}
-  - {fileID: 11400000, guid: efec9f1468b8413b96e13247a040421d, type: 2}
   - {fileID: 11400000, guid: f08119cb908746d0b0c8cb6d39769828, type: 2}
   - {fileID: 11400000, guid: 7115f50796ba469ab60875f815f22757, type: 2}
   - {fileID: 11400000, guid: 5a16c3407511460095f55c54ef74439e, type: 2}

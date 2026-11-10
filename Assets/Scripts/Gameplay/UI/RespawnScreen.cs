@@ -176,9 +176,7 @@ namespace Unity.MP_FPS.UI
                         localPlayerQuery.ToComponentDataArray<PredictedPlayerGhost>(Allocator.Temp);
                     foreach (PredictedPlayerGhost localPlayer in localPlayers)
                     {
-                        bool isAlive = localPlayer.CurrentHealth > 0f &&
-                            (localPlayer.MaxHealth <= 0f ||
-                             localPlayer.CurrentHealth < localPlayer.MaxHealth);
+                        bool isAlive = localPlayer.CurrentHealth > 0f;
                         if (isAlive)
                         {
                             m_SpectatedNetworkId = -1;
@@ -284,8 +282,7 @@ namespace Unity.MP_FPS.UI
             {
                 PredictedPlayerGhost state =
                     entityManager.GetComponentData<PredictedPlayerGhost>(playerEntity);
-                if (state.CurrentHealth <= 0f ||
-                    (state.MaxHealth > 0f && state.CurrentHealth >= state.MaxHealth))
+                if (state.CurrentHealth <= 0f)
                 {
                     continue;
                 }

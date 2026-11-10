@@ -9,6 +9,8 @@ using UnityEngine;
 public partial class ClientInputReaderSystem : SystemBase
 {
     private float2 _accumulatedLook;
+    private bool _shrinkInputHeld;
+    private bool _growInputHeld;
 
     private Entity _lastKnownPlayerEntity = Entity.Null;
 
@@ -78,16 +80,48 @@ public partial class ClientInputReaderSystem : SystemBase
 
                 ProcessGameplayInput(controls, ref playerInput);
 
-                // Only play feedback when the predicted resize will actually change
-                // the player's size. This shares the resize code's charge and size
-                // boundary rules, so rejected input remains visually silent.
+                bool gameplayKeysEnabled = !GameSettings.Instance.IsPauseMenuOpen;
+                bool shrinkHeld = gameplayKeysEnabled &&
+                    InputSystemManager.GetGameplayAction(controls,
+                        InputSystemManager.SelfShrinkActionName).IsPressed();
+                bool growHeld = gameplayKeysEnabled &&
+                    InputSystemManager.GetGameplayAction(controls,
+                        InputSystemManager.SelfGrowActionName).IsPressed();
+                bool shrinkPressedThisHold = shrinkHeld && !_shrinkInputHeld;
+                bool growPressedThisHold = growHeld && !_growInputHeld;
+                bool shrinkReleasedThisHold = !shrinkHeld && _shrinkInputHeld;
+                bool growReleasedThisHold = !growHeld && _growInputHeld;
+                _shrinkInputHeld = shrinkHeld;
+                _growInputHeld = growHeld;
+
+                // Resize is driven by transitions rather than a continuously sampled
+                // held value. Prediction can replay these commands safely without
+                // toggling the stance on every network tick.
+                playerInput.SetFlag(PlayerInput.InputFlag.SelfShrinkPressed,
+                    shrinkPressedThisHold);
+                playerInput.SetFlag(PlayerInput.InputFlag.SelfGrowPressed,
+                    growPressedThisHold);
+                playerInput.SetFlag(PlayerInput.InputFlag.SelfShrinkReleased,
+                    shrinkReleasedThisHold);
+                playerInput.SetFlag(PlayerInput.InputFlag.SelfGrowReleased,
+                    growReleasedThisHold);
+
+                // Visual feedback uses the same persistent press edge. This ECS
+                // group may update more than once during one rendered frame.
                 if (!resizePulseHandled && currentLocalPlayerController != null)
                 {
-                    int resizeDirection = playerInput.SelfShrinkPressed ==
-                                          playerInput.SelfGrowPressed
+                    int resizeDirection = growPressedThisHold == shrinkPressedThisHold
                         ? 0
-                        : playerInput.SelfGrowPressed ? 1 : -1;
-                    if (currentLocalPlayerController.CanSelfResize(
+                        : growPressedThisHold ? 1 : -1;
+
+                    // Do not pulse when both stance keys are physically held.
+                    if (shrinkHeld && growHeld)
+                    {
+                        resizeDirection = 0;
+                    }
+
+                    if (resizeDirection != 0 &&
+                        currentLocalPlayerController.CanSelfResize(
                             in currentLocalPlayerData, resizeDirection))
                     {
                         CameraResizePulseEffect.TriggerConfigured(resizeDirection);
@@ -118,6 +152,8 @@ public partial class ClientInputReaderSystem : SystemBase
             }
             else
             {
+                _shrinkInputHeld = false;
+                _growInputHeld = false;
                 Debug.LogWarning($"[ClientInputReaderSystem] Input user is invalid");
             }
         }
@@ -135,19 +171,11 @@ public partial class ClientInputReaderSystem : SystemBase
         playerInput.SetFlag(PlayerInput.InputFlag.Reload, controls.FPS.Reload.triggered);
         playerInput.SetFlag(PlayerInput.InputFlag.TossGrenade,
             controls.FPS.ShootGrenade.triggered && !reflectPressed);
-        // Right click is exclusively the growth projectile. Manual self-resizing has
-        // deliberately been removed so firing can never alter the shooter's own size.
+        // Right click fires the secondary weapon. Size is controlled only by the
+        // dedicated held Shift/Ctrl stance inputs.
         playerInput.SetFlag(PlayerInput.InputFlag.GrowShot,
             controls.UI.RightClick.IsPressed());
 
-        playerInput.SetFlag(PlayerInput.InputFlag.SelfShrinkPressed,
-            gameplayKeysEnabled &&
-            InputSystemManager.GetGameplayAction(controls,
-                InputSystemManager.SelfShrinkActionName).WasPressedThisFrame());
-        playerInput.SetFlag(PlayerInput.InputFlag.SelfGrowPressed,
-            gameplayKeysEnabled &&
-            InputSystemManager.GetGameplayAction(controls,
-                InputSystemManager.SelfGrowActionName).WasPressedThisFrame());
         playerInput.SetFlag(PlayerInput.InputFlag.ReflectPressed,
             reflectPressed);
     }

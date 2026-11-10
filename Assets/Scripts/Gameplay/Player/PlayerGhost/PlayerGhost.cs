@@ -30,11 +30,6 @@ namespace Unity.MP_FPS
         [SerializeField] private Color m_ReflectShieldColour = new(0.12f, 0.68f, 1f, 0.42f);
         [SerializeField] private Vector3 m_ReflectShieldOffset = new(0f, 1f, 0f);
         [SerializeField] private Vector3 m_ReflectShieldScale = new(1.5f, 2.4f, 1.5f);
-        [FormerlySerializedAs("m_ManualScaleTransitionSpeed")]
-        [SerializeField, Min(0.01f), Tooltip("How quickly the visible player scale catches up while shrinking.")]
-        private float m_ShrinkScaleResponseSpeed = 8f;
-        [SerializeField, Min(0.01f), Tooltip("How quickly the visible player scale catches up while growing.")]
-        private float m_GrowScaleResponseSpeed = 8f;
         [field: SerializeField] public Transform CameraTarget { get; private set; }
         [field: SerializeField] public Transform ReticlePoint { get; private set; }
         [field: SerializeField] public Transform ShotOrigin { get; private set; }
@@ -559,19 +554,8 @@ namespace Unity.MP_FPS
         private void ApplyPlayerScale(float deltaTime)
         {
             var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
-            if (predictedPlayerGhost.MaxHealth <= 0f)
-            {
-                return;
-            }
-
             var targetScaleMultiplier = GetTargetScaleMultiplier(in predictedPlayerGhost);
-            float responseSpeed = targetScaleMultiplier < m_ManualScaleMultiplier
-                ? m_ShrinkScaleResponseSpeed
-                : m_GrowScaleResponseSpeed;
-            m_ManualScaleMultiplier = Mathf.MoveTowards(
-                m_ManualScaleMultiplier,
-                targetScaleMultiplier,
-                responseSpeed * deltaTime);
+            m_ManualScaleMultiplier = targetScaleMultiplier;
 
             var targetScale = m_InitialScale * m_ManualScaleMultiplier;
 
@@ -584,28 +568,12 @@ namespace Unity.MP_FPS
 
         public float GetTargetScaleMultiplier(in PredictedPlayerGhost predictedPlayerGhost)
         {
-            if (predictedPlayerGhost.MaxHealth <= 0f)
+            return predictedPlayerGhost.SizeState switch
             {
-                return 1f;
-            }
-
-            float normalSizeHealth = predictedPlayerGhost.NormalSizeHealth > 0f
-                ? predictedPlayerGhost.NormalSizeHealth
-                : 100f;
-            float sizeHealth = Mathf.Clamp(
-                predictedPlayerGhost.CurrentHealth, 0f, predictedPlayerGhost.MaxHealth);
-            float healthScaleMultiplier = sizeHealth <= normalSizeHealth
-                ? Mathf.Lerp(m_MinimumPlayerScale, 1f, sizeHealth / normalSizeHealth)
-                : Mathf.Lerp(1f, m_MaximumPlayerScale,
-                    (sizeHealth - normalSizeHealth) /
-                    Mathf.Max(1f, predictedPlayerGhost.MaxHealth - normalSizeHealth));
-            var controllerState = predictedPlayerGhost.ControllerState;
-
-            return controllerState.IsForcedFullSize
-                ? 1f
-                : controllerState.IsManualShrinkActive
-                    ? m_MinimumPlayerScale
-                    : healthScaleMultiplier;
+                FirstPersonController.SmallSizeState => m_MinimumPlayerScale,
+                FirstPersonController.LargeSizeState => m_MaximumPlayerScale,
+                _ => 1f
+            };
         }
 
         public bool SetPlayerPositionFromRPC(float3 rpcPosition, float positionErrorSq)

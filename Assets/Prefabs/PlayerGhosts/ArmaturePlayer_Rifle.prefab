@@ -272,6 +272,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FirstPersonController
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
+  m_SmallMaxHealth: 30
+  m_NormalMaxHealth: 100
+  m_LargeMaxHealth: 150
+  m_SmallMovementSpeedMultiplier: 1.5
+  m_LargeMovementSpeedMultiplier: 0.5
   m_ManualShrinkHealthMultiplier: 0.2
   m_ReflectDuration: 1
   m_ReflectCooldown: 15

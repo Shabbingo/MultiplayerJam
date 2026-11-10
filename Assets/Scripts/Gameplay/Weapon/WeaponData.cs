@@ -80,12 +80,9 @@ namespace Unity.MP_FPS
         [Tooltip("How many seconds the resize effect lasts before the player returns to the size permitted by their unchanged health.")]
         public float ResizeEffectDuration = 5f;
 
-        public float PlayerSizeDelta => ResizeEffect switch
-        {
-            PlayerResizeEffect.RestoreFullSize => 0f,
-            PlayerResizeEffect.Grow => Mathf.Abs(Damage),
-            _ => -Mathf.Abs(Damage)
-        };
+        // Legacy name retained for compatibility with existing hit paths. Weapons
+        // now always remove health and never alter the victim's size.
+        public float PlayerSizeDelta => -Mathf.Abs(Damage);
 
         public ProjectileBehavior Behavior = ProjectileBehavior.DirectDamage;
         public float AoeRadius = 5f;

@@ -227,15 +227,6 @@ namespace Unity.MP_FPS
                 weaponId, in modifiers);
             var secondaryProfile = WeaponManager.Instance.ResolveRuntimeProfile(
                 WeaponManager.SecondaryWeaponId, in modifiers);
-            var cardCatalog = WeaponManager.Instance.CardModifierCatalog;
-            float bigCapacityPerStack = cardCatalog?
-                .FindByKind(CardModifierKind.BigHealthCapacity)?.ValuePerStack ?? 0f;
-            float smallCapacityPerStack = cardCatalog?
-                .FindByKind(CardModifierKind.SmallHealthCapacity)?.ValuePerStack ?? 0f;
-            float bigCapacity = 100f * modifiers.BigHealthCapacity *
-                                Mathf.Max(0f, bigCapacityPerStack);
-            float smallCapacity = 100f * modifiers.SmallHealthCapacity *
-                                  Mathf.Max(0f, smallCapacityPerStack);
             int magazineSize = primaryProfile.SourceProfile != null
                 ? primaryProfile.MagazineSize
                 : 30;
@@ -251,10 +242,10 @@ namespace Unity.MP_FPS
             ecb.SetComponent(playerEntity, new PredictedPlayerGhost
             {
                 InputIndex = 0,
-                // Each capacity card extends its side of the normal-size point by 50%.
-                MaxHealth = 200f + bigCapacity + smallCapacity,
-                NormalSizeHealth = 100f + smallCapacity,
-                CurrentHealth = 100f + smallCapacity,
+                MaxHealth = FirstPersonController.DefaultNormalMaxHealth,
+                NormalSizeHealth = FirstPersonController.DefaultNormalMaxHealth,
+                CurrentHealth = FirstPersonController.DefaultNormalMaxHealth,
+                SizeState = FirstPersonController.NormalSizeState,
                 ControllerState = initialControllerState,
                 EquippedWeaponID = weaponId,
                 CurrentAmmo = magazineSize,
@@ -301,10 +292,7 @@ namespace Unity.MP_FPS
                      SystemAPI.Query<RefRO<PredictedPlayerGhost>, RefRO<GhostOwner>, RefRO<LocalTransform>>()
                          .WithEntityAccess())
             {
-                bool shrunkToDeath = playerGhost.ValueRO.CurrentHealth <= 0f;
-                bool overgrown = playerGhost.ValueRO.MaxHealth > 0f &&
-                                 playerGhost.ValueRO.CurrentHealth >= playerGhost.ValueRO.MaxHealth;
-                if (shrunkToDeath || overgrown)
+                if (playerGhost.ValueRO.CurrentHealth <= 0f)
                 {
                     var networkId = ghostOwner.ValueRO.NetworkId;
                     var connectionEntity = clientsMap[ghostOwner.ValueRO.NetworkId].ConnectionEntity;
@@ -334,12 +322,6 @@ namespace Unity.MP_FPS
                         Debug.Log($"[Server] Player {networkId} is eliminated until the next round.");
                     }
 
-                    if (overgrown && VisualEffectManager.ServerInstance != null)
-                    {
-                        VisualEffectManager.ServerInstance.Server_RequestPlayerExplosion(
-                            (Vector3)transform.ValueRO.Position + Vector3.up);
-                    }
-                    
                     if (SystemAPI.HasComponent<PlayerClientCommandInputLookup>(entity))
                     {
                         var inputLookup = SystemAPI.GetComponent<PlayerClientCommandInputLookup>(entity);
