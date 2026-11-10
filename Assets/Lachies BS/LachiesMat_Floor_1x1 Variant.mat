@@ -48,6 +48,6 @@ Material:
     - _WorldSpace_UV_XAxis_Only: 0
     - _WorldSpace_UV_YAxis_Only: 0
     m_Colors:
-    - _Color_Tint_R_Base: {r: 0.23584908, g: 0.23584908, b: 0.23584908, a: 1}
+    - _Color_Tint_R_Base: {r: 0.23529412, g: 0.23529412, b: 0.23529412, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
