@@ -436,7 +436,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d6eb1f3325185fc43a4bb6f3d95ff636, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PredictedPlayerControllerConstsAuthoring
-  <WalkSpeed>k__BackingField: 9
+  <WalkSpeed>k__BackingField: 7
   <SprintSpeed>k__BackingField: 7
   <WalkRotationSmoothTime>k__BackingField: 0.1
   <WalkAnimationMotionScale>k__BackingField: 0.4

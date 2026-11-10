@@ -15,7 +15,7 @@ MonoBehaviour:
   m_CardId: 5
   m_DisplayName: Homing Projectiles
   m_Description: Adds 15 degrees per second of player-tracking turn speed to the
-    selected hand.
+    selected hand Bullets also slightly slower.
   m_Icon: {fileID: 0}
   m_StrengthScore: 5
   m_BaseOfferWeight: 1
@@ -23,3 +23,17 @@ MonoBehaviour:
   m_AllowedTargets: 3
   m_StackLimit: 1
   m_ValuePerStack: 25
+  m_EffectDurationSeconds: 0
+  m_DamagePercentPerStack: 0
+  m_BaseDamageMultiplier: 1
+  m_ReloadTimeMultiplierPerStack: 1
+  m_MinimumReloadMultiplier: 0.25
+  m_MagazineDeltaPerStack: 0
+  m_ProjectileScalePerStack: 0
+  m_ProjectileSpeedMultiplierPerStack: 0.5
+  m_ProjectileScaleMultiplierPerStack: 1
+  m_ExplosionRadiusMultiplierPerStack: 1
+  m_ScatterHalfAngleDegrees: 7.5
+  m_BounceVelocityRetention: 1
+  m_DamageReductionPercent: 0
+  m_TeleportFreezeSeconds: 0.1

@@ -3,17 +3,37 @@
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8ea0d67bb85b448c8ea2f83f32a65fb1, type: 3}
   m_Name: Bleed
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 12
   m_DisplayName: Bleed
-  m_Description: Hits apply a stacking 10 damage-per-second bleed, but direct bullet damage becomes zero.
+  m_Description: Hits apply a stacking 10 damage-per-second bleed, but direct bullet
+    damage becomes zero.
   m_Icon: {fileID: 0}
   m_StrengthScore: 5
   m_BaseOfferWeight: 1
   m_Kind: 11
   m_AllowedTargets: 3
   m_StackLimit: 1
-  m_ValuePerStack: 10
+  m_ValuePerStack: 20
   m_EffectDurationSeconds: 3
+  m_DamagePercentPerStack: 0
+  m_BaseDamageMultiplier: 1
+  m_ReloadTimeMultiplierPerStack: 1
+  m_MinimumReloadMultiplier: 0.25
+  m_MagazineDeltaPerStack: 0
+  m_ProjectileScalePerStack: 0
+  m_ProjectileSpeedMultiplierPerStack: 1
+  m_ProjectileScaleMultiplierPerStack: 1
+  m_ExplosionRadiusMultiplierPerStack: 1
+  m_ScatterHalfAngleDegrees: 7.5
+  m_BounceVelocityRetention: 1
+  m_DamageReductionPercent: 0
+  m_TeleportFreezeSeconds: 0.1
