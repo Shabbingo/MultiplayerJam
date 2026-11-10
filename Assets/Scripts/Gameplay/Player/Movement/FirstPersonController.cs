@@ -34,6 +34,8 @@ public class FirstPersonController : MonoBehaviour
     [SerializeField, Min(1f)] private float m_SmallMaxHealth = 30f;
     [SerializeField, Min(1f)] private float m_NormalMaxHealth = DefaultNormalMaxHealth;
     [SerializeField, Min(1f)] private float m_LargeMaxHealth = 150f;
+    [SerializeField, Range(0f, 1f), Tooltip("Fraction of all incoming damage prevented while in the large stance.")]
+    private float m_LargeIncomingDamageReduction = 0.25f;
     [SerializeField, Min(0f), Tooltip("Movement multiplier while Ctrl is held.")]
     private float m_SmallMovementSpeedMultiplier = 1.5f;
     [SerializeField, Min(0f), Tooltip("Movement multiplier while Shift is held.")]
@@ -48,6 +50,9 @@ public class FirstPersonController : MonoBehaviour
     private float m_ResizeBounceSpeed = 7.5f;
     [SerializeField, Min(0), Tooltip("Maximum small-to-normal air pops before the player must touch the ground. Set to 0 to disable air pops.")]
     private int m_MaxConsecutiveResizePops = 1;
+
+    public float LargeIncomingDamageReduction =>
+        Mathf.Clamp01(m_LargeIncomingDamageReduction);
 
     [Header("Self Resize Camera Pulse")]
     [SerializeField, Range(0f, 1f), Tooltip("Peak lens distortion used by a self-resize pulse. Grow and shrink use opposite distortion directions.")]
@@ -661,16 +666,18 @@ public class FirstPersonController : MonoBehaviour
         }
 
         float previousMaximum = Mathf.Max(1f, predictedPlayer.MaxHealth);
-        float damageTaken = Mathf.Max(0f,
-            previousMaximum - predictedPlayer.CurrentHealth);
+        float healthFraction = Mathf.Clamp01(
+            predictedPlayer.CurrentHealth / previousMaximum);
         float newMaximum = GetMaximumHealthForSizeState(
             requestedSizeState, in modifiers);
 
         predictedPlayer.SizeState = requestedSizeState;
         predictedPlayer.NormalSizeHealth = Mathf.Max(1f, m_NormalMaxHealth);
         predictedPlayer.MaxHealth = newMaximum;
-        predictedPlayer.CurrentHealth = Mathf.Clamp(
-            newMaximum - damageTaken, 0f, newMaximum);
+        // Preserve health percentage across stances. A damaged player can safely
+        // enter the 30-health small stance, while repeated resizing cannot improve
+        // their relative health or erase damage.
+        predictedPlayer.CurrentHealth = newMaximum * healthFraction;
         predictedPlayer.ControllerState.IsManualShrinkActive =
             requestedSizeState == SmallSizeState;
         predictedPlayer.ControllerState.IsForcedFullSize = false;

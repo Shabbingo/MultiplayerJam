@@ -1422,19 +1422,8 @@ namespace Unity.MP_FPS
             float appliedDelta = -Mathf.Abs(signedSizeDelta);
             if (appliedDelta < 0f)
             {
-                var catalog = WeaponManager.Instance?.CardModifierCatalog;
-                float damageReduction = damagedPlayer.ValueRO.SizeState switch
-                {
-                    FirstPersonController.LargeSizeState =>
-                        defenderModifiers.BigHealthCapacity *
-                        (catalog?.FindByKind(Cards.CardModifierKind.BigHealthCapacity)?
-                            .DamageReductionPercent ?? 0f),
-                    FirstPersonController.SmallSizeState =>
-                        defenderModifiers.SmallHealthCapacity *
-                        (catalog?.FindByKind(Cards.CardModifierKind.SmallHealthCapacity)?
-                            .DamageReductionPercent ?? 0f),
-                    _ => 0f
-                };
+                float damageReduction = GetIncomingDamageReduction(
+                    damageTargetEntity, in damagedPlayer.ValueRO);
                 appliedDelta *= 1f - Mathf.Clamp01(damageReduction);
             }
             damagedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
@@ -1655,8 +1644,11 @@ namespace Unity.MP_FPS
                 }
 
                 float previous = player.CurrentHealth;
+                float incomingDamageMultiplier = 1f -
+                    GetIncomingDamageReduction(effect.Target, in player);
                 player.CurrentHealth = Mathf.Clamp(
-                    player.CurrentHealth + effect.DamagePerSecond * deltaTime,
+                    player.CurrentHealth + effect.DamagePerSecond * deltaTime *
+                    incomingDamageMultiplier,
                     0f, player.MaxHealth);
                 player.LastDamageAmount = Mathf.Abs(previous - player.CurrentHealth);
                 player.LastHitTick = hitTick;
@@ -1681,6 +1673,43 @@ namespace Unity.MP_FPS
                 if (effect.Remaining <= 0f) m_BleedEffects.RemoveAt(i);
                 else m_BleedEffects[i] = effect;
             }
+        }
+
+        private float GetIncomingDamageReduction(Entity targetEntity,
+            in PredictedPlayerGhost player)
+        {
+            Cards.PlayerModifierStacks modifiers =
+                EntityManager.HasComponent<Cards.PlayerModifierStacks>(targetEntity)
+                    ? EntityManager.GetComponentData<Cards.PlayerModifierStacks>(targetEntity)
+                    : default;
+            var catalog = WeaponManager.Instance?.CardModifierCatalog;
+
+            float reduction = 0f;
+            if (player.SizeState == FirstPersonController.LargeSizeState)
+            {
+                reduction = 0.25f;
+                if (EntityManager.HasComponent<PlayerControllerLink>(targetEntity))
+                {
+                    var controllerLink =
+                        EntityManager.GetComponentObject<PlayerControllerLink>(targetEntity);
+                    if (controllerLink?.Controller != null)
+                    {
+                        reduction = controllerLink.Controller.LargeIncomingDamageReduction;
+                    }
+                }
+
+                reduction += modifiers.BigHealthCapacity *
+                    (catalog?.FindByKind(Cards.CardModifierKind.BigHealthCapacity)?
+                        .DamageReductionPercent ?? 0f);
+            }
+            else if (player.SizeState == FirstPersonController.SmallSizeState)
+            {
+                reduction = modifiers.SmallHealthCapacity *
+                    (catalog?.FindByKind(Cards.CardModifierKind.SmallHealthCapacity)?
+                        .DamageReductionPercent ?? 0f);
+            }
+
+            return Mathf.Clamp01(reduction);
         }
 
         public bool TryGetGuidedAimPoint(int ownerNetworkId, float range, out Vector3 targetPoint)
