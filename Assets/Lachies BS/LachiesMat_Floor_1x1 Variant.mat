@@ -40,6 +40,7 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
+    - _Brightness_R_Base: 1
     - _QueueControl: 0
     - _QueueOffset: 0
     - _TilingX: 1
@@ -47,6 +48,6 @@ Material:
     - _WorldSpace_UV_XAxis_Only: 0
     - _WorldSpace_UV_YAxis_Only: 0
     m_Colors:
-    - _Color_Tint_R_Base: {r: 0.63838476, g: 0.6415094, b: 0.3177287, a: 1}
+    - _Color_Tint_R_Base: {r: 0.23584908, g: 0.23584908, b: 0.23584908, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
