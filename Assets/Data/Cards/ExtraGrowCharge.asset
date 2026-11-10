@@ -4,15 +4,15 @@
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8ea0d67bb85b448c8ea2f83f32a65fb1, type: 3}
-  m_Name: Extra Grow Charge
+  m_Name: Slow Shield
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 3
-  m_DisplayName: Extra Grow Charge
-  m_Description: Adds one maximum self-grow charge.
+  m_DisplayName: Slow Shield
+  m_Description: A successful reflect slows the opponent by 50%.
   m_Icon: {fileID: 0}
   m_StrengthScore: 2
   m_BaseOfferWeight: 1
-  m_Kind: 2
+  m_Kind: 18
   m_AllowedTargets: 4
-  m_StackLimit: 5
-  m_ValuePerStack: 1
+  m_StackLimit: 1
+  m_ValuePerStack: 0.5

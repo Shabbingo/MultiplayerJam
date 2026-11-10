@@ -32,6 +32,7 @@ namespace Unity.MP_FPS.UI
         private Button _leftTargetButton;
         private Button _selfTargetButton;
         private Button _rightTargetButton;
+        private Button _bothTargetButton;
         private readonly List<ScoreUiPlayerInfo> _items = new();
 
         private float _timer;
@@ -69,9 +70,11 @@ namespace Unity.MP_FPS.UI
             _leftTargetButton = _rootElement.Q<Button>("target-left");
             _selfTargetButton = _rootElement.Q<Button>("target-self");
             _rightTargetButton = _rootElement.Q<Button>("target-right");
+            _bothTargetButton = _rootElement.Q<Button>("target-both");
             _leftTargetButton.clicked += () => SubmitTarget(ModifierTarget.LeftHand);
             _selfTargetButton.clicked += () => SubmitTarget(ModifierTarget.Self);
             _rightTargetButton.clicked += () => SubmitTarget(ModifierTarget.RightHand);
+            _bothTargetButton.clicked += () => SubmitTarget(ModifierTarget.BothHands);
 
             _listView.itemsSource = _items;
             _listView.makeItem = () => ScoreItemTemplate.Instantiate();
@@ -319,6 +322,7 @@ namespace Unity.MP_FPS.UI
             _leftTargetButton.SetEnabled(false);
             _selfTargetButton.SetEnabled(false);
             _rightTargetButton.SetEnabled(false);
+            _bothTargetButton.SetEnabled(false);
         }
 
         private void RefreshTargetButtons(LeaderboardManager manager)
@@ -328,6 +332,7 @@ namespace Unity.MP_FPS.UI
             _leftTargetButton.SetEnabled(canChoose && card.Allows(ModifierTarget.LeftHand));
             _selfTargetButton.SetEnabled(canChoose && card.Allows(ModifierTarget.Self));
             _rightTargetButton.SetEnabled(canChoose && card.Allows(ModifierTarget.RightHand));
+            _bothTargetButton.SetEnabled(canChoose && card.Allows(ModifierTarget.BothHands));
         }
 
         private void UpdateLeaderboardUI()

@@ -830,9 +830,9 @@ public class FirstPersonController : MonoBehaviour
         }
 
         predictedPlayer.MaxSelfShrinkCharges = Mathf.Max(1,
-            m_SelfShrinkUses + modifiers.ExtraSelfShrinkCharges);
+            m_SelfShrinkUses + modifiers.ExtraSelfShrinkCharges + modifiers.ExtraResizeCharges);
         predictedPlayer.MaxSelfGrowCharges = Mathf.Max(1,
-            m_SelfGrowUses + modifiers.ExtraSelfGrowCharges);
+            m_SelfGrowUses + modifiers.ExtraSelfGrowCharges + modifiers.ExtraResizeCharges);
         predictedPlayer.SelfShrinkCharges = predictedPlayer.MaxSelfShrinkCharges;
         predictedPlayer.SelfGrowCharges = predictedPlayer.MaxSelfGrowCharges;
         predictedPlayer.SelfShrinkRechargeTimer = 0f;

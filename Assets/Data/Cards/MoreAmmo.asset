@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 10
   m_DisplayName: More Ammo
-  m_Description: Adds 10 rounds to the selected hand's magazine per stack.
+  m_Description: Adds two bullets to both magazines, but increases reload time by 15%.
   m_Icon: {fileID: 0}
   m_StrengthScore: 2
   m_BaseOfferWeight: 1
   m_Kind: 9
-  m_AllowedTargets: 3
+  m_AllowedTargets: 8
   m_StackLimit: 5
-  m_ValuePerStack: 10
+  m_ValuePerStack: 2

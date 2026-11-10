@@ -435,6 +435,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,
                                 out float jumpHeightMultiplier);
+                            if (modifiers.ValueRO.ShieldSpeed > 0 &&
+                                predictedPlayer.ValueRO.ReflectShieldTimeRemaining > 0f)
+                                speedMultiplier *= 1.5f;
                             controllerLink.Controller.ProcessResizeBounce(
                                 ref predictedPlayer.ValueRW,
                                 input,

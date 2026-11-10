@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ea0d67bb85b448c8ea2f83f32a65fb1, type: 3}
+  m_Name: Bullet Size
+  m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
+  m_CardId: 14
+  m_DisplayName: Bullet Size
+  m_Description: Increases both hands' bullet scale by 0.5 and damage by 10%. Larger bullets may clip walls.
+  m_Icon: {fileID: 0}
+  m_StrengthScore: 1
+  m_BaseOfferWeight: 1
+  m_Kind: 14
+  m_AllowedTargets: 8
+  m_StackLimit: 5
+  m_ValuePerStack: 0.5

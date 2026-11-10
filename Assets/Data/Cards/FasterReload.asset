@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 9
   m_DisplayName: Faster Reload
-  m_Description: Reduces the selected hand's reload time by 15% per stack, down to a 75% reduction.
+  m_Description: Reduces reload time for both hands by 50%.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_StrengthScore: 2
   m_BaseOfferWeight: 1
   m_Kind: 8
-  m_AllowedTargets: 3
-  m_StackLimit: 5
-  m_ValuePerStack: 0.15
+  m_AllowedTargets: 8
+  m_StackLimit: 1
+  m_ValuePerStack: 0.5

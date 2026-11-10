@@ -41,7 +41,10 @@ namespace Unity.MP_FPS
             AddedHomingTurnSpeed = 15f,
             WireGuidedTurnSpeed = 120f,
             ReloadTimeReductionPerStack = 0.15f,
-            AmmoPerStack = 10
+            AmmoPerStack = 2,
+            BleedDamagePerSecond = 10f,
+            BleedDuration = 3f,
+            LifeStealPercent = 0.5f
         };
 
         public Cards.CardModifierCatalog CardModifierCatalog => m_CardModifierCatalog;
@@ -100,6 +103,8 @@ namespace Unity.MP_FPS
             var wireGuided = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.WireGuided);
             var reload = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.ReloadSpeed);
             var ammo = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.MagazineCapacity);
+            var bleed = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.Bleed);
+            var siphon = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.LifeSiphon);
             if (damage != null) tuning.DamagePerStack = damage.ValuePerStack;
             if (explosion != null) tuning.ExplosionRadiusPerStack = explosion.ValuePerStack;
             if (scatter != null) tuning.ScatterPelletCount = Mathf.Max(1,
@@ -110,6 +115,8 @@ namespace Unity.MP_FPS
             if (reload != null) tuning.ReloadTimeReductionPerStack = reload.ValuePerStack;
             if (ammo != null) tuning.AmmoPerStack = Mathf.Max(0,
                 Mathf.RoundToInt(ammo.ValuePerStack));
+            if (bleed != null) tuning.BleedDamagePerSecond = bleed.ValuePerStack;
+            if (siphon != null) tuning.LifeStealPercent = siphon.ValuePerStack;
             return tuning;
         }
 

@@ -10,7 +10,7 @@ MonoBehaviour:
   m_DisplayName: Wire Guided
   m_Description: Projectiles from the selected hand continuously steer toward your live crosshair.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_StrengthScore: 5
   m_BaseOfferWeight: 1
   m_Kind: 10
   m_AllowedTargets: 3

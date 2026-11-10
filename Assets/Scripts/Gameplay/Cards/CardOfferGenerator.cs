@@ -6,7 +6,7 @@ namespace Unity.MP_FPS.Cards
 {
     /// <summary>
     /// Server-side deterministic offer generation. Finishing position zero is the
-    /// first player eliminated; later positions receive less comeback weighting.
+    /// first player eliminated; the final position is the round winner.
     /// </summary>
     public static class CardOfferGenerator
     {
@@ -53,7 +53,8 @@ namespace Unity.MP_FPS.Cards
         {
             return IsAvailable(card, ModifierTarget.LeftHand, in owned) ||
                    IsAvailable(card, ModifierTarget.RightHand, in owned) ||
-                   IsAvailable(card, ModifierTarget.Self, in owned);
+                   IsAvailable(card, ModifierTarget.Self, in owned) ||
+                   IsAvailable(card, ModifierTarget.BothHands, in owned);
         }
 
         private static bool IsAvailable(CardModifierDefinition card,
@@ -72,7 +73,7 @@ namespace Unity.MP_FPS.Cards
             float placement01 = playerCount <= 1
                 ? 0.5f
                 : Mathf.Clamp01(finishingPosition / (float)(playerCount - 1));
-            // +1 for first eliminated, -1 for the final player in the draft.
+            // +1 for first eliminated, -1 for the round winner.
             float comebackBias = 1f - placement01 * 2f;
             double totalWeight = 0d;
             for (int i = 0; i < candidates.Count; i++)

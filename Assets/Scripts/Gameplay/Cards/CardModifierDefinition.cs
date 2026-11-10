@@ -9,7 +9,8 @@ namespace Unity.MP_FPS.Cards
         None = 0,
         LeftHand = 1 << 0,
         RightHand = 1 << 1,
-        Self = 1 << 2
+        Self = 1 << 2,
+        BothHands = 1 << 3
     }
 
     public enum WeaponHand : byte
@@ -30,7 +31,20 @@ namespace Unity.MP_FPS.Cards
         ScatterWeapon,
         ReloadSpeed,
         MagazineCapacity,
-        WireGuided
+        WireGuided,
+        Bleed,
+        Bounce,
+        LifeSiphon,
+        BulletSize,
+        BulletSpeed,
+        BulletGrowth,
+        ExtraResizeCharge,
+        SlowShield,
+        SwapOnReflect,
+        ReflectHealing,
+        ShieldSpeed,
+        BigHealthCapacity,
+        SmallHealthCapacity
     }
 
     [CreateAssetMenu(fileName = "CardModifier", menuName = "Multiplayer Jam/Card Modifier")]
@@ -79,9 +93,20 @@ namespace Unity.MP_FPS.Cards
             m_BaseOfferWeight = Mathf.Max(0.01f, m_BaseOfferWeight);
             m_StackLimit = Mathf.Clamp(m_StackLimit, 1, 5);
 
-            if (m_Kind is CardModifierKind.SlowTarget or
+            if (m_Kind is CardModifierKind.HomingProjectiles or
+                CardModifierKind.WireGuided or
+                CardModifierKind.SlowTarget or
                 CardModifierKind.ScatterWeapon or
-                CardModifierKind.WireGuided)
+                CardModifierKind.Bleed or
+                CardModifierKind.Bounce or
+                CardModifierKind.LifeSiphon or
+                CardModifierKind.BulletGrowth or
+                CardModifierKind.SlowShield or
+                CardModifierKind.SwapOnReflect or
+                CardModifierKind.ReflectHealing or
+                CardModifierKind.ShieldSpeed or
+                CardModifierKind.BigHealthCapacity or
+                CardModifierKind.SmallHealthCapacity)
             {
                 m_StackLimit = 1;
             }

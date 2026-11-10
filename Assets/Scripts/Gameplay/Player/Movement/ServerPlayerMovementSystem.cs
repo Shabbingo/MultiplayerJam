@@ -33,6 +33,10 @@ namespace Unity.MP_FPS
         public byte AppliesSlow;
         public float SlowPercent;
         public float SlowDuration;
+        public float ProjectileSpeed;
+        public int MaxBounces;
+        public float ProjectileScale;
+        public byte GrowsOverDistance;
     }
 
     struct VfxSpawnData
@@ -721,7 +725,11 @@ namespace Unity.MP_FPS
                                             ExplosionRadius = runtimeProfile.ExplosionRadius,
                                             AppliesSlow = runtimeProfile.AppliesSlow ? (byte)1 : (byte)0,
                                             SlowPercent = runtimeProfile.SlowPercent,
-                                            SlowDuration = runtimeProfile.SlowDuration
+                                            SlowDuration = runtimeProfile.SlowDuration,
+                                            ProjectileSpeed = runtimeProfile.ProjectileSpeed,
+                                            MaxBounces = runtimeProfile.MaxBounces,
+                                            ProjectileScale = runtimeProfile.ProjectileScale,
+                                            GrowsOverDistance = runtimeProfile.GrowsOverDistance ? (byte)1 : (byte)0
                                         });
                                     }
                                     else
@@ -769,7 +777,11 @@ namespace Unity.MP_FPS
                             ExplosionRadius = spawnData.ExplosionRadius,
                             AppliesSlow = spawnData.AppliesSlow,
                             SlowPercent = spawnData.SlowPercent,
-                            SlowDuration = spawnData.SlowDuration
+                            SlowDuration = spawnData.SlowDuration,
+                            ProjectileSpeed = spawnData.ProjectileSpeed,
+                            MaxBounces = spawnData.MaxBounces,
+                            ProjectileScale = spawnData.ProjectileScale,
+                            GrowsOverDistance = spawnData.GrowsOverDistance
                         });
                     });
             }
@@ -815,6 +827,9 @@ namespace Unity.MP_FPS
                                 in predictedPlayer.ValueRO,
                                 out float speedMultiplier,
                                 out float jumpHeightMultiplier);
+                            if (modifiers.ValueRO.ShieldSpeed > 0 &&
+                                predictedPlayer.ValueRO.ReflectShieldTimeRemaining > 0f)
+                                speedMultiplier *= 1.5f;
                             controllerLink.Controller.ProcessResizeBounce(
                                 ref predictedPlayer.ValueRW,
                                 input,
@@ -1324,6 +1339,10 @@ namespace Unity.MP_FPS
             Entity damageTargetEntity = intendedTargetEntity;
             int damageSourceNetworkId = attackerNetworkId;
             bool reflected = m_ReflectActiveTimers.ContainsKey(intendedTargetNetworkId);
+            Cards.PlayerModifierStacks defenderModifiers =
+                EntityManager.HasComponent<Cards.PlayerModifierStacks>(intendedTargetEntity)
+                    ? EntityManager.GetComponentData<Cards.PlayerModifierStacks>(intendedTargetEntity)
+                    : default;
 
             if (reflected)
             {
@@ -1349,6 +1368,10 @@ namespace Unity.MP_FPS
             int damagedPlayerNetworkId = ownerLookup[damageTargetEntity].NetworkId;
             float healthBeforeDamage = damagedPlayer.ValueRO.CurrentHealth;
             float appliedDelta = signedSizeDelta;
+            if (appliedDelta < 0f &&
+                (defenderModifiers.BigHealthCapacity > 0 ||
+                 defenderModifiers.SmallHealthCapacity > 0))
+                appliedDelta *= 0.9f;
             damagedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
                 damagedPlayer.ValueRO.CurrentHealth + appliedDelta,
                 0f,
@@ -1386,6 +1409,33 @@ namespace Unity.MP_FPS
 
             if (reflected)
             {
+                if (defenderModifiers.SlowShield > 0)
+                {
+                    damagedPlayer.ValueRW.MoveSlowPercent = Mathf.Max(
+                        damagedPlayer.ValueRO.MoveSlowPercent, 0.5f);
+                    damagedPlayer.ValueRW.MoveSlowTimeRemaining = Mathf.Max(
+                        damagedPlayer.ValueRO.MoveSlowTimeRemaining, 3f);
+                }
+                if (defenderModifiers.ReflectHealing > 0)
+                {
+                    var defender = playerGhostLookup.GetRefRW(intendedTargetEntity);
+                    defender.ValueRW.CurrentHealth = Mathf.Min(defender.ValueRO.MaxHealth,
+                        defender.ValueRO.CurrentHealth + Mathf.Abs(signedSizeDelta) * 0.5f);
+                }
+                if (defenderModifiers.SwapOnReflect > 0 &&
+                    EntityManager.HasComponent<LocalTransform>(intendedTargetEntity) &&
+                    EntityManager.HasComponent<LocalTransform>(damageTargetEntity))
+                {
+                    var defenderTransform = EntityManager.GetComponentData<LocalTransform>(
+                        intendedTargetEntity);
+                    var attackerTransform = EntityManager.GetComponentData<LocalTransform>(
+                        damageTargetEntity);
+                    float3 defenderPosition = defenderTransform.Position;
+                    defenderTransform.Position = attackerTransform.Position;
+                    attackerTransform.Position = defenderPosition;
+                    EntityManager.SetComponentData(intendedTargetEntity, defenderTransform);
+                    EntityManager.SetComponentData(damageTargetEntity, attackerTransform);
+                }
                 Debug.Log($"[Server] Player {intendedTargetNetworkId} reflected " +
                           $"player {attackerNetworkId}'s hit.");
             }

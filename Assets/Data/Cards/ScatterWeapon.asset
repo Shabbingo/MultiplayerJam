@@ -8,9 +8,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 8
   m_DisplayName: Scatter Weapon
-  m_Description: Transforms the selected hand into the shotgun profile and fires ten pellets.
+  m_Description: Converts the selected hand to a short-range shotgun and reduces its magazine by one.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 5
+  m_StrengthScore: 3
   m_BaseOfferWeight: 1
   m_Kind: 7
   m_AllowedTargets: 3

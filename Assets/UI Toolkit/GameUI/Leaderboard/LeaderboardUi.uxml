@@ -26,6 +26,7 @@
                 <ui:Button text="LEFT HAND" name="target-left" style="width: 180px; margin-right: 10px;"/>
                 <ui:Button text="SELF" name="target-self" style="width: 180px; margin-right: 10px;"/>
                 <ui:Button text="RIGHT HAND" name="target-right" style="width: 180px;"/>
+                <ui:Button text="BOTH HANDS" name="target-both" style="width: 180px; margin-left: 10px;"/>
             </ui:VisualElement>
             <ui:Label text="" name="draft-pick-result" style="font-size: 19px; color: rgb(120, 255, 170); -unity-font-style: bold; -unity-text-align: middle-center; margin-top: 12px;"/>
         </ui:VisualElement>

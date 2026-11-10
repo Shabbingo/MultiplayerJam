@@ -51,6 +51,10 @@ namespace Unity.MP_FPS
             [GhostField] public byte AppliesSlow;
             [GhostField] public float SlowPercent;
             [GhostField] public float SlowDuration;
+            [GhostField] public float ProjectileSpeed;
+            [GhostField] public int MaxBounces;
+            [GhostField] public float ProjectileScale;
+            [GhostField] public byte GrowsOverDistance;
         }
 
         public class PredictedProjectileInfo
@@ -89,6 +93,9 @@ namespace Unity.MP_FPS
         private bool _hasGuidedTarget;
         private bool _runtimeHoming;
         private float _runtimeHomingTurnSpeed;
+        private float _runtimeProjectileSpeed;
+        private float _runtimeProjectileScale = 1f;
+        private bool _growsOverDistance;
 
         public void SetGuidedTarget(Vector3 targetPosition)
         {
@@ -109,6 +116,10 @@ namespace Unity.MP_FPS
             SetGuidedTarget(projectileData.TargetPosition);
             SetRuntimeMotion(projectileData.IsHoming != 0,
                 projectileData.HomingTurnSpeed);
+            _runtimeProjectileSpeed = projectileData.ProjectileSpeed;
+            _runtimeProjectileScale = Mathf.Max(0.1f, projectileData.ProjectileScale);
+            _growsOverDistance = projectileData.GrowsOverDistance != 0;
+            transform.localScale = Vector3.one * _runtimeProjectileScale;
             ApplyServerMotionState(projectileData);
         }
 
@@ -164,6 +175,9 @@ namespace Unity.MP_FPS
             Move(displacement);
 
             _localTime += deltaTime;
+            if (_growsOverDistance)
+                transform.localScale = Vector3.one * _runtimeProjectileScale *
+                                       (1f + _localTime * 0.1f);
             PublishServerMotionState();
             if (_localTime > weaponData.ProjectileFuseTime)
             {
@@ -179,7 +193,10 @@ namespace Unity.MP_FPS
                 return;
             }
 
-            _velocity = transform.forward * weaponData.ProjectileSpeed;
+            float launchSpeed = _runtimeProjectileSpeed > 0f
+                ? _runtimeProjectileSpeed
+                : weaponData.ProjectileSpeed;
+            _velocity = transform.forward * launchSpeed;
             if (_runtimeHoming)
             {
                 _velocity += Vector3.up * weaponData.GuidedLaunchUpwardSpeed;
@@ -208,7 +225,9 @@ namespace Unity.MP_FPS
                         Mathf.Deg2Rad * Mathf.Max(0f, _runtimeHomingTurnSpeed) * deltaTime,
                         0f);
                     float currentSpeed = Mathf.Max(_velocity.magnitude, 0.01f);
-                    float targetSpeed = Mathf.Max(0.01f, weaponData.ProjectileSpeed);
+                    float targetSpeed = Mathf.Max(0.01f, _runtimeProjectileSpeed > 0f
+                        ? _runtimeProjectileSpeed
+                        : weaponData.ProjectileSpeed);
                     float speed = weaponData.GuidedAcceleration > 0f
                         ? Mathf.MoveTowards(currentSpeed, targetSpeed,
                             weaponData.GuidedAcceleration * deltaTime)
@@ -279,6 +298,9 @@ namespace Unity.MP_FPS
 
             Move(displacement);
             _localTime += deltaTime;
+            if (_growsOverDistance)
+                transform.localScale = Vector3.one * _runtimeProjectileScale *
+                                       (1f + _localTime * 0.1f);
         }
 
         private bool CheckForCollision(WeaponData weaponData, Vector3 displacement)
@@ -386,7 +408,11 @@ namespace Unity.MP_FPS
 
         private bool TryBounce(Vector3 impactPosition, Vector3 impactNormal, WeaponData weaponData)
         {
-            if (!weaponData.IsLobbedProjectile || _bounceCount >= weaponData.ProjectileBounces)
+            var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+            int maximumBounces = Mathf.Max(weaponData.ProjectileBounces,
+                projectileData.MaxBounces);
+            if ((!weaponData.IsLobbedProjectile && maximumBounces <= 0) ||
+                _bounceCount >= maximumBounces)
             {
                 return false;
             }

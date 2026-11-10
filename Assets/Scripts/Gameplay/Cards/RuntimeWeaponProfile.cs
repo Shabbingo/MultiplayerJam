@@ -22,6 +22,9 @@ namespace Unity.MP_FPS.Cards
         [Min(0f)] public float WireGuidedTurnSpeed;
         [Range(0f, 0.5f)] public float ReloadTimeReductionPerStack;
         [Min(0)] public int AmmoPerStack;
+        [Min(0f)] public float BleedDamagePerSecond;
+        [Min(0f)] public float BleedDuration;
+        [Range(0f, 1f)] public float LifeStealPercent;
 
         public static ModifierGameplayTuning Default => new()
         {
@@ -34,7 +37,10 @@ namespace Unity.MP_FPS.Cards
             AddedHomingTurnSpeed = 15f,
             WireGuidedTurnSpeed = 120f,
             ReloadTimeReductionPerStack = 0.15f,
-            AmmoPerStack = 10
+            AmmoPerStack = 2,
+            BleedDamagePerSecond = 10f,
+            BleedDuration = 3f,
+            LifeStealPercent = 0.5f
         };
     }
 
@@ -64,6 +70,12 @@ namespace Unity.MP_FPS.Cards
         public readonly bool AppliesSlow;
         public readonly float SlowPercent;
         public readonly float SlowDuration;
+        public readonly int MaxBounces;
+        public readonly float BleedDamagePerSecond;
+        public readonly float BleedDuration;
+        public readonly float LifeStealPercent;
+        public readonly float ProjectileScale;
+        public readonly bool GrowsOverDistance;
 
         public float SignedSizeDelta => Hand == WeaponHand.Right
             ? Mathf.Abs(Damage)
@@ -76,7 +88,9 @@ namespace Unity.MP_FPS.Cards
             bool isHoming, bool tracksPlayers, bool tracksAim, float homingTurnSpeed,
             bool hasExplosion,
             float explosionRadius, bool appliesSlow, float slowPercent,
-            float slowDuration)
+            float slowDuration, int maxBounces, float bleedDamagePerSecond,
+            float bleedDuration, float lifeStealPercent, float projectileScale,
+            bool growsOverDistance)
         {
             SourceProfile = sourceProfile;
             Hand = hand;
@@ -98,6 +112,12 @@ namespace Unity.MP_FPS.Cards
             AppliesSlow = appliesSlow;
             SlowPercent = slowPercent;
             SlowDuration = slowDuration;
+            MaxBounces = maxBounces;
+            BleedDamagePerSecond = bleedDamagePerSecond;
+            BleedDuration = bleedDuration;
+            LifeStealPercent = lifeStealPercent;
+            ProjectileScale = projectileScale;
+            GrowsOverDistance = growsOverDistance;
         }
     }
 
@@ -126,7 +146,20 @@ namespace Unity.MP_FPS.Cards
             int wireGuidedStacks = modifiers.GetStacks(CardModifierKind.WireGuided, target);
             int reloadStacks = modifiers.GetStacks(CardModifierKind.ReloadSpeed, target);
             int ammoStacks = modifiers.GetStacks(CardModifierKind.MagazineCapacity, target);
-            float damage = source.Damage * (1f + damageStacks * Mathf.Max(0f, tuning.DamagePerStack));
+            int bleedStacks = modifiers.GetStacks(CardModifierKind.Bleed, target);
+            int bounceStacks = modifiers.GetStacks(CardModifierKind.Bounce, target);
+            int siphonStacks = modifiers.GetStacks(CardModifierKind.LifeSiphon, target);
+            int bulletSizeStacks = modifiers.GetStacks(CardModifierKind.BulletSize,
+                ModifierTarget.BothHands);
+            int bulletSpeedStacks = modifiers.GetStacks(CardModifierKind.BulletSpeed,
+                ModifierTarget.BothHands);
+            bool growsOverDistance = modifiers.GetStacks(CardModifierKind.BulletGrowth,
+                ModifierTarget.BothHands) > 0;
+            float damage = bleedStacks > 0
+                ? 0f
+                : source.Damage * (1f + damageStacks * Mathf.Max(0f, tuning.DamagePerStack));
+            damage *= 1f + bulletSizeStacks * 0.1f;
+            if (siphonStacks > 0) damage *= 0.75f;
             float baseExplosionRadius = source.Behavior == ProjectileBehavior.AreaOfEffect
                 ? Mathf.Max(0f, source.AoeRadius)
                 : 0f;
@@ -148,8 +181,16 @@ namespace Unity.MP_FPS.Cards
             bool appliesSlow = modifiers.GetStacks(CardModifierKind.SlowTarget, target) > 0;
             float reloadMultiplier = Mathf.Max(0.25f,
                 1f - reloadStacks * Mathf.Clamp(tuning.ReloadTimeReductionPerStack, 0f, 0.5f));
+            if (appliesSlow) reloadMultiplier *= 1.25f;
+            reloadMultiplier *= 1f + ammoStacks * 0.15f;
             int magazineSize = Mathf.Max(1, source.MagazineSize +
                 ammoStacks * Mathf.Max(0, tuning.AmmoPerStack));
+            if (scatter) magazineSize = Mathf.Max(1, magazineSize - 1);
+            float projectileScale = (1f + bulletSizeStacks * 0.5f) *
+                                    Mathf.Pow(0.8f, bulletSpeedStacks);
+            float projectileSpeed = source.ProjectileSpeed *
+                                    Mathf.Pow(1.3f, bulletSpeedStacks);
+            if (bulletSpeedStacks > 0) explosionRadius *= 0.5f;
 
             return new RuntimeWeaponProfile(
                 source,
@@ -160,7 +201,7 @@ namespace Unity.MP_FPS.Cards
                 Mathf.Max(0f, source.ProjectileReleaseDelay),
                 magazineSize,
                 Mathf.Max(0f, source.ReloadTime * reloadMultiplier),
-                Mathf.Max(0f, source.ProjectileSpeed),
+                Mathf.Max(0f, projectileSpeed),
                 scatter ? Mathf.Max(1, tuning.ScatterPelletCount) : 1,
                 scatter ? Mathf.Max(0f, tuning.ScatterHalfAngleDegrees) : 0f,
                 isHoming,
@@ -171,7 +212,12 @@ namespace Unity.MP_FPS.Cards
                 explosionRadius,
                 appliesSlow,
                 appliesSlow ? Mathf.Clamp01(tuning.SlowPercent) : 0f,
-                appliesSlow ? Mathf.Max(0f, tuning.SlowDuration) : 0f);
+                appliesSlow ? Mathf.Max(0f, tuning.SlowDuration) : 0f,
+                bounceStacks > 0 ? 1 : 0,
+                bleedStacks * Mathf.Max(0f, tuning.BleedDamagePerSecond),
+                bleedStacks > 0 ? Mathf.Max(0f, tuning.BleedDuration) : 0f,
+                siphonStacks > 0 ? Mathf.Clamp01(tuning.LifeStealPercent) : 0f,
+                Mathf.Max(0.1f, projectileScale), growsOverDistance);
         }
 
         public static Vector3 ApplyScatterDirection(Vector3 forward,

@@ -528,8 +528,10 @@ namespace Gameplay.Leaderboard
                 ? store.GetOrCreate(_activeDraftNetworkId)
                 : default;
             var catalog = WeaponManager.Instance?.CardModifierCatalog;
+            int finishingPosition = _finishingOrder.IndexOf(_activeDraftNetworkId);
+            if (finishingPosition < 0) finishingPosition = _draftIndex;
             var generated = CardOfferGenerator.Generate(catalog, in owned,
-                _draftIndex, Mathf.Max(1, _draftOrder.Count),
+                finishingPosition, Mathf.Max(1, _finishingOrder.Count),
                 GetRules().CardsPerOffer,
                 (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663));
 
@@ -592,6 +594,7 @@ namespace Gameplay.Leaderboard
             {
                 ModifierTarget.LeftHand => "LEFT HAND",
                 ModifierTarget.RightHand => "RIGHT HAND",
+                ModifierTarget.BothHands => "BOTH HANDS",
                 _ => "SELF"
             };
             var message = new FixedString128Bytes(

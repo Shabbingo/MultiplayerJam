@@ -4,15 +4,15 @@
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8ea0d67bb85b448c8ea2f83f32a65fb1, type: 3}
-  m_Name: Damage Increase
+  m_Name: Bounce
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 1
-  m_DisplayName: Damage Increase
-  m_Description: Increases the selected hand's damage by 10% of its base damage.
+  m_DisplayName: Bounce
+  m_Description: Projectiles from the selected hand bounce once and can return to hit you.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 2
+  m_StrengthScore: 4
   m_BaseOfferWeight: 1
-  m_Kind: 0
+  m_Kind: 12
   m_AllowedTargets: 3
-  m_StackLimit: 5
-  m_ValuePerStack: 0.1
+  m_StackLimit: 1
+  m_ValuePerStack: 1
