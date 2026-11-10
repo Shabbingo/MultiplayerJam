@@ -117,6 +117,7 @@ namespace Unity.MP_FPS
                 Mathf.RoundToInt(ammo.ValuePerStack));
             if (bleed != null) tuning.BleedDamagePerSecond = bleed.ValuePerStack;
             if (siphon != null) tuning.LifeStealPercent = siphon.ValuePerStack;
+            if (tuning.BleedDuration <= 0f) tuning.BleedDuration = 3f;
             return tuning;
         }
 

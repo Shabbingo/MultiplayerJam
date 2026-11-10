@@ -242,9 +242,11 @@ namespace Unity.MP_FPS
             ecb.SetComponent(playerEntity, new PredictedPlayerGhost
             {
                 InputIndex = 0,
-                // Size-health is a 0-200 resource: 100 is normal size, either edge is lethal.
-                MaxHealth = 200f,
-                CurrentHealth = 100f,
+                // Each capacity card extends its side of the normal-size point by 50%.
+                MaxHealth = 200f + 50f * modifiers.BigHealthCapacity +
+                            50f * modifiers.SmallHealthCapacity,
+                NormalSizeHealth = 100f + 50f * modifiers.SmallHealthCapacity,
+                CurrentHealth = 100f + 50f * modifiers.SmallHealthCapacity,
                 ControllerState = initialControllerState,
                 EquippedWeaponID = weaponId,
                 CurrentAmmo = magazineSize,

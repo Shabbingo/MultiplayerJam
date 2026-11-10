@@ -656,7 +656,10 @@ public class FirstPersonController : MonoBehaviour
             return false;
         }
 
-        return !Mathf.Approximately(predictedPlayer.CurrentHealth, 100f);
+        float normalSizeHealth = predictedPlayer.NormalSizeHealth > 0f
+            ? predictedPlayer.NormalSizeHealth
+            : 100f;
+        return !Mathf.Approximately(predictedPlayer.CurrentHealth, normalSizeHealth);
     }
 
     public void ProcessSelfResize(ref PredictedPlayerGhost predictedPlayer,
@@ -871,8 +874,11 @@ public class FirstPersonController : MonoBehaviour
             return false;
         }
 
+        float normalSizeHealth = predictedPlayer.NormalSizeHealth > 0f
+            ? predictedPlayer.NormalSizeHealth
+            : 100f;
         predictedPlayer.CurrentHealth = Mathf.MoveTowards(
-            predictedPlayer.CurrentHealth, 100f, fullSizeHealAmount);
+            predictedPlayer.CurrentHealth, normalSizeHealth, fullSizeHealAmount);
         return true;
     }
 
@@ -1785,7 +1791,9 @@ public class FirstPersonController : MonoBehaviour
 
     public async void SpawnPredictedProjectile(uint spawnTick, uint weaponId, Vector3 spawnPosition,
         Quaternion spawnRotation, Vector3 targetPosition,
-        bool isHoming = false, float homingTurnSpeed = 0f)
+        bool isHoming = false, float homingTurnSpeed = 0f,
+        float projectileSpeed = 0f, float projectileScale = 1f,
+        bool growsOverDistance = false, int maxBounces = 0)
     {
         try
         {
@@ -1845,6 +1853,8 @@ public class FirstPersonController : MonoBehaviour
             projectile.SetWeaponId(weaponId);
             projectile.SetGuidedTarget(targetPosition);
             projectile.SetRuntimeMotion(isHoming, homingTurnSpeed);
+            projectile.SetRuntimeProjectileProperties(projectileSpeed, projectileScale,
+                growsOverDistance, maxBounces);
 
             var projectileInfo = new Projectile.PredictedProjectileInfo
             {

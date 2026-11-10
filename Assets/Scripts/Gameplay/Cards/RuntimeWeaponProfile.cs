@@ -213,8 +213,9 @@ namespace Unity.MP_FPS.Cards
                 appliesSlow,
                 appliesSlow ? Mathf.Clamp01(tuning.SlowPercent) : 0f,
                 appliesSlow ? Mathf.Max(0f, tuning.SlowDuration) : 0f,
-                bounceStacks > 0 ? 1 : 0,
-                bleedStacks * Mathf.Max(0f, tuning.BleedDamagePerSecond),
+                bounceStacks,
+                (hand == WeaponHand.Right ? 1f : -1f) * bleedStacks *
+                Mathf.Max(0f, tuning.BleedDamagePerSecond),
                 bleedStacks > 0 ? Mathf.Max(0f, tuning.BleedDuration) : 0f,
                 siphonStacks > 0 ? Mathf.Clamp01(tuning.LifeStealPercent) : 0f,
                 Mathf.Max(0.1f, projectileScale), growsOverDistance);

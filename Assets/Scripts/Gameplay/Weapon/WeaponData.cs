@@ -125,7 +125,7 @@ namespace Unity.MP_FPS
 
         [Min(0)]
         [Tooltip("Number of map-geometry impacts that bounce before the next impact detonates.")]
-        public int ProjectileBounces = 1;
+        public int ProjectileBounces;
 
         [FormerlySerializedAs("BounceVelocityRetention")]
         [Range(0f, 1f)]

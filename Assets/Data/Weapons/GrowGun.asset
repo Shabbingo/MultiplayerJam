@@ -79,7 +79,7 @@ MonoBehaviour:
   IsLobbedProjectile: 0
   LobUpwardSpeed: 3
   ProjectileGravity: 20
-  ProjectileBounces: 2
+  ProjectileBounces: 0
   FirstBounceVelocityRetention: 0.3
   ConsecutiveBounceVelocityRetentions:
   - 0.6

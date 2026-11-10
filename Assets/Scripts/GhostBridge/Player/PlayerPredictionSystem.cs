@@ -416,7 +416,11 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         spawnRotation,
                                         targetPoint,
                                         runtimeProfile.IsHoming,
-                                        runtimeProfile.HomingTurnSpeed);
+                                        runtimeProfile.HomingTurnSpeed,
+                                        runtimeProfile.ProjectileSpeed,
+                                        runtimeProfile.ProjectileScale,
+                                        runtimeProfile.GrowsOverDistance,
+                                        runtimeProfile.MaxBounces);
                                 }
                             }
 

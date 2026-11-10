@@ -37,6 +37,9 @@ namespace Unity.MP_FPS
         public int MaxBounces;
         public float ProjectileScale;
         public byte GrowsOverDistance;
+        public float BleedDamagePerSecond;
+        public float BleedDuration;
+        public float LifeStealPercent;
     }
 
     struct VfxSpawnData
@@ -75,6 +78,15 @@ namespace Unity.MP_FPS
         private readonly List<int> m_ReflectPlayersScratch = new();
         private readonly Dictionary<int, Entity> m_PlayerEntitiesByNetworkId = new();
         private readonly HashSet<Entity> m_RuntimeAreaHitEntities = new();
+        private readonly List<BleedEffect> m_BleedEffects = new();
+
+        private struct BleedEffect
+        {
+            public Entity Target;
+            public int SourceNetworkId;
+            public float DamagePerSecond;
+            public float Remaining;
+        }
 
         private struct HitscanBloomState
         {
@@ -204,6 +216,7 @@ namespace Unity.MP_FPS
             m_ReflectPlayersScratch.Clear();
             m_PlayerEntitiesByNetworkId.Clear();
             m_RuntimeAreaHitEntities.Clear();
+            m_BleedEffects.Clear();
 
             var query = GetEntityQuery(typeof(PlayerControllerLink));
             foreach (var entity in query.ToEntityArray(Allocator.Temp))
@@ -230,6 +243,7 @@ namespace Unity.MP_FPS
             UpdateForcedFullSizeEffects(deltaTime);
             UpdateHitscanBloom(deltaTime);
             UpdateReflectTimerDictionary(m_ReflectActiveTimers, deltaTime);
+            UpdateBleedEffects(deltaTime, serverTick);
 
             s_PlayerMovementActive = true;
             s_PlayerMovementTick = serverTick;
@@ -631,16 +645,27 @@ namespace Unity.MP_FPS
                                             weaponData.HitscanRange, shooterNetworkId, rewindTick,
                                             out var hit))
                                     {
+                                        float distanceMultiplier = runtimeProfile.GrowsOverDistance
+                                            ? 1f + Vector3.Distance((Vector3)eyePosition,
+                                                hit.Point) * 0.01f
+                                            : 1f;
+                                        float distanceScaledDelta =
+                                            runtimeProfile.SignedSizeDelta * distanceMultiplier;
                                         if (runtimeProfile.HasExplosion)
                                         {
                                             ApplyRuntimeAreaDamage(hit.Point,
                                                 runtimeProfile.ExplosionRadius,
                                                 shooterNetworkId,
-                                                runtimeProfile.SignedSizeDelta,
-                                                weaponData.ResizeEffect,
+                                                distanceScaledDelta,
+                                                Mathf.Abs(runtimeProfile.BleedDamagePerSecond) > 0f
+                                                    ? PlayerResizeEffect.None
+                                                    : weaponData.ResizeEffect,
                                                 weaponData.ResizeEffectDuration,
                                                 runtimeProfile.SlowPercent,
                                                 runtimeProfile.SlowDuration,
+                                                runtimeProfile.BleedDamagePerSecond,
+                                                runtimeProfile.BleedDuration,
+                                                runtimeProfile.LifeStealPercent,
                                                 serverTick,
                                                 playerGhostLookup,
                                                 ghostOwnerLookup);
@@ -654,11 +679,16 @@ namespace Unity.MP_FPS
                                             {
                                                 ApplyIncomingWeaponDamage(hit.PlayerEntity,
                                                     shooterNetworkId,
-                                                    runtimeProfile.SignedSizeDelta,
-                                                    weaponData.ResizeEffect,
+                                                    distanceScaledDelta,
+                                                    Mathf.Abs(runtimeProfile.BleedDamagePerSecond) > 0f
+                                                        ? PlayerResizeEffect.None
+                                                        : weaponData.ResizeEffect,
                                                     weaponData.ResizeEffectDuration,
                                                     runtimeProfile.SlowPercent,
                                                     runtimeProfile.SlowDuration,
+                                                    runtimeProfile.BleedDamagePerSecond,
+                                                    runtimeProfile.BleedDuration,
+                                                    runtimeProfile.LifeStealPercent,
                                                     serverTick,
                                                     playerGhostLookup,
                                                     ghostOwnerLookup);
@@ -729,7 +759,10 @@ namespace Unity.MP_FPS
                                             ProjectileSpeed = runtimeProfile.ProjectileSpeed,
                                             MaxBounces = runtimeProfile.MaxBounces,
                                             ProjectileScale = runtimeProfile.ProjectileScale,
-                                            GrowsOverDistance = runtimeProfile.GrowsOverDistance ? (byte)1 : (byte)0
+                                            GrowsOverDistance = runtimeProfile.GrowsOverDistance ? (byte)1 : (byte)0,
+                                            BleedDamagePerSecond = runtimeProfile.BleedDamagePerSecond,
+                                            BleedDuration = runtimeProfile.BleedDuration,
+                                            LifeStealPercent = runtimeProfile.LifeStealPercent
                                         });
                                     }
                                     else
@@ -781,7 +814,10 @@ namespace Unity.MP_FPS
                             ProjectileSpeed = spawnData.ProjectileSpeed,
                             MaxBounces = spawnData.MaxBounces,
                             ProjectileScale = spawnData.ProjectileScale,
-                            GrowsOverDistance = spawnData.GrowsOverDistance
+                            GrowsOverDistance = spawnData.GrowsOverDistance,
+                            BleedDamagePerSecond = spawnData.BleedDamagePerSecond,
+                            BleedDuration = spawnData.BleedDuration,
+                            LifeStealPercent = spawnData.LifeStealPercent
                         });
                     });
             }
@@ -1312,6 +1348,9 @@ namespace Unity.MP_FPS
                 weaponData.ResizeEffectDuration,
                 0f,
                 0f,
+                0f,
+                0f,
+                0f,
                 hitTick,
                 playerGhostLookup,
                 ownerLookup);
@@ -1320,7 +1359,9 @@ namespace Unity.MP_FPS
         public bool ApplyIncomingWeaponDamage(Entity intendedTargetEntity,
             int attackerNetworkId, float signedSizeDelta,
             PlayerResizeEffect resizeEffect, float resizeEffectDuration,
-            float slowPercent, float slowDuration, uint hitTick,
+            float slowPercent, float slowDuration,
+            float bleedDamagePerSecond, float bleedDuration,
+            float lifeStealPercent, uint hitTick,
             ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
             ComponentLookup<GhostOwner> ownerLookup)
         {
@@ -1392,6 +1433,35 @@ namespace Unity.MP_FPS
             damagedPlayer.ValueRW.LastDamageAmount = Mathf.Abs(appliedDelta);
             damagedPlayer.ValueRW.LastHitTick = hitTick;
 
+            if (Mathf.Abs(bleedDamagePerSecond) > 0f && bleedDuration > 0f &&
+                damagedPlayer.ValueRO.CurrentHealth > 0f)
+            {
+                m_BleedEffects.Add(new BleedEffect
+                {
+                    Target = damageTargetEntity,
+                    SourceNetworkId = damageSourceNetworkId,
+                    DamagePerSecond = bleedDamagePerSecond,
+                    Remaining = bleedDuration
+                });
+            }
+
+            if (lifeStealPercent > 0f &&
+                m_PlayerEntitiesByNetworkId.TryGetValue(damageSourceNetworkId,
+                    out Entity sourceEntity) &&
+                playerGhostLookup.HasComponent(sourceEntity))
+            {
+                var sourcePlayer = playerGhostLookup.GetRefRW(sourceEntity);
+                float restored = Mathf.Abs(damagedPlayer.ValueRO.CurrentHealth -
+                                            healthBeforeDamage) *
+                                 Mathf.Clamp01(lifeStealPercent);
+                sourcePlayer.ValueRW.CurrentHealth = Mathf.MoveTowards(
+                    sourcePlayer.ValueRO.CurrentHealth,
+                    sourcePlayer.ValueRO.NormalSizeHealth > 0f
+                        ? sourcePlayer.ValueRO.NormalSizeHealth
+                        : 100f,
+                    restored);
+            }
+
             if (IsSizeLethal(healthBeforeDamage, damagedPlayer.ValueRO.CurrentHealth,
                     damagedPlayer.ValueRO.MaxHealth))
             {
@@ -1446,7 +1516,9 @@ namespace Unity.MP_FPS
         public void ApplyRuntimeAreaDamage(Vector3 impactPosition, float radius,
             int attackerNetworkId, float signedSizeDelta,
             PlayerResizeEffect resizeEffect, float resizeEffectDuration,
-            float slowPercent, float slowDuration, uint hitTick,
+            float slowPercent, float slowDuration,
+            float bleedDamagePerSecond, float bleedDuration,
+            float lifeStealPercent, uint hitTick,
             ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
             ComponentLookup<GhostOwner> ownerLookup)
         {
@@ -1462,8 +1534,7 @@ namespace Unity.MP_FPS
                 if (!GhostGameObject.TryFindGhostGameObject(collider.gameObject,
                         out var hitGhost) ||
                     !m_RuntimeAreaHitEntities.Add(hitGhost.LinkedEntity) ||
-                    !ownerLookup.HasComponent(hitGhost.LinkedEntity) ||
-                    ownerLookup[hitGhost.LinkedEntity].NetworkId == attackerNetworkId)
+                    !ownerLookup.HasComponent(hitGhost.LinkedEntity))
                 {
                     continue;
                 }
@@ -1475,9 +1546,60 @@ namespace Unity.MP_FPS
                     resizeEffectDuration,
                     slowPercent,
                     slowDuration,
+                    bleedDamagePerSecond,
+                    bleedDuration,
+                    lifeStealPercent,
                     hitTick,
                     playerGhostLookup,
                     ownerLookup);
+            }
+        }
+
+        private void UpdateBleedEffects(float deltaTime, uint hitTick)
+        {
+            for (int i = m_BleedEffects.Count - 1; i >= 0; i--)
+            {
+                BleedEffect effect = m_BleedEffects[i];
+                if (!EntityManager.Exists(effect.Target) ||
+                    !EntityManager.HasComponent<PredictedPlayerGhost>(effect.Target))
+                {
+                    m_BleedEffects.RemoveAt(i);
+                    continue;
+                }
+
+                var player = EntityManager.GetComponentData<PredictedPlayerGhost>(effect.Target);
+                if (player.CurrentHealth <= 0f || effect.Remaining <= 0f)
+                {
+                    m_BleedEffects.RemoveAt(i);
+                    continue;
+                }
+
+                float previous = player.CurrentHealth;
+                player.CurrentHealth = Mathf.Clamp(
+                    player.CurrentHealth + effect.DamagePerSecond * deltaTime,
+                    0f, player.MaxHealth);
+                player.LastDamageAmount = Mathf.Abs(previous - player.CurrentHealth);
+                player.LastHitTick = hitTick;
+                EntityManager.SetComponentData(effect.Target, player);
+                effect.Remaining -= deltaTime;
+
+                if (IsSizeLethal(previous, player.CurrentHealth, player.MaxHealth))
+                {
+                    int victimId = EntityManager.HasComponent<GhostOwner>(effect.Target)
+                        ? EntityManager.GetComponentData<GhostOwner>(effect.Target).NetworkId
+                        : -1;
+                    if (victimId >= 0)
+                        LeaderboardManager.ServerInstance?.AddKill(
+                            effect.SourceNetworkId, victimId);
+                    for (int j = m_BleedEffects.Count - 1; j >= 0; j--)
+                        if (m_BleedEffects[j].Target == effect.Target)
+                            m_BleedEffects.RemoveAt(j);
+                    i = Mathf.Min(i, m_BleedEffects.Count);
+                    continue;
+                }
+
+                if (effect.Remaining <= 0f) m_BleedEffects.RemoveAt(i);
+                else m_BleedEffects[i] = effect;
             }
         }
 

@@ -98,7 +98,6 @@ namespace Unity.MP_FPS.Cards
                 CardModifierKind.SlowTarget or
                 CardModifierKind.ScatterWeapon or
                 CardModifierKind.Bleed or
-                CardModifierKind.Bounce or
                 CardModifierKind.LifeSiphon or
                 CardModifierKind.BulletGrowth or
                 CardModifierKind.SlowShield or

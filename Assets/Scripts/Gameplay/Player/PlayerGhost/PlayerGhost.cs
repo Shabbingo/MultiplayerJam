@@ -589,7 +589,9 @@ namespace Unity.MP_FPS
                 return 1f;
             }
 
-            const float normalSizeHealth = 100f;
+            float normalSizeHealth = predictedPlayerGhost.NormalSizeHealth > 0f
+                ? predictedPlayerGhost.NormalSizeHealth
+                : 100f;
             float sizeHealth = Mathf.Clamp(
                 predictedPlayerGhost.CurrentHealth, 0f, predictedPlayerGhost.MaxHealth);
             float healthScaleMultiplier = sizeHealth <= normalSizeHealth

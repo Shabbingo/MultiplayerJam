@@ -55,6 +55,9 @@ namespace Unity.MP_FPS
             [GhostField] public int MaxBounces;
             [GhostField] public float ProjectileScale;
             [GhostField] public byte GrowsOverDistance;
+            [GhostField] public float BleedDamagePerSecond;
+            [GhostField] public float BleedDuration;
+            [GhostField] public float LifeStealPercent;
         }
 
         public class PredictedProjectileInfo
@@ -96,6 +99,8 @@ namespace Unity.MP_FPS
         private float _runtimeProjectileSpeed;
         private float _runtimeProjectileScale = 1f;
         private bool _growsOverDistance;
+        private int _runtimeMaxBounces;
+        private float _distanceTravelled;
 
         public void SetGuidedTarget(Vector3 targetPosition)
         {
@@ -109,6 +114,16 @@ namespace Unity.MP_FPS
             _runtimeHomingTurnSpeed = Mathf.Max(0f, homingTurnSpeed);
         }
 
+        public void SetRuntimeProjectileProperties(float speed, float scale,
+            bool growsOverDistance, int maxBounces)
+        {
+            _runtimeProjectileSpeed = Mathf.Max(0f, speed);
+            _runtimeProjectileScale = Mathf.Max(0.1f, scale);
+            _growsOverDistance = growsOverDistance;
+            _runtimeMaxBounces = Mathf.Max(0, maxBounces);
+            transform.localScale = Vector3.one * _runtimeProjectileScale;
+        }
+
         public override void OnGhostLinked()
         {
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
@@ -119,6 +134,7 @@ namespace Unity.MP_FPS
             _runtimeProjectileSpeed = projectileData.ProjectileSpeed;
             _runtimeProjectileScale = Mathf.Max(0.1f, projectileData.ProjectileScale);
             _growsOverDistance = projectileData.GrowsOverDistance != 0;
+            _runtimeMaxBounces = Mathf.Max(0, projectileData.MaxBounces);
             transform.localScale = Vector3.one * _runtimeProjectileScale;
             ApplyServerMotionState(projectileData);
         }
@@ -173,11 +189,12 @@ namespace Unity.MP_FPS
             }
 
             Move(displacement);
+            _distanceTravelled += displacement.magnitude;
 
             _localTime += deltaTime;
             if (_growsOverDistance)
                 transform.localScale = Vector3.one * _runtimeProjectileScale *
-                                       (1f + _localTime * 0.1f);
+                                       (1f + _distanceTravelled * 0.01f);
             PublishServerMotionState();
             if (_localTime > weaponData.ProjectileFuseTime)
             {
@@ -274,7 +291,8 @@ namespace Unity.MP_FPS
             _collisionGraceTimer = Mathf.Max(0f, _collisionGraceTimer - deltaTime);
             Vector3 displacement = _velocity * deltaTime;
 
-            if (weaponData.IsLobbedProjectile && _collisionGraceTimer <= 0f &&
+            if ((weaponData.IsLobbedProjectile || _runtimeMaxBounces > 0) &&
+                _collisionGraceTimer <= 0f &&
                 displacement.sqrMagnitude > 0.000001f &&
                 UnityEngine.Physics.SphereCast(
                     transform.position,
@@ -297,10 +315,11 @@ namespace Unity.MP_FPS
             }
 
             Move(displacement);
+            _distanceTravelled += displacement.magnitude;
             _localTime += deltaTime;
             if (_growsOverDistance)
                 transform.localScale = Vector3.one * _runtimeProjectileScale *
-                                       (1f + _localTime * 0.1f);
+                                       (1f + _distanceTravelled * 0.01f);
         }
 
         private bool CheckForCollision(WeaponData weaponData, Vector3 displacement)
@@ -408,11 +427,7 @@ namespace Unity.MP_FPS
 
         private bool TryBounce(Vector3 impactPosition, Vector3 impactNormal, WeaponData weaponData)
         {
-            var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
-            int maximumBounces = Mathf.Max(weaponData.ProjectileBounces,
-                projectileData.MaxBounces);
-            if ((!weaponData.IsLobbedProjectile && maximumBounces <= 0) ||
-                _bounceCount >= maximumBounces)
+            if (_runtimeMaxBounces <= 0 || _bounceCount >= _runtimeMaxBounces)
             {
                 return false;
             }
@@ -421,8 +436,7 @@ namespace Unity.MP_FPS
                 ? impactNormal.normalized
                 : -_velocity.normalized;
             transform.position = impactPosition + normal * (ProjectileRadius + BounceSurfaceOffset);
-            _velocity = Vector3.Reflect(_velocity, normal) *
-                        weaponData.GetBounceVelocityRetention(_bounceCount);
+            _velocity = Vector3.Reflect(_velocity, normal);
             _bounceCount++;
             _collisionGraceTimer = BounceCollisionGrace;
 
@@ -614,10 +628,15 @@ namespace Unity.MP_FPS
                 GetExplosionRadius(weaponData, projectileData),
                 projectileData.OwnerNetworkId,
                 GetSignedSizeDelta(weaponData, projectileData),
-                weaponData.ResizeEffect,
+                Mathf.Abs(projectileData.BleedDamagePerSecond) > 0f
+                    ? PlayerResizeEffect.None
+                    : weaponData.ResizeEffect,
                 weaponData.ResizeEffectDuration,
                 projectileData.AppliesSlow != 0 ? projectileData.SlowPercent : 0f,
                 projectileData.AppliesSlow != 0 ? projectileData.SlowDuration : 0f,
+                projectileData.BleedDamagePerSecond,
+                projectileData.BleedDuration,
+                projectileData.LifeStealPercent,
                 serverCurrentTick,
                 playerGhostLookup,
                 ghostOwnerLookup);
@@ -656,10 +675,15 @@ namespace Unity.MP_FPS
                         .ApplyIncomingWeaponDamage(hitGhostObject.LinkedEntity,
                             shooterNetworkId,
                             GetSignedSizeDelta(weaponData, projectileData),
-                            weaponData.ResizeEffect,
+                            Mathf.Abs(projectileData.BleedDamagePerSecond) > 0f
+                                ? PlayerResizeEffect.None
+                                : weaponData.ResizeEffect,
                             weaponData.ResizeEffectDuration,
                             projectileData.AppliesSlow != 0 ? projectileData.SlowPercent : 0f,
                             projectileData.AppliesSlow != 0 ? projectileData.SlowDuration : 0f,
+                            projectileData.BleedDamagePerSecond,
+                            projectileData.BleedDuration,
+                            projectileData.LifeStealPercent,
                             serverCurrentTick,
                             playerGhostLookup,
                             ghostOwnerLookup);
@@ -687,12 +711,13 @@ namespace Unity.MP_FPS
                     : 0f;
         }
 
-        private static float GetSignedSizeDelta(WeaponData weaponData,
+        private float GetSignedSizeDelta(WeaponData weaponData,
             in ProjectileData projectileData)
         {
-            return Mathf.Abs(projectileData.SignedSizeDelta) > Mathf.Epsilon
-                ? projectileData.SignedSizeDelta
-                : weaponData.PlayerSizeDelta;
+            float baseDelta = projectileData.SignedSizeDelta;
+            return _growsOverDistance
+                ? baseDelta * (1f + _distanceTravelled * 0.01f)
+                : baseDelta;
         }
 
         private static void DrawGizmoAtPosition(Vector3 position)
