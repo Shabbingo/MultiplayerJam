@@ -1534,7 +1534,8 @@ namespace Unity.MP_FPS
                 if (!GhostGameObject.TryFindGhostGameObject(collider.gameObject,
                         out var hitGhost) ||
                     !m_RuntimeAreaHitEntities.Add(hitGhost.LinkedEntity) ||
-                    !ownerLookup.HasComponent(hitGhost.LinkedEntity))
+                    !ownerLookup.HasComponent(hitGhost.LinkedEntity) ||
+                    ownerLookup[hitGhost.LinkedEntity].NetworkId == attackerNetworkId)
                 {
                     continue;
                 }
