@@ -84,6 +84,9 @@ namespace Unity.MP_FPS.Cards
         private float m_ProjectileSpeedMultiplierPerStack = 1f;
         [SerializeField, Min(0f), Tooltip("Projectile-scale multiplier per stack.")]
         private float m_ProjectileScaleMultiplierPerStack = 1f;
+        [SerializeField, InspectorName("AOE Radius Adjustment Per Stack"),
+         Tooltip("Metres added to the explosion radius per stack. Positive values increase AOE; negative values reduce it.")]
+        private float m_AoeRadiusAdjustmentPerStack;
         [SerializeField, Min(0f), Tooltip("Explosion-radius multiplier per stack.")]
         private float m_ExplosionRadiusMultiplierPerStack = 1f;
         [SerializeField, Min(0f)] private float m_ScatterHalfAngleDegrees = 7.5f;
@@ -112,6 +115,8 @@ namespace Unity.MP_FPS.Cards
             m_ProjectileSpeedMultiplierPerStack;
         public float ProjectileScaleMultiplierPerStack =>
             m_ProjectileScaleMultiplierPerStack;
+        public float AoeRadiusAdjustmentPerStack =>
+            m_AoeRadiusAdjustmentPerStack;
         public float ExplosionRadiusMultiplierPerStack =>
             m_ExplosionRadiusMultiplierPerStack;
         public float ScatterHalfAngleDegrees => m_ScatterHalfAngleDegrees;

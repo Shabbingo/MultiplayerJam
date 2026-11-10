@@ -1512,11 +1512,12 @@ public class FirstPersonController : MonoBehaviour
     }
 
     private static float3 CalculateMovementFromInput(ref ControllerState state, in ControllerConsts consts,
-        in ControllerConsts.StateConsts stateConsts, in PlayerInput input, bool updateRotation, float deltaTime)
+        in ControllerConsts.StateConsts stateConsts, in PlayerInput input,
+        float lookYawOffsetDegrees, bool updateRotation, float deltaTime)
     {
         if (updateRotation)
         {
-            state.YawDegrees = input.LookYawPitchDegrees.x;
+            state.YawDegrees = input.LookYawPitchDegrees.x + lookYawOffsetDegrees;
             state.PitchDegrees = input.LookYawPitchDegrees.y;
             state.CurrentRotation = quaternion.RotateY(math.radians(state.YawDegrees));
         }
@@ -1546,7 +1547,8 @@ public class FirstPersonController : MonoBehaviour
 
     public static void AccumulateMovement(ref ControllerState state,
         ref float3 accumulatedMovement, in PlayerInput input, in ControllerConsts consts,
-        float speedMultiplier, float jumpHeightMultiplier, float deltaTime)
+        float lookYawOffsetDegrees, float speedMultiplier,
+        float jumpHeightMultiplier, float deltaTime)
     {
         state.TimeInState += deltaTime;
 
@@ -1581,7 +1583,8 @@ public class FirstPersonController : MonoBehaviour
         {
             case MovementType.Standing:
                 {
-                    moveDelta = CalculateMovementFromInput(ref state, consts, stateConsts, input, true, deltaTime);
+                    moveDelta = CalculateMovementFromInput(ref state, consts,
+                        stateConsts, input, lookYawOffsetDegrees, true, deltaTime);
                     AddMovementFromJumpFall(ref moveDelta, state);
                 }
                 break;
@@ -1589,7 +1592,8 @@ public class FirstPersonController : MonoBehaviour
             case MovementType.Jumping:
             case MovementType.Falling:
                 {
-                    moveDelta = CalculateMovementFromInput(ref state, consts, stateConsts, input, true, deltaTime);
+                    moveDelta = CalculateMovementFromInput(ref state, consts,
+                        stateConsts, input, lookYawOffsetDegrees, true, deltaTime);
                     AddMovementFromJumpFall(ref moveDelta, state);
                 }
                 break;

@@ -889,6 +889,7 @@ namespace Unity.MP_FPS
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
                                 controllerConsts.ValueRO.ControllerConsts,
+                                predictedPlayer.ValueRO.LookYawOffsetDegrees,
                                 speedMultiplier,
                                 jumpHeightMultiplier,
                                 movementDt);
@@ -1533,10 +1534,31 @@ namespace Unity.MP_FPS
                         .FindByKind(Cards.CardModifierKind.SwapOnReflect);
                     float teleportFreeze = swapCard?.TeleportFreezeSeconds ?? 0f;
                     float3 defenderPosition = defenderState.CurrentPosition;
+                    quaternion defenderRotation = defenderState.CurrentRotation;
+                    float defenderYaw = defenderState.YawDegrees;
+                    quaternion attackerRotation = attackerState.CurrentRotation;
+                    float attackerYaw = attackerState.YawDegrees;
+
                     defenderState.CurrentPosition = attackerState.CurrentPosition;
                     attackerState.CurrentPosition = defenderPosition;
+                    defenderState.CurrentRotation = attackerRotation;
+                    attackerState.CurrentRotation = defenderRotation;
+                    defenderState.YawDegrees = attackerYaw;
+                    attackerState.YawDegrees = defenderYaw;
                     defenderState.TeleportFreeze = teleportFreeze;
                     attackerState.TeleportFreeze = teleportFreeze;
+
+                    // Look input contains an absolute yaw, so exchanging only the
+                    // transforms would be undone on the next prediction tick. Shift
+                    // each player's replicated look offset by the same yaw delta.
+                    float defenderYawDelta = Mathf.DeltaAngle(defenderYaw, attackerYaw);
+                    float attackerYawDelta = Mathf.DeltaAngle(attackerYaw, defenderYaw);
+                    defenderPlayer.ValueRW.LookYawOffsetDegrees = Mathf.DeltaAngle(
+                        0f,
+                        defenderPlayer.ValueRO.LookYawOffsetDegrees + defenderYawDelta);
+                    damagedPlayer.ValueRW.LookYawOffsetDegrees = Mathf.DeltaAngle(
+                        0f,
+                        damagedPlayer.ValueRO.LookYawOffsetDegrees + attackerYawDelta);
                     defenderPlayer.ValueRW.ControllerState = defenderState;
                     damagedPlayer.ValueRW.ControllerState = attackerState;
                     defenderPlayer.ValueRW.AccumulatedMovement = float3.zero;
@@ -1547,7 +1569,9 @@ namespace Unity.MP_FPS
                     var attackerTransform = EntityManager.GetComponentData<LocalTransform>(
                         damageTargetEntity);
                     defenderTransform.Position = defenderState.CurrentPosition;
+                    defenderTransform.Rotation = defenderState.CurrentRotation;
                     attackerTransform.Position = attackerState.CurrentPosition;
+                    attackerTransform.Rotation = attackerState.CurrentRotation;
                     EntityManager.SetComponentData(intendedTargetEntity, defenderTransform);
                     EntityManager.SetComponentData(damageTargetEntity, attackerTransform);
 

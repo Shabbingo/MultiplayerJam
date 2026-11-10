@@ -458,6 +458,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
                                 controllerConsts.ValueRO.ControllerConsts,
+                                predictedPlayer.ValueRO.LookYawOffsetDegrees,
                                 speedMultiplier,
                                 jumpHeightMultiplier,
                                 accumulateDT);

@@ -92,7 +92,9 @@ namespace Unity.MP_FPS
             var bulletGrowth = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.BulletGrowth);
             var bounce = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.Bounce);
             if (damage != null) tuning.DamagePerStack = damage.ValuePerStack;
-            if (explosion != null) tuning.ExplosionRadiusPerStack = explosion.ValuePerStack;
+            if (explosion != null)
+                tuning.ExplosionRadiusPerStack =
+                    explosion.AoeRadiusAdjustmentPerStack;
             if (scatter != null)
             {
                 tuning.ScatterPelletCount = Mathf.Max(1,

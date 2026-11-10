@@ -49,6 +49,10 @@ public struct PredictedPlayerGhost : IComponentData
 
     [GhostField] public int InputIndex;
 
+    // Persistent authoritative offset applied to absolute look input. Swap Position
+    // changes this so the exchanged facing direction survives the next input tick.
+    [GhostField] public float LookYawOffsetDegrees;
+
     [GhostField] public ControllerState ControllerState;
     [GhostField] public float CurrentHealth;
     [GhostField] public float MaxHealth;

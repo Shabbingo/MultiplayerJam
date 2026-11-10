@@ -13,7 +13,7 @@ namespace Unity.MP_FPS.Cards
     public struct ModifierGameplayTuning
     {
         [Min(0f)] public float DamagePerStack;
-        [Min(0f)] public float ExplosionRadiusPerStack;
+        public float ExplosionRadiusPerStack;
         [Min(1)] public int ScatterPelletCount;
         [Min(0f)] public float ScatterHalfAngleDegrees;
         [Range(0f, 1f)] public float SlowPercent;
@@ -196,8 +196,9 @@ namespace Unity.MP_FPS.Cards
             float baseExplosionRadius = source.Behavior == ProjectileBehavior.AreaOfEffect
                 ? Mathf.Max(0f, source.AoeRadius)
                 : 0f;
-            float explosionRadius = baseExplosionRadius + explosionStacks *
-                Mathf.Max(0f, tuning.ExplosionRadiusPerStack);
+            float explosionRadius = Mathf.Max(0f,
+                baseExplosionRadius + explosionStacks *
+                tuning.ExplosionRadiusPerStack);
             bool tracksPlayers = homingStacks > 0;
             bool tracksAim = wireGuidedStacks > 0;
             bool isHoming = source.IsGuidedProjectile || tracksPlayers || tracksAim;
