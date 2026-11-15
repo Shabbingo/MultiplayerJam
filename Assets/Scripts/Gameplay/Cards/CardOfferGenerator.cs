@@ -10,7 +10,10 @@ namespace Unity.MP_FPS.Cards
     /// </summary>
     public static class CardOfferGenerator
     {
-        private const float PlacementBiasBase = 1.35f;
+        // Strength score serves two purposes: high-score cards are globally rarer,
+        // but the first players eliminated receive a strong-card comeback bias.
+        private const float GlobalRarityBase = 1.6f;
+        private const float PlacementBiasBase = 1.5f;
 
         public static List<CardModifierDefinition> Generate(
             CardModifierCatalog catalog,
@@ -60,8 +63,7 @@ namespace Unity.MP_FPS.Cards
         private static bool IsAvailable(CardModifierDefinition card,
             ModifierTarget target, in PlayerModifierStacks owned)
         {
-            return card.Allows(target) &&
-                   owned.GetStacks(card.Kind, target) < card.StackLimit;
+            return card.Allows(target);
         }
 
         private static int DrawWeightedIndex(
@@ -98,8 +100,10 @@ namespace Unity.MP_FPS.Cards
             float comebackBias)
         {
             int centeredStrength = card.StrengthScore - 3;
-            return card.BaseOfferWeight * Math.Pow(
+            double rarityWeight = Math.Pow(GlobalRarityBase, -centeredStrength);
+            double placementWeight = Math.Pow(
                 PlacementBiasBase, comebackBias * centeredStrength);
+            return card.BaseOfferWeight * rarityWeight * placementWeight;
         }
     }
 }

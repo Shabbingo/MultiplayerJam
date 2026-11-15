@@ -167,7 +167,8 @@ namespace Unity.MP_FPS.Cards
             ModifierTarget target = hand == WeaponHand.Left
                 ? ModifierTarget.LeftHand
                 : ModifierTarget.RightHand;
-            bool scatter = modifiers.GetStacks(CardModifierKind.ScatterWeapon, target) > 0;
+            int scatterStacks = modifiers.GetStacks(CardModifierKind.ScatterWeapon, target);
+            bool scatter = scatterStacks > 0;
             WeaponData source = scatter && scatterProfile != null
                 ? scatterProfile
                 : baseProfile;
@@ -184,15 +185,21 @@ namespace Unity.MP_FPS.Cards
                 ModifierTarget.BothHands);
             int bulletSpeedStacks = modifiers.GetStacks(CardModifierKind.BulletSpeed,
                 ModifierTarget.BothHands);
-            bool growsOverDistance = modifiers.GetStacks(CardModifierKind.BulletGrowth,
-                ModifierTarget.BothHands) > 0;
+            int growthStacks = modifiers.GetStacks(CardModifierKind.BulletGrowth,
+                ModifierTarget.BothHands);
+            bool growsOverDistance = growthStacks > 0;
             float damage = bleedStacks > 0
                 ? 0f
                 : source.Damage * (1f + damageStacks * Mathf.Max(0f, tuning.DamagePerStack));
             damage *= 1f + bulletSizeStacks * Mathf.Max(0f,
                 tuning.BulletSizeDamagePerStack);
-            if (siphonStacks > 0) damage *= Mathf.Max(0f,
-                tuning.LifeSiphonDamageMultiplier);
+            if (siphonStacks > 0)
+            {
+                // Every Siphon stack increases the healing ceiling, but its damage
+                // drawback compounds so the weapon becomes a dedicated sustain tool.
+                damage *= Mathf.Pow(Mathf.Max(0f,
+                    tuning.LifeSiphonDamageMultiplier), siphonStacks);
+            }
             float baseExplosionRadius = source.Behavior == ProjectileBehavior.AreaOfEffect
                 ? Mathf.Max(0f, source.AoeRadius)
                 : 0f;
@@ -208,20 +215,36 @@ namespace Unity.MP_FPS.Cards
             float homingTurnSpeed = tracksPlayers
                 ? homingStacks * Mathf.Max(0f, tuning.AddedHomingTurnSpeed)
                 : tracksAim
-                    ? Mathf.Max(0f, tuning.WireGuidedTurnSpeed)
+                    ? wireGuidedStacks * Mathf.Max(0f,
+                        tuning.WireGuidedTurnSpeed)
                 : source.IsGuidedProjectile
                     ? Mathf.Max(0f, source.GuidedTurnSpeed)
                     : 0f;
-            bool appliesSlow = modifiers.GetStacks(CardModifierKind.SlowTarget, target) > 0;
+            int slowStacks = modifiers.GetStacks(CardModifierKind.SlowTarget, target);
+            bool appliesSlow = slowStacks > 0;
+            float slowPercent = appliesSlow
+                ? 1f - Mathf.Pow(1f - Mathf.Clamp01(tuning.SlowPercent), slowStacks)
+                : 0f;
             float reloadMultiplier = Mathf.Max(tuning.MinimumReloadMultiplier,
                 1f - reloadStacks * Mathf.Clamp(tuning.ReloadTimeReductionPerStack, 0f, 0.5f));
-            if (appliesSlow) reloadMultiplier *= Mathf.Max(0f, tuning.SlowReloadMultiplier);
+            if (appliesSlow)
+            {
+                reloadMultiplier *= Mathf.Pow(
+                    Mathf.Max(0f, tuning.SlowReloadMultiplier), slowStacks);
+            }
             reloadMultiplier *= Mathf.Pow(Mathf.Max(0f, tuning.AmmoReloadMultiplier),
                 ammoStacks);
             int magazineSize = Mathf.Max(1, source.MagazineSize +
                 ammoStacks * Mathf.Max(0, tuning.AmmoPerStack));
             if (scatter) magazineSize = Mathf.Max(1,
-                magazineSize + tuning.ScatterMagazineDelta);
+                magazineSize + scatterStacks * tuning.ScatterMagazineDelta);
+            int pelletCount = scatter
+                ? 1 + scatterStacks * Mathf.Max(0, tuning.ScatterPelletCount - 1)
+                : 1;
+            float scatterHalfAngle = scatter
+                ? Mathf.Max(0f, tuning.ScatterHalfAngleDegrees) *
+                  Mathf.Sqrt(scatterStacks)
+                : 0f;
             float projectileScale = (1f + bulletSizeStacks *
                                     tuning.BulletSizeScalePerStack) *
                                     Mathf.Pow(tuning.BulletSpeedScaleMultiplier,
@@ -242,8 +265,8 @@ namespace Unity.MP_FPS.Cards
                 magazineSize,
                 Mathf.Max(0f, source.ReloadTime * reloadMultiplier),
                 Mathf.Max(0f, projectileSpeed),
-                scatter ? Mathf.Max(1, tuning.ScatterPelletCount) : 1,
-                scatter ? Mathf.Max(0f, tuning.ScatterHalfAngleDegrees) : 0f,
+                Mathf.Max(1, pelletCount),
+                scatterHalfAngle,
                 isHoming,
                 tracksPlayers,
                 tracksAim,
@@ -251,16 +274,21 @@ namespace Unity.MP_FPS.Cards
                 explosionRadius > 0f,
                 explosionRadius,
                 appliesSlow,
-                appliesSlow ? Mathf.Clamp01(tuning.SlowPercent) : 0f,
+                slowPercent,
                 appliesSlow ? Mathf.Max(0f, tuning.SlowDuration) : 0f,
                 Mathf.Max(0, Mathf.RoundToInt(bounceStacks *
                     tuning.BounceCountPerStack)),
                 (hand == WeaponHand.Right ? 1f : -1f) * bleedStacks *
                 Mathf.Max(0f, tuning.BleedDamagePerSecond),
                 bleedStacks > 0 ? Mathf.Max(0f, tuning.BleedDuration) : 0f,
-                siphonStacks > 0 ? Mathf.Clamp01(tuning.LifeStealPercent) : 0f,
+                siphonStacks > 0
+                    ? 1f - Mathf.Pow(1f - Mathf.Clamp01(tuning.LifeStealPercent),
+                        siphonStacks)
+                    : 0f,
                 Mathf.Max(0.1f, projectileScale), growsOverDistance,
-                growsOverDistance ? Mathf.Max(0f, tuning.BulletGrowthPerMetre) : 0f,
+                growsOverDistance
+                    ? growthStacks * Mathf.Max(0f, tuning.BulletGrowthPerMetre)
+                    : 0f,
                 Mathf.Clamp01(tuning.BounceVelocityRetention));
         }
 

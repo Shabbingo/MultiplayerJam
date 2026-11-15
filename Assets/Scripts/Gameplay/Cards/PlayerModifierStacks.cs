@@ -44,6 +44,9 @@ namespace Unity.MP_FPS.Cards
         [GhostField] public byte ShieldSpeed;
         [GhostField] public byte BigHealthCapacity;
         [GhostField] public byte SmallHealthCapacity;
+        [GhostField] public byte MirrorImage;
+        [GhostField] public byte SecondChance;
+        [GhostField] public byte NullField;
 
         public int GetStacks(CardModifierKind kind, ModifierTarget target)
         {
@@ -86,109 +89,117 @@ namespace Unity.MP_FPS.Cards
                 (CardModifierKind.ShieldSpeed, ModifierTarget.Self) => ShieldSpeed,
                 (CardModifierKind.BigHealthCapacity, ModifierTarget.Self) => BigHealthCapacity,
                 (CardModifierKind.SmallHealthCapacity, ModifierTarget.Self) => SmallHealthCapacity,
+                (CardModifierKind.MirrorImage, ModifierTarget.Self) => MirrorImage,
+                (CardModifierKind.SecondChance, ModifierTarget.Self) => SecondChance,
+                (CardModifierKind.NullField, ModifierTarget.Self) => NullField,
                 _ => 0
             };
         }
 
         public bool TryAdd(CardModifierDefinition card, ModifierTarget target)
         {
-            if (card == null || !card.Allows(target) ||
-                GetStacks(card.Kind, target) >= card.StackLimit)
+            if (card == null || !card.Allows(target))
             {
                 return false;
             }
 
-            return TryIncrement(card.Kind, target, card.StackLimit);
+            return TryIncrement(card.Kind, target);
         }
 
-        public bool TryIncrement(CardModifierKind kind, ModifierTarget target,
-            int stackLimit)
+        public bool TryIncrement(CardModifierKind kind, ModifierTarget target)
         {
-            int limit = Unity.Mathematics.math.clamp(stackLimit, 1, 5);
             switch (kind, target)
             {
                 case (CardModifierKind.DamagePercent, ModifierTarget.LeftHand):
-                    return Increment(ref LeftDamage, limit);
+                    return Increment(ref LeftDamage);
                 case (CardModifierKind.DamagePercent, ModifierTarget.RightHand):
-                    return Increment(ref RightDamage, limit);
+                    return Increment(ref RightDamage);
                 case (CardModifierKind.HomingProjectiles, ModifierTarget.LeftHand):
-                    return Increment(ref LeftHoming, limit);
+                    return Increment(ref LeftHoming);
                 case (CardModifierKind.HomingProjectiles, ModifierTarget.RightHand):
-                    return Increment(ref RightHoming, limit);
+                    return Increment(ref RightHoming);
                 case (CardModifierKind.WireGuided, ModifierTarget.LeftHand):
-                    return Increment(ref LeftWireGuided, limit);
+                    return Increment(ref LeftWireGuided);
                 case (CardModifierKind.WireGuided, ModifierTarget.RightHand):
-                    return Increment(ref RightWireGuided, limit);
+                    return Increment(ref RightWireGuided);
                 case (CardModifierKind.SlowTarget, ModifierTarget.LeftHand):
-                    return Increment(ref LeftSlow, limit);
+                    return Increment(ref LeftSlow);
                 case (CardModifierKind.SlowTarget, ModifierTarget.RightHand):
-                    return Increment(ref RightSlow, limit);
+                    return Increment(ref RightSlow);
                 case (CardModifierKind.ExplosionRadius, ModifierTarget.LeftHand):
-                    return Increment(ref LeftExplosion, limit);
+                    return Increment(ref LeftExplosion);
                 case (CardModifierKind.ExplosionRadius, ModifierTarget.RightHand):
-                    return Increment(ref RightExplosion, limit);
+                    return Increment(ref RightExplosion);
                 case (CardModifierKind.ScatterWeapon, ModifierTarget.LeftHand):
-                    return Increment(ref LeftScatter, limit);
+                    return Increment(ref LeftScatter);
                 case (CardModifierKind.ScatterWeapon, ModifierTarget.RightHand):
-                    return Increment(ref RightScatter, limit);
+                    return Increment(ref RightScatter);
                 case (CardModifierKind.ReloadSpeed, ModifierTarget.LeftHand):
-                    return Increment(ref LeftReloadSpeed, limit);
+                    return Increment(ref LeftReloadSpeed);
                 case (CardModifierKind.ReloadSpeed, ModifierTarget.RightHand):
-                    return Increment(ref RightReloadSpeed, limit);
+                    return Increment(ref RightReloadSpeed);
                 case (CardModifierKind.MagazineCapacity, ModifierTarget.LeftHand):
-                    return Increment(ref LeftMagazineCapacity, limit);
+                    return Increment(ref LeftMagazineCapacity);
                 case (CardModifierKind.MagazineCapacity, ModifierTarget.RightHand):
-                    return Increment(ref RightMagazineCapacity, limit);
+                    return Increment(ref RightMagazineCapacity);
                 case (CardModifierKind.ExtraSelfShrinkCharge, ModifierTarget.Self):
-                    return Increment(ref ExtraSelfShrinkCharges, limit);
+                    return Increment(ref ExtraSelfShrinkCharges);
                 case (CardModifierKind.ExtraSelfGrowCharge, ModifierTarget.Self):
-                    return Increment(ref ExtraSelfGrowCharges, limit);
+                    return Increment(ref ExtraSelfGrowCharges);
                 case (CardModifierKind.ExtraReflectCharge, ModifierTarget.Self):
-                    return Increment(ref ExtraReflectCharges, limit);
+                    return Increment(ref ExtraReflectCharges);
                 case (CardModifierKind.Bleed, ModifierTarget.LeftHand):
-                    return Increment(ref LeftBleed, limit);
+                    return Increment(ref LeftBleed);
                 case (CardModifierKind.Bleed, ModifierTarget.RightHand):
-                    return Increment(ref RightBleed, limit);
+                    return Increment(ref RightBleed);
                 case (CardModifierKind.Bounce, ModifierTarget.LeftHand):
-                    return Increment(ref LeftBounce, limit);
+                    return Increment(ref LeftBounce);
                 case (CardModifierKind.Bounce, ModifierTarget.RightHand):
-                    return Increment(ref RightBounce, limit);
+                    return Increment(ref RightBounce);
                 case (CardModifierKind.LifeSiphon, ModifierTarget.LeftHand):
-                    return Increment(ref LeftLifeSiphon, limit);
+                    return Increment(ref LeftLifeSiphon);
                 case (CardModifierKind.LifeSiphon, ModifierTarget.RightHand):
-                    return Increment(ref RightLifeSiphon, limit);
+                    return Increment(ref RightLifeSiphon);
                 case (CardModifierKind.BulletSize, ModifierTarget.BothHands):
-                    return Increment(ref BulletSize, limit);
+                    return Increment(ref BulletSize);
                 case (CardModifierKind.BulletSpeed, ModifierTarget.BothHands):
-                    return Increment(ref BulletSpeed, limit);
+                    return Increment(ref BulletSpeed);
                 case (CardModifierKind.BulletGrowth, ModifierTarget.BothHands):
-                    return Increment(ref BulletGrowth, limit);
+                    return Increment(ref BulletGrowth);
                 case (CardModifierKind.ReloadSpeed, ModifierTarget.BothHands):
-                    return IncrementBoth(ref LeftReloadSpeed, ref RightReloadSpeed, limit);
+                    return IncrementBoth(ref LeftReloadSpeed, ref RightReloadSpeed);
                 case (CardModifierKind.MagazineCapacity, ModifierTarget.BothHands):
-                    return IncrementBoth(ref LeftMagazineCapacity, ref RightMagazineCapacity, limit);
+                    return IncrementBoth(ref LeftMagazineCapacity, ref RightMagazineCapacity);
                 case (CardModifierKind.ExtraResizeCharge, ModifierTarget.BothHands):
-                    return Increment(ref ExtraResizeCharges, limit);
+                    return Increment(ref ExtraResizeCharges);
                 case (CardModifierKind.SlowShield, ModifierTarget.Self):
-                    return Increment(ref SlowShield, limit);
+                    return Increment(ref SlowShield);
                 case (CardModifierKind.SwapOnReflect, ModifierTarget.Self):
-                    return Increment(ref SwapOnReflect, limit);
+                    return Increment(ref SwapOnReflect);
                 case (CardModifierKind.ReflectHealing, ModifierTarget.Self):
-                    return Increment(ref ReflectHealing, limit);
+                    return Increment(ref ReflectHealing);
                 case (CardModifierKind.ShieldSpeed, ModifierTarget.Self):
-                    return Increment(ref ShieldSpeed, limit);
+                    return Increment(ref ShieldSpeed);
                 case (CardModifierKind.BigHealthCapacity, ModifierTarget.Self):
-                    return Increment(ref BigHealthCapacity, limit);
+                    return Increment(ref BigHealthCapacity);
                 case (CardModifierKind.SmallHealthCapacity, ModifierTarget.Self):
-                    return Increment(ref SmallHealthCapacity, limit);
+                    return Increment(ref SmallHealthCapacity);
+                case (CardModifierKind.MirrorImage, ModifierTarget.Self):
+                    return Increment(ref MirrorImage);
+                case (CardModifierKind.SecondChance, ModifierTarget.Self):
+                    return Increment(ref SecondChance);
+                case (CardModifierKind.NullField, ModifierTarget.Self):
+                    return Increment(ref NullField);
                 default:
                     return false;
             }
         }
 
-        private static bool Increment(ref byte value, int limit)
+        private static bool Increment(ref byte value)
         {
-            if (value >= limit)
+            // Stack limits are intentionally open-ended for gameplay. The byte
+            // maximum remains as an overflow guard for replicated state.
+            if (value == byte.MaxValue)
             {
                 return false;
             }
@@ -197,9 +208,9 @@ namespace Unity.MP_FPS.Cards
             return true;
         }
 
-        private static bool IncrementBoth(ref byte left, ref byte right, int limit)
+        private static bool IncrementBoth(ref byte left, ref byte right)
         {
-            if (left >= limit || right >= limit) return false;
+            if (left == byte.MaxValue || right == byte.MaxValue) return false;
             left++;
             right++;
             return true;

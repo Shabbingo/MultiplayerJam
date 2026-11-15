@@ -249,7 +249,7 @@ namespace Unity.MP_FPS.UI
                     : DisplayStyle.None;
                 if (!visible) continue;
                 _cardButtons[i].text =
-                    $"{definition.DisplayName.ToUpperInvariant()}\n\n{definition.Description}\n\nSTACK LIMIT: {definition.StackLimit}";
+                    $"{definition.DisplayName.ToUpperInvariant()}\n\n{definition.Description}\n\nRARITY: {definition.StrengthScore}/5";
                 _cardButtons[i].SetEnabled(manager.IsLocalDraftTurn && activeTurn);
                 _cardButtons[i].style.backgroundColor = cardId == _selectedCardId
                     ? new Color(0.18f, 0.48f, 0.68f, 0.98f)

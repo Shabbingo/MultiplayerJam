@@ -23,7 +23,7 @@ public class FirstPersonController : MonoBehaviour
 
     [Header("Reflect")]
     [SerializeField, Min(0.01f), Tooltip("Seconds that incoming weapon hits are reflected after activating the ability.")]
-    private float m_ReflectDuration = 0.25f;
+    private float m_ReflectDuration = 2f;
     [SerializeField, Min(0.1f), Tooltip("Seconds before the reflect ability can be activated again.")]
     private float m_ReflectCooldown = 15f;
 
@@ -713,7 +713,7 @@ public class FirstPersonController : MonoBehaviour
         return predictedPlayer.SizeState != requestedSizeState;
     }
 
-    private float GetMaximumHealthForSizeState(int sizeState,
+    public float GetMaximumHealthForSizeState(int sizeState,
         in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers)
     {
         float baseMaximum = sizeState switch

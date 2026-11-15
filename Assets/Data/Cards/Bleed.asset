@@ -21,7 +21,6 @@ MonoBehaviour:
   m_BaseOfferWeight: 1
   m_Kind: 11
   m_AllowedTargets: 3
-  m_StackLimit: 1
   m_ValuePerStack: 20
   m_EffectDurationSeconds: 3
   m_DamagePercentPerStack: 0

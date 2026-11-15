@@ -200,6 +200,27 @@ namespace Unity.MP_FPS
             _collisionGraceTimer = Mathf.Max(0f, _collisionGraceTimer - deltaTime);
             Vector3 displacement = _velocity * deltaTime;
 
+            var nullFieldSystem = GhostGameObject.World
+                .GetExistingSystemManaged<ServerPlayerMovementSystem>();
+            if (nullFieldSystem != null &&
+                nullFieldSystem.TryAbsorbProjectile(transform.position,
+                    transform.position + displacement,
+                    projectileData.OwnerNetworkId,
+                    out Vector3 absorptionPosition))
+            {
+                if (weaponData.ProjectileHitVfxPrefab != null)
+                {
+                    Vector3 effectDirection = _velocity.sqrMagnitude > 0.0001f
+                        ? -_velocity.normalized
+                        : -transform.forward;
+                    SpawnImpactEffect(weaponData, absorptionPosition,
+                        effectDirection, 0f,
+                        GetSignedSizeDelta(weaponData, projectileData));
+                }
+                HandleGeometryImpact(absorptionPosition);
+                return;
+            }
+
             // Test the segment the projectile is about to travel. The previous implementation
             // moved first and cast forward from the new position, which skipped close targets.
             if (CheckForCollision(weaponData, displacement))

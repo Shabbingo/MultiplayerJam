@@ -141,7 +141,7 @@ namespace Unity.MP_FPS
 
             m_ReflectShieldFrame?.EnableInClassList(
                 "reflect-shield-active", playerData.ReflectShieldTimeRemaining > 0f);
-            UpdateReflectCooldownWheel(in playerData);
+            UpdateReflectCooldownWheel(in playerData, in modifiers);
 
             // Update Health Bar
             if (m_HealthBar != null)
@@ -240,7 +240,8 @@ namespace Unity.MP_FPS
             }
         }
 
-        private void UpdateReflectCooldownWheel(in PredictedPlayerGhost playerData)
+        private void UpdateReflectCooldownWheel(in PredictedPlayerGhost playerData,
+            in Cards.PlayerModifierStacks modifiers)
         {
             if (m_ReflectCooldownWheel == null)
             {
@@ -261,8 +262,14 @@ namespace Unity.MP_FPS
                 Mathf.Clamp01(cooldownProgress * 4f - 3f));
 
             bool isReady = playerData.ReflectCharges > 0;
+            string secondChanceStatus = modifiers.SecondChance > 0
+                ? $"\nSECOND CHANCE: {playerData.SecondChanceUsesRemaining} / " +
+                  $"{modifiers.SecondChance}"
+                : string.Empty;
             m_ReflectCooldownWheel.tooltip =
-                $"REFLECT: {playerData.ReflectCharges} / {Mathf.Max(1, playerData.MaxReflectCharges)}";
+                $"REFLECT: {playerData.ReflectCharges} / " +
+                $"{Mathf.Max(1, playerData.MaxReflectCharges)}" +
+                secondChanceStatus;
             if (m_ReflectChargeLabel != null)
             {
                 m_ReflectChargeLabel.text =

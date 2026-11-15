@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Cinemachine;
 using Unity.Collections;
 using Unity.Entities;
@@ -28,6 +29,8 @@ namespace Unity.MP_FPS
         [SerializeField, Min(0f)] private float m_ReflectGlowIntensity = 4f;
         [SerializeField, Min(0.1f)] private float m_ReflectGlowRange = 5f;
         [SerializeField] private Color m_ReflectShieldColour = new(0.12f, 0.68f, 1f, 0.42f);
+        [SerializeField] private Color m_NullFieldShieldColour = new(0.62f, 0.22f, 1f, 0.5f);
+        [SerializeField] private Color m_SecondChanceGlowColour = new(1f, 0.68f, 0.08f, 1f);
         [SerializeField] private Vector3 m_ReflectShieldOffset = new(0f, 1f, 0f);
         [SerializeField] private Vector3 m_ReflectShieldScale = new(1.5f, 2.4f, 1.5f);
         [field: SerializeField] public Transform CameraTarget { get; private set; }
@@ -81,6 +84,25 @@ namespace Unity.MP_FPS
         private Light m_ReflectGlow;
         private MeshRenderer m_ReflectShieldRenderer;
         private Material m_ReflectShieldMaterial;
+        private readonly List<MirrorSnapshot> m_MirrorHistory = new();
+        private readonly List<MirrorDecoy> m_MirrorDecoys = new();
+        private bool m_WasReflectShieldActive;
+        private float m_LastMirrorSnapshotTime = float.MinValue;
+
+        private struct MirrorSnapshot
+        {
+            public float Time;
+            public Vector3 Position;
+            public Quaternion Rotation;
+            public Vector3 Scale;
+        }
+
+        private sealed class MirrorDecoy
+        {
+            public GameObject Instance;
+            public float MovementDelay;
+            public float ExpiresAt;
+        }
 
         private CinemachineTargetGroup m_TargetGroup;
         private CinemachinePositionComposer m_PositionComposer;
@@ -460,6 +482,7 @@ namespace Unity.MP_FPS
 
         public override void OnGhostPreDestroy()
         {
+            ClearMirrorDecoys();
             if (m_ReflectShieldMaterial != null)
             {
                 Destroy(m_ReflectShieldMaterial);
@@ -520,10 +543,15 @@ namespace Unity.MP_FPS
 
             var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
             bool reflectShieldActive = predictedPlayerGhost.ReflectShieldTimeRemaining > 0f;
+            bool secondChanceProtected =
+                predictedPlayerGhost.SecondChanceInvulnerabilityTimeRemaining > 0f;
             if (m_ReflectGlow != null)
             {
-                m_ReflectGlow.enabled = reflectShieldActive;
-                if (reflectShieldActive)
+                m_ReflectGlow.enabled = reflectShieldActive || secondChanceProtected;
+                m_ReflectGlow.color = secondChanceProtected
+                    ? m_SecondChanceGlowColour
+                    : m_ReflectGlowColour;
+                if (m_ReflectGlow.enabled)
                 {
                     m_ReflectGlow.intensity = m_ReflectGlowIntensity *
                         (0.85f + 0.15f * Mathf.Sin(Time.time * 12f));
@@ -534,6 +562,27 @@ namespace Unity.MP_FPS
             {
                 m_ReflectShieldRenderer.enabled = reflectShieldActive;
             }
+
+            RecordMirrorSnapshot();
+            Cards.PlayerModifierStacks modifiers =
+                TryReadGhostComponentData<Cards.PlayerModifierStacks>(
+                    out var replicatedModifiers)
+                    ? replicatedModifiers
+                    : default;
+            if (m_ReflectShieldMaterial != null)
+            {
+                m_ReflectShieldMaterial.SetColor("_ShieldColor",
+                    modifiers.NullField > 0
+                        ? m_NullFieldShieldColour
+                        : m_ReflectShieldColour);
+            }
+            if (reflectShieldActive && !m_WasReflectShieldActive &&
+                modifiers.MirrorImage > 0)
+            {
+                SpawnMirrorDecoys(modifiers.MirrorImage);
+            }
+            UpdateMirrorDecoys();
+            m_WasReflectShieldActive = reflectShieldActive;
 
             var controllerState = predictedPlayerGhost.ControllerState;
             if (Role == MultiplayerRole.ClientOwned)
@@ -549,6 +598,198 @@ namespace Unity.MP_FPS
             //TODO: The following is a temporary fix for animation root moves (Robot Jump for example)
             m_OtherPlayerVisuals.transform.localPosition = Vector3.zero;
             m_OtherPlayerVisuals.transform.localRotation = Quaternion.identity;
+        }
+
+        private void RecordMirrorSnapshot()
+        {
+            float now = Time.time;
+            if (now - m_LastMirrorSnapshotTime < 0.025f ||
+                m_OtherPlayerVisuals == null)
+            {
+                return;
+            }
+
+            m_LastMirrorSnapshotTime = now;
+            Transform visualTransform = m_OtherPlayerVisuals.transform;
+            m_MirrorHistory.Add(new MirrorSnapshot
+            {
+                Time = now,
+                Position = visualTransform.position,
+                Rotation = visualTransform.rotation,
+                Scale = visualTransform.lossyScale
+            });
+
+            const float historyDuration = 3f;
+            float oldestAllowed = now - historyDuration;
+            int removeCount = 0;
+            while (removeCount < m_MirrorHistory.Count - 1 &&
+                   m_MirrorHistory[removeCount].Time < oldestAllowed)
+            {
+                removeCount++;
+            }
+            if (removeCount > 0)
+            {
+                m_MirrorHistory.RemoveRange(0, removeCount);
+            }
+        }
+
+        private void SpawnMirrorDecoys(int stackCount)
+        {
+            if (m_OtherPlayerVisuals == null || stackCount <= 0)
+            {
+                return;
+            }
+
+            var card = WeaponManager.Instance?.CardModifierCatalog?
+                .FindByKind(Cards.CardModifierKind.MirrorImage);
+            float lifetime = Mathf.Max(0.1f,
+                card?.EffectDurationSeconds ?? 2f);
+            float maximumDelay = Mathf.Min(2.4f,
+                0.16f * Mathf.Max(1, stackCount));
+            float now = Time.time;
+            for (int i = 0; i < stackCount; i++)
+            {
+                var clone = Instantiate(m_OtherPlayerVisuals);
+                clone.name = $"Mirror Image {i + 1}";
+                clone.transform.SetParent(null, true);
+                PrepareMirrorVisual(clone, i, stackCount);
+                clone.SetActive(true);
+
+                float delay = stackCount == 1
+                    ? 0.18f
+                    : Mathf.Lerp(0.12f, maximumDelay,
+                        i / (float)(stackCount - 1));
+                ApplyMirrorSnapshot(clone.transform, now - delay);
+                m_MirrorDecoys.Add(new MirrorDecoy
+                {
+                    Instance = clone,
+                    MovementDelay = delay,
+                    ExpiresAt = now + lifetime
+                });
+            }
+        }
+
+        private static void PrepareMirrorVisual(GameObject clone, int index,
+            int count)
+        {
+            foreach (var behaviour in clone.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                behaviour.enabled = false;
+            }
+            foreach (var collider in clone.GetComponentsInChildren<Collider>(true))
+            {
+                collider.enabled = false;
+            }
+            foreach (var audioSource in clone.GetComponentsInChildren<AudioSource>(true))
+            {
+                audioSource.enabled = false;
+            }
+
+            float hue = Mathf.Repeat(0.5f + index /
+                (float)Mathf.Max(1, count) * 0.18f, 1f);
+            Color tint = Color.HSVToRGB(hue, 0.65f, 1f);
+            tint.a = 0.5f;
+            var propertyBlock = new MaterialPropertyBlock();
+            foreach (var visualRenderer in clone.GetComponentsInChildren<Renderer>(true))
+            {
+                visualRenderer.shadowCastingMode =
+                    UnityEngine.Rendering.ShadowCastingMode.Off;
+                visualRenderer.receiveShadows = false;
+                var materials = visualRenderer.sharedMaterials;
+                for (int materialIndex = 0; materialIndex < materials.Length;
+                     materialIndex++)
+                {
+                    Material material = materials[materialIndex];
+                    if (material == null) continue;
+                    visualRenderer.GetPropertyBlock(propertyBlock, materialIndex);
+                    if (material.HasProperty(s_BaseColorProperty))
+                    {
+                        propertyBlock.SetColor(s_BaseColorProperty, tint);
+                    }
+                    if (material.HasProperty(s_ColorProperty))
+                    {
+                        propertyBlock.SetColor(s_ColorProperty, tint);
+                    }
+                    visualRenderer.SetPropertyBlock(propertyBlock, materialIndex);
+                    propertyBlock.Clear();
+                }
+            }
+        }
+
+        private void UpdateMirrorDecoys()
+        {
+            float now = Time.time;
+            for (int i = m_MirrorDecoys.Count - 1; i >= 0; i--)
+            {
+                MirrorDecoy decoy = m_MirrorDecoys[i];
+                if (decoy.Instance == null || now >= decoy.ExpiresAt)
+                {
+                    if (decoy.Instance != null)
+                    {
+                        Destroy(decoy.Instance);
+                    }
+                    m_MirrorDecoys.RemoveAt(i);
+                    continue;
+                }
+
+                ApplyMirrorSnapshot(decoy.Instance.transform,
+                    now - decoy.MovementDelay);
+            }
+        }
+
+        private void ApplyMirrorSnapshot(Transform target, float sampleTime)
+        {
+            if (target == null || m_MirrorHistory.Count == 0)
+            {
+                return;
+            }
+
+            int newerIndex = 0;
+            while (newerIndex < m_MirrorHistory.Count &&
+                   m_MirrorHistory[newerIndex].Time < sampleTime)
+            {
+                newerIndex++;
+            }
+
+            if (newerIndex <= 0)
+            {
+                ApplyMirrorSnapshot(target, m_MirrorHistory[0]);
+                return;
+            }
+            if (newerIndex >= m_MirrorHistory.Count)
+            {
+                ApplyMirrorSnapshot(target,
+                    m_MirrorHistory[m_MirrorHistory.Count - 1]);
+                return;
+            }
+
+            MirrorSnapshot older = m_MirrorHistory[newerIndex - 1];
+            MirrorSnapshot newer = m_MirrorHistory[newerIndex];
+            float t = Mathf.InverseLerp(older.Time, newer.Time, sampleTime);
+            target.SetPositionAndRotation(
+                Vector3.Lerp(older.Position, newer.Position, t),
+                Quaternion.Slerp(older.Rotation, newer.Rotation, t));
+            target.localScale = Vector3.Lerp(older.Scale, newer.Scale, t);
+        }
+
+        private static void ApplyMirrorSnapshot(Transform target,
+            in MirrorSnapshot snapshot)
+        {
+            target.SetPositionAndRotation(snapshot.Position, snapshot.Rotation);
+            target.localScale = snapshot.Scale;
+        }
+
+        private void ClearMirrorDecoys()
+        {
+            foreach (MirrorDecoy decoy in m_MirrorDecoys)
+            {
+                if (decoy.Instance != null)
+                {
+                    Destroy(decoy.Instance);
+                }
+            }
+            m_MirrorDecoys.Clear();
+            m_MirrorHistory.Clear();
         }
 
         private void ApplyPlayerScale(float deltaTime)

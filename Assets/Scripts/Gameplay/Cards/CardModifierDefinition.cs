@@ -44,7 +44,10 @@ namespace Unity.MP_FPS.Cards
         ReflectHealing,
         ShieldSpeed,
         BigHealthCapacity,
-        SmallHealthCapacity
+        SmallHealthCapacity,
+        MirrorImage,
+        SecondChance,
+        NullField
     }
 
     [CreateAssetMenu(fileName = "CardModifier", menuName = "Multiplayer Jam/Card Modifier")]
@@ -63,12 +66,13 @@ namespace Unity.MP_FPS.Cards
         [Header("Effect")]
         [SerializeField] private CardModifierKind m_Kind;
         [SerializeField] private ModifierTarget m_AllowedTargets = ModifierTarget.LeftHand;
-        [SerializeField, Range(1, 5)] private int m_StackLimit = 1;
         [SerializeField, Tooltip("Meaning depends on the modifier: 0.10 is 10% damage, 1 is one charge or one metre.")]
         private float m_ValuePerStack = 1f;
 
         [Header("Advanced Effect Tuning")]
         [SerializeField, Min(0f)] private float m_EffectDurationSeconds;
+        [SerializeField, Min(0f), Tooltip("World-space radius used by area-based card effects.")]
+        private float m_EffectRadiusMetres;
         [SerializeField, Min(0f), Tooltip("Additional base-damage percentage per stack. 0.10 means +10%.")]
         private float m_DamagePercentPerStack;
         [SerializeField, Min(0f), Tooltip("Multiplier applied to base damage while this card is active.")]
@@ -102,9 +106,9 @@ namespace Unity.MP_FPS.Cards
         public float BaseOfferWeight => m_BaseOfferWeight;
         public CardModifierKind Kind => m_Kind;
         public ModifierTarget AllowedTargets => m_AllowedTargets;
-        public int StackLimit => m_StackLimit;
         public float ValuePerStack => m_ValuePerStack;
         public float EffectDurationSeconds => m_EffectDurationSeconds;
+        public float EffectRadiusMetres => m_EffectRadiusMetres;
         public float DamagePercentPerStack => m_DamagePercentPerStack;
         public float BaseDamageMultiplier => m_BaseDamageMultiplier;
         public float ReloadTimeMultiplierPerStack => m_ReloadTimeMultiplierPerStack;
@@ -137,8 +141,8 @@ namespace Unity.MP_FPS.Cards
             m_CardId = Mathf.Max(1, m_CardId);
             m_StrengthScore = Mathf.Clamp(m_StrengthScore, 1, 5);
             m_BaseOfferWeight = Mathf.Max(0.01f, m_BaseOfferWeight);
-            m_StackLimit = Mathf.Clamp(m_StackLimit, 1, 5);
             m_EffectDurationSeconds = Mathf.Max(0f, m_EffectDurationSeconds);
+            m_EffectRadiusMetres = Mathf.Max(0f, m_EffectRadiusMetres);
             m_DamagePercentPerStack = Mathf.Max(0f, m_DamagePercentPerStack);
             m_BaseDamageMultiplier = Mathf.Max(0f, m_BaseDamageMultiplier);
             m_ReloadTimeMultiplierPerStack = Mathf.Max(0f,
@@ -157,23 +161,6 @@ namespace Unity.MP_FPS.Cards
             m_BounceVelocityRetention = Mathf.Clamp01(m_BounceVelocityRetention);
             m_DamageReductionPercent = Mathf.Clamp01(m_DamageReductionPercent);
             m_TeleportFreezeSeconds = Mathf.Max(0f, m_TeleportFreezeSeconds);
-
-            if (m_Kind is CardModifierKind.HomingProjectiles or
-                CardModifierKind.WireGuided or
-                CardModifierKind.SlowTarget or
-                CardModifierKind.ScatterWeapon or
-                CardModifierKind.Bleed or
-                CardModifierKind.LifeSiphon or
-                CardModifierKind.BulletGrowth or
-                CardModifierKind.SlowShield or
-                CardModifierKind.SwapOnReflect or
-                CardModifierKind.ReflectHealing or
-                CardModifierKind.ShieldSpeed or
-                CardModifierKind.BigHealthCapacity or
-                CardModifierKind.SmallHealthCapacity)
-            {
-                m_StackLimit = 1;
-            }
         }
     }
 }

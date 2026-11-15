@@ -14,5 +14,4 @@ MonoBehaviour:
   m_BaseOfferWeight: 1
   m_Kind: 10
   m_AllowedTargets: 3
-  m_StackLimit: 1
   m_ValuePerStack: 120

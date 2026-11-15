@@ -79,6 +79,9 @@ namespace Unity.MP_FPS
         private readonly List<int> m_HitscanBloomPlayersScratch = new();
         private readonly Dictionary<int, float> m_ReflectActiveTimers = new();
         private readonly List<int> m_ReflectPlayersScratch = new();
+        private readonly Dictionary<int, int> m_SecondChanceUsesConsumed = new();
+        private readonly Dictionary<int, float> m_SecondChanceInvulnerabilityTimers = new();
+        private int m_SecondChanceRound = -1;
         private readonly Dictionary<int, Entity> m_PlayerEntitiesByNetworkId = new();
         private readonly HashSet<Entity> m_RuntimeAreaHitEntities = new();
         private readonly List<BleedEffect> m_BleedEffects = new();
@@ -217,6 +220,8 @@ namespace Unity.MP_FPS
             m_HitscanBloomPlayersScratch.Clear();
             m_ReflectActiveTimers.Clear();
             m_ReflectPlayersScratch.Clear();
+            m_SecondChanceUsesConsumed.Clear();
+            m_SecondChanceInvulnerabilityTimers.Clear();
             m_PlayerEntitiesByNetworkId.Clear();
             m_RuntimeAreaHitEntities.Clear();
             m_BleedEffects.Clear();
@@ -245,7 +250,10 @@ namespace Unity.MP_FPS
             uint serverTick = networkTime.ServerTick.TickIndexForValidTick;
             UpdateForcedFullSizeEffects(deltaTime);
             UpdateHitscanBloom(deltaTime);
+            UpdateSecondChanceRoundState();
             UpdateReflectTimerDictionary(m_ReflectActiveTimers, deltaTime);
+            UpdateReflectTimerDictionary(m_SecondChanceInvulnerabilityTimers,
+                deltaTime);
             UpdateBleedEffects(deltaTime, serverTick);
 
             s_PlayerMovementActive = true;
@@ -420,6 +428,18 @@ namespace Unity.MP_FPS
                     m_ReflectActiveTimers.TryGetValue(
                         owner.ValueRO.NetworkId, out float shieldTimeRemaining)
                         ? shieldTimeRemaining
+                        : 0f;
+                int secondChanceMaximum = modifiers.ValueRO.SecondChance;
+                int secondChanceConsumed = m_SecondChanceUsesConsumed.TryGetValue(
+                    owner.ValueRO.NetworkId, out int consumedUses)
+                    ? consumedUses
+                    : 0;
+                predictedPlayer.ValueRW.SecondChanceUsesRemaining = Mathf.Max(0,
+                    secondChanceMaximum - secondChanceConsumed);
+                predictedPlayer.ValueRW.SecondChanceInvulnerabilityTimeRemaining =
+                    m_SecondChanceInvulnerabilityTimers.TryGetValue(
+                        owner.ValueRO.NetworkId, out float invulnerabilityRemaining)
+                        ? invulnerabilityRemaining
                         : 0f;
                 if (predictedPlayer.ValueRO.WeaponCooldown < float.MaxValue)
                 {
@@ -1237,6 +1257,81 @@ namespace Unity.MP_FPS
             return previous > 0f && current <= 0f;
         }
 
+        private void UpdateSecondChanceRoundState()
+        {
+            int currentRound = LeaderboardManager.ServerInstance?.CurrentRound ?? 0;
+            if (currentRound == m_SecondChanceRound)
+            {
+                return;
+            }
+
+            m_SecondChanceRound = currentRound;
+            m_SecondChanceUsesConsumed.Clear();
+            m_SecondChanceInvulnerabilityTimers.Clear();
+        }
+
+        private bool TryActivateSecondChance(Entity playerEntity, int playerNetworkId,
+            ref PredictedPlayerGhost player)
+        {
+            Cards.PlayerModifierStacks modifiers =
+                EntityManager.HasComponent<Cards.PlayerModifierStacks>(playerEntity)
+                    ? EntityManager.GetComponentData<Cards.PlayerModifierStacks>(playerEntity)
+                    : default;
+            int maximumUses = modifiers.SecondChance;
+            int consumedUses = m_SecondChanceUsesConsumed.TryGetValue(
+                playerNetworkId, out int existingUses)
+                ? existingUses
+                : 0;
+            if (maximumUses <= consumedUses)
+            {
+                return false;
+            }
+
+            m_SecondChanceUsesConsumed[playerNetworkId] = consumedUses + 1;
+            var card = WeaponManager.Instance?.CardModifierCatalog?
+                .FindByKind(Cards.CardModifierKind.SecondChance);
+            float protectionDuration = Mathf.Max(0f,
+                card?.EffectDurationSeconds ?? 0f);
+            if (protectionDuration > 0f)
+            {
+                m_SecondChanceInvulnerabilityTimers[playerNetworkId] =
+                    protectionDuration;
+            }
+
+            float smallMaximumHealth = 30f;
+            if (EntityManager.HasComponent<PlayerControllerLink>(playerEntity))
+            {
+                var controllerLink =
+                    EntityManager.GetComponentObject<PlayerControllerLink>(playerEntity);
+                if (controllerLink?.Controller != null)
+                {
+                    smallMaximumHealth = controllerLink.Controller
+                        .GetMaximumHealthForSizeState(
+                            FirstPersonController.SmallSizeState, in modifiers);
+                }
+            }
+
+            player.SizeState = FirstPersonController.SmallSizeState;
+            player.MaxHealth = Mathf.Max(1f, smallMaximumHealth);
+            player.CurrentHealth = 1f;
+            player.ControllerState.IsManualShrinkActive = true;
+            player.ControllerState.IsForcedFullSize = false;
+            Debug.Log($"[Server] Second Chance saved player {playerNetworkId}; " +
+                      $"{maximumUses - consumedUses - 1} use(s) remain this round.");
+            return true;
+        }
+
+        private void RemoveBleedEffects(Entity target)
+        {
+            for (int i = m_BleedEffects.Count - 1; i >= 0; i--)
+            {
+                if (m_BleedEffects[i].Target == target)
+                {
+                    m_BleedEffects.RemoveAt(i);
+                }
+            }
+        }
+
         private void TryActivateReflect(Entity playerEntity,
             ref PredictedPlayerGhost predictedPlayer)
         {
@@ -1342,6 +1437,116 @@ namespace Unity.MP_FPS
             }
         }
 
+        public bool TryAbsorbProjectile(Vector3 segmentStart, Vector3 segmentEnd,
+            int projectileOwnerNetworkId, out Vector3 absorptionPosition)
+        {
+            absorptionPosition = segmentEnd;
+            var nullFieldCard = WeaponManager.Instance?.CardModifierCatalog?
+                .FindByKind(Cards.CardModifierKind.NullField);
+            float fieldRadius = Mathf.Max(0f,
+                nullFieldCard?.EffectRadiusMetres ?? 0f);
+            if (fieldRadius <= 0f || m_ReflectActiveTimers.Count == 0)
+            {
+                return false;
+            }
+
+            int selectedNetworkId = -1;
+            int selectedStacks = 0;
+            float closestDistanceSq = float.MaxValue;
+            Vector3 selectedPoint = segmentEnd;
+            foreach (var activeShield in m_ReflectActiveTimers)
+            {
+                int playerNetworkId = activeShield.Key;
+                if (playerNetworkId == projectileOwnerNetworkId ||
+                    !m_PlayerEntitiesByNetworkId.TryGetValue(
+                        playerNetworkId, out Entity playerEntity) ||
+                    !EntityManager.Exists(playerEntity) ||
+                    !EntityManager.HasComponent<PredictedPlayerGhost>(playerEntity) ||
+                    !EntityManager.HasComponent<Cards.PlayerModifierStacks>(playerEntity))
+                {
+                    continue;
+                }
+
+                var player = EntityManager.GetComponentData<PredictedPlayerGhost>(
+                    playerEntity);
+                var modifiers = EntityManager.GetComponentData<Cards.PlayerModifierStacks>(
+                    playerEntity);
+                if (player.CurrentHealth <= 0f || modifiers.NullField <= 0)
+                {
+                    continue;
+                }
+
+                Vector3 fieldCentre = (Vector3)player.ControllerState.CurrentPosition +
+                                      Vector3.up;
+                Vector3 closestPoint = ClosestPointOnSegment(segmentStart,
+                    segmentEnd, fieldCentre);
+                float distanceSq = (closestPoint - fieldCentre).sqrMagnitude;
+                if (distanceSq > fieldRadius * fieldRadius ||
+                    distanceSq >= closestDistanceSq)
+                {
+                    continue;
+                }
+
+                selectedNetworkId = playerNetworkId;
+                selectedStacks = modifiers.NullField;
+                closestDistanceSq = distanceSq;
+                selectedPoint = closestPoint;
+            }
+
+            if (selectedNetworkId < 0)
+            {
+                return false;
+            }
+
+            absorptionPosition = selectedPoint;
+            ExtendNullFieldShield(selectedNetworkId, selectedStacks);
+            Debug.Log($"[Server] Null Field absorbed player " +
+                      $"{projectileOwnerNetworkId}'s projectile for player " +
+                      $"{selectedNetworkId}.");
+            return true;
+        }
+
+        private void ExtendNullFieldShield(int playerNetworkId, int stacks)
+        {
+            if (stacks <= 0 ||
+                !m_ReflectActiveTimers.TryGetValue(playerNetworkId,
+                    out float remaining))
+            {
+                return;
+            }
+
+            var card = WeaponManager.Instance?.CardModifierCatalog?
+                .FindByKind(Cards.CardModifierKind.NullField);
+            float addedDuration = Mathf.Max(0f, card?.ValuePerStack ?? 0f) *
+                                  stacks;
+            float extendedDuration = remaining + addedDuration;
+            m_ReflectActiveTimers[playerNetworkId] = extendedDuration;
+            if (m_PlayerEntitiesByNetworkId.TryGetValue(playerNetworkId,
+                    out Entity playerEntity) &&
+                EntityManager.Exists(playerEntity) &&
+                EntityManager.HasComponent<PredictedPlayerGhost>(playerEntity))
+            {
+                var player = EntityManager.GetComponentData<PredictedPlayerGhost>(
+                    playerEntity);
+                player.ReflectShieldTimeRemaining = extendedDuration;
+                EntityManager.SetComponentData(playerEntity, player);
+            }
+        }
+
+        private static Vector3 ClosestPointOnSegment(Vector3 start, Vector3 end,
+            Vector3 point)
+        {
+            Vector3 segment = end - start;
+            float lengthSq = segment.sqrMagnitude;
+            if (lengthSq <= 0.000001f)
+            {
+                return start;
+            }
+
+            float t = Mathf.Clamp01(Vector3.Dot(point - start, segment) / lengthSq);
+            return start + segment * t;
+        }
+
         /// <summary>
         /// Applies ordinary weapon damage to the intended target, or redirects it to
         /// the attacker when the intended target's reflect shield is active.
@@ -1396,6 +1601,13 @@ namespace Unity.MP_FPS
                     ? EntityManager.GetComponentData<Cards.PlayerModifierStacks>(intendedTargetEntity)
                     : default;
 
+            if (reflected && defenderModifiers.NullField > 0)
+            {
+                ExtendNullFieldShield(intendedTargetNetworkId,
+                    defenderModifiers.NullField);
+                return true;
+            }
+
             if (reflected)
             {
                 // The shield still blocks the hit if its original attacker has already
@@ -1418,6 +1630,12 @@ namespace Unity.MP_FPS
             }
 
             int damagedPlayerNetworkId = ownerLookup[damageTargetEntity].NetworkId;
+            if (m_SecondChanceInvulnerabilityTimers.ContainsKey(
+                    damagedPlayerNetworkId))
+            {
+                return true;
+            }
+
             float healthBeforeDamage = damagedPlayer.ValueRO.CurrentHealth;
             float appliedDelta = -Mathf.Abs(signedSizeDelta);
             if (appliedDelta < 0f)
@@ -1456,6 +1674,24 @@ namespace Unity.MP_FPS
                 });
             }
 
+            bool lethalDamage = IsHealthLethal(healthBeforeDamage,
+                damagedPlayer.ValueRO.CurrentHealth);
+            bool secondChanceActivated = false;
+            if (lethalDamage)
+            {
+                var rescuedPlayer = damagedPlayer.ValueRO;
+                secondChanceActivated = TryActivateSecondChance(
+                    damageTargetEntity, damagedPlayerNetworkId,
+                    ref rescuedPlayer);
+                if (secondChanceActivated)
+                {
+                    rescuedPlayer.LastDamageAmount = Mathf.Max(0f,
+                        healthBeforeDamage - rescuedPlayer.CurrentHealth);
+                    damagedPlayer.ValueRW = rescuedPlayer;
+                    RemoveBleedEffects(damageTargetEntity);
+                }
+            }
+
             if (lifeStealPercent > 0f &&
                 m_PlayerEntitiesByNetworkId.TryGetValue(damageSourceNetworkId,
                     out Entity sourceEntity) &&
@@ -1471,8 +1707,7 @@ namespace Unity.MP_FPS
                     restored);
             }
 
-            if (IsHealthLethal(healthBeforeDamage,
-                    damagedPlayer.ValueRO.CurrentHealth))
+            if (lethalDamage && !secondChanceActivated)
             {
                 if (LeaderboardManager.ServerInstance != null)
                 {
@@ -1492,21 +1727,32 @@ namespace Unity.MP_FPS
                 {
                     var slowShieldCard = WeaponManager.Instance?.CardModifierCatalog?
                         .FindByKind(Cards.CardModifierKind.SlowShield);
+                    float slowPerStack = Mathf.Clamp01(
+                        slowShieldCard?.ValuePerStack ?? 0f);
+                    float stackedSlow = 1f - Mathf.Pow(1f - slowPerStack,
+                        defenderModifiers.SlowShield);
+                    float stackedDuration = Mathf.Max(0f,
+                        slowShieldCard?.EffectDurationSeconds ?? 0f) *
+                        (1f + 0.5f * (defenderModifiers.SlowShield - 1));
                     damagedPlayer.ValueRW.MoveSlowPercent = Mathf.Max(
                         damagedPlayer.ValueRO.MoveSlowPercent,
-                        Mathf.Clamp01(slowShieldCard?.ValuePerStack ?? 0f));
+                        stackedSlow);
                     damagedPlayer.ValueRW.MoveSlowTimeRemaining = Mathf.Max(
                         damagedPlayer.ValueRO.MoveSlowTimeRemaining,
-                        Mathf.Max(0f, slowShieldCard?.EffectDurationSeconds ?? 0f));
+                        stackedDuration);
                 }
                 if (defenderModifiers.ReflectHealing > 0)
                 {
                     var reflectHealingCard = WeaponManager.Instance?.CardModifierCatalog?
                         .FindByKind(Cards.CardModifierKind.ReflectHealing);
                     var defender = playerGhostLookup.GetRefRW(intendedTargetEntity);
+                    float healPerStack = Mathf.Clamp01(
+                        reflectHealingCard?.ValuePerStack ?? 0f);
+                    float stackedHealing = 1f - Mathf.Pow(1f - healPerStack,
+                        defenderModifiers.ReflectHealing);
                     defender.ValueRW.CurrentHealth = Mathf.Min(defender.ValueRO.MaxHealth,
                         defender.ValueRO.CurrentHealth + Mathf.Abs(signedSizeDelta) *
-                        Mathf.Clamp01(reflectHealingCard?.ValuePerStack ?? 0f));
+                        stackedHealing);
                 }
                 if (defenderModifiers.SwapOnReflect > 0 &&
                     playerGhostLookup.HasComponent(intendedTargetEntity) &&
@@ -1532,7 +1778,8 @@ namespace Unity.MP_FPS
                     defenderState.YawDegrees = attackerYaw;
                     attackerState.YawDegrees = defenderYaw;
                     defenderState.TeleportFreeze = teleportFreeze;
-                    attackerState.TeleportFreeze = teleportFreeze;
+                    attackerState.TeleportFreeze = teleportFreeze *
+                        defenderModifiers.SwapOnReflect;
 
                     // Look input contains an absolute yaw, so exchanging only the
                     // transforms would be undone on the next prediction tick. Shift
@@ -1652,7 +1899,6 @@ namespace Unity.MP_FPS
                     0f, player.MaxHealth);
                 player.LastDamageAmount = Mathf.Abs(previous - player.CurrentHealth);
                 player.LastHitTick = hitTick;
-                EntityManager.SetComponentData(effect.Target, player);
                 effect.Remaining -= deltaTime;
 
                 if (IsHealthLethal(previous, player.CurrentHealth))
@@ -1660,6 +1906,18 @@ namespace Unity.MP_FPS
                     int victimId = EntityManager.HasComponent<GhostOwner>(effect.Target)
                         ? EntityManager.GetComponentData<GhostOwner>(effect.Target).NetworkId
                         : -1;
+                    if (victimId >= 0 && TryActivateSecondChance(effect.Target,
+                            victimId, ref player))
+                    {
+                        player.LastDamageAmount = Mathf.Max(0f,
+                            previous - player.CurrentHealth);
+                        EntityManager.SetComponentData(effect.Target, player);
+                        RemoveBleedEffects(effect.Target);
+                        i = Mathf.Min(i, m_BleedEffects.Count);
+                        continue;
+                    }
+
+                    EntityManager.SetComponentData(effect.Target, player);
                     if (victimId >= 0)
                         LeaderboardManager.ServerInstance?.AddKill(
                             effect.SourceNetworkId, victimId);
@@ -1669,6 +1927,8 @@ namespace Unity.MP_FPS
                     i = Mathf.Min(i, m_BleedEffects.Count);
                     continue;
                 }
+
+                EntityManager.SetComponentData(effect.Target, player);
 
                 if (effect.Remaining <= 0f) m_BleedEffects.RemoveAt(i);
                 else m_BleedEffects[i] = effect;
