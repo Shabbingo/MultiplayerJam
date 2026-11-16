@@ -70,9 +70,19 @@ namespace Unity.MP_FPS
             else
             {
                 m_SoundSystem = new SoundSystem();
-                AudioListener audioListener = MainCameraSingleton.Instance.GetComponent<AudioListener>();
+                Camera mainCamera = MainCameraSingleton.Instance;
+                AudioListener audioListener = mainCamera != null
+                    ? mainCamera.GetComponent<AudioListener>()
+                    : null;
                 SoundGameObjects = new SoundGameObjectPool("SoundSystemSources", MaxSoundGameObjects);
-                m_SoundSystem.Init(audioListener.transform, MaxSoundEmitters, SoundGameObjects, AudioMixer);
+                // The camera singleton can be unavailable during a domain reload or
+                // scene transition. Use this persistent object temporarily; the
+                // listener is rebound as soon as a camera/player becomes available.
+                Transform listenerTransform = audioListener != null
+                    ? audioListener.transform
+                    : transform;
+                m_SoundSystem.Init(listenerTransform, MaxSoundEmitters,
+                    SoundGameObjects, AudioMixer);
             }
         }
         
@@ -80,11 +90,24 @@ namespace Unity.MP_FPS
         {
             Application.runInBackground = true; //Prevents dropped connections during multiplayer gameplay
 
-            MainCameraSingleton.Instance.GetComponent<Camera>().enabled = true;
-            var audioListener = MainCameraSingleton.Instance.GetComponent<AudioListener>();
-            if (audioListener != null)
+            if (!m_IsHeadless)
             {
-                m_SoundSystem.SetListenerTransform(audioListener.transform);
+                Camera mainCamera = MainCameraSingleton.Instance;
+                if (mainCamera != null)
+                {
+                    mainCamera.enabled = true;
+                    var audioListener = mainCamera.GetComponent<AudioListener>();
+                    if (audioListener != null)
+                    {
+                        m_SoundSystem.SetListenerTransform(audioListener.transform);
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        "Main menu camera was not available during GameManager startup; " +
+                        "audio will bind to the next active player or spectator camera.");
+                }
             }
 
             GameSettings.Instance.MainMenuSceneLoaded = false;

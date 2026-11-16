@@ -259,6 +259,12 @@ namespace Unity.MP_FPS
             }
 
             uint serverTick = networkTime.ServerTick.TickIndexForValidTick;
+            // Refresh cached lookups before any tick work. Structural changes made
+            // after the previous update invalidate their safety handles.
+            ghostOwnerLookup.Update(this);
+            m_PlayerGhostLookup.Update(this);
+            m_PredictedClientInputComponentLookup.Update(this);
+
             UpdateForcedFullSizeEffects(deltaTime);
             UpdateHitscanBloom(deltaTime);
             UpdateSecondChanceRoundState();
@@ -401,10 +407,6 @@ namespace Unity.MP_FPS
                     commands[commandIndex] = commandInput;
                 }
             }
-
-            ghostOwnerLookup.Update(this);
-            m_PlayerGhostLookup.Update(this);
-            m_PredictedClientInputComponentLookup.Update(this);
 
             var predictedClientInputComponentLookup = m_PredictedClientInputComponentLookup;
             var playerGhostLookup = m_PlayerGhostLookup;
@@ -2304,13 +2306,15 @@ namespace Unity.MP_FPS
         {
             if (!m_PlayerEntitiesByNetworkId.TryGetValue(sourceNetworkId,
                     out Entity sourceEntity) ||
-                !m_PlayerGhostLookup.HasComponent(sourceEntity))
+                !EntityManager.Exists(sourceEntity) ||
+                !EntityManager.HasComponent<PredictedPlayerGhost>(sourceEntity))
             {
                 return blocked ? -5f : 5f;
             }
 
-            float3 direction = m_PlayerGhostLookup[sourceEntity]
-                                   .ControllerState.CurrentPosition -
+            PredictedPlayerGhost sourcePlayer = EntityManager
+                .GetComponentData<PredictedPlayerGhost>(sourceEntity);
+            float3 direction = sourcePlayer.ControllerState.CurrentPosition -
                                damagedPlayer.ControllerState.CurrentPosition;
             direction.y = 0f;
             direction = math.normalizesafe(direction);
