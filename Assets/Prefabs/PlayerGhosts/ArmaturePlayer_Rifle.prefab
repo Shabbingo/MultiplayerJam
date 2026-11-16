@@ -252,8 +252,8 @@ CharacterController:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Height: 1.5
-  m_Radius: 0.5
+  m_Height: 2
+  m_Radius: 0.75
   m_SlopeLimit: 45
   m_StepOffset: 0.25
   m_SkinWidth: 0.02
@@ -272,23 +272,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FirstPersonController
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
+  m_ReflectDuration: 2
+  m_ReflectCooldown: 15
   m_SmallMaxHealth: 30
   m_NormalMaxHealth: 100
   m_LargeMaxHealth: 150
+  m_LargeIncomingDamageReduction: 0.25
   m_SmallMovementSpeedMultiplier: 1.5
   m_LargeMovementSpeedMultiplier: 0.5
-  m_ManualShrinkHealthMultiplier: 0.2
-  m_ReflectDuration: 2
-  m_ReflectCooldown: 15
-  m_SelfShrinkUses: 2
-  m_SelfGrowUses: 2
-  m_SelfShrinkRechargeSeconds: 4
-  m_SelfGrowRechargeSeconds: 4
-  m_SelfResizeChunkSize: 50
-  m_SelfResizeSafetyMargin: 1
-  m_AirGrowJumpSpeed: 5
   m_AirShrinkPushSpeed: 7
-  m_SelfResizeLensDistortion: 0.5
+  m_ResizeBounceInputWindow: 0.3
+  m_ResizeBounceSpeed: 10
+  m_MaxConsecutiveResizePops: 1
+  m_SelfResizeLensDistortion: 0.2
   m_InvertSelfResizeLensDirection: 1
   m_SelfResizeLensPulseDuration: 0.2
   m_SelfShrinkLensCenterY: 0.3
@@ -326,16 +322,6 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  m_MaxShrinkResource: 5
-  m_ShrinkActivationCost: 0.5
-  m_ShrinkDrainRate: 1
-  m_ShrinkRefillRate: 0.05
-  m_SizeMovementSpeedInfluence: 0.75
-  m_SizeJumpHeightInfluence: 0.75
-  m_ResizeBounceInputWindow: 0.3
-  m_ResizeBounceSpeed: 10
-  m_ResizeBounceFovKick: 10.95
-  m_ResizeBounceFovDuration: 0.25
   m_AirborneRecoilImpulse: 1
   m_RecoilIntensityBySize:
     serializedVersion: 2
@@ -412,10 +398,12 @@ MonoBehaviour:
   m_ReflectGlowIntensity: 4
   m_ReflectGlowRange: 5
   m_ReflectShieldColour: {r: 0.12, g: 0.68, b: 1, a: 0.42}
+  m_NullFieldShieldColour: {r: 0.62, g: 0.22, b: 1, a: 0.5}
+  m_SecondChanceGlowColour: {r: 1, g: 0.68, b: 0.08, a: 1}
+  m_GraceShieldColour: {r: 1, g: 0.68, b: 0.08, a: 0.68}
+  m_GraceShieldShellThickness: 0.018
   m_ReflectShieldOffset: {x: 0, y: 1, z: 0}
   m_ReflectShieldScale: {x: 1.5, y: 2.4, z: 1.5}
-  m_ShrinkScaleResponseSpeed: 16
-  m_GrowScaleResponseSpeed: 32
   <CameraTarget>k__BackingField: {fileID: 1666222585322407308}
   <ReticlePoint>k__BackingField: {fileID: 912756953968078347}
   <ShotOrigin>k__BackingField: {fileID: 429955562769033583}
