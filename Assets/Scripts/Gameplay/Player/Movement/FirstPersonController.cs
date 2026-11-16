@@ -735,7 +735,12 @@ public class FirstPersonController : MonoBehaviour
                     .ValuePerStack ?? 0f),
             _ => 0f
         };
-        return baseMaximum * (1f + capacityBonus);
+        float universalHealthBonus = modifiers.MoreHealth *
+            Mathf.Max(0f, catalog?.FindByKind(
+                Unity.MP_FPS.Cards.CardModifierKind.MoreHealth)?
+                .ValuePerStack ?? 0f);
+        return baseMaximum * (1f + capacityBonus) *
+               (1f + universalHealthBonus);
     }
 
     private void ApplyAirShrinkPull(ref PredictedPlayerGhost predictedPlayer)
@@ -826,6 +831,7 @@ public class FirstPersonController : MonoBehaviour
     }
 
     public void GetSizeMovementMultipliers(in PredictedPlayerGhost predictedPlayer,
+        in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers,
         out float speedMultiplier, out float jumpHeightMultiplier)
     {
         speedMultiplier = predictedPlayer.SizeState switch
@@ -834,11 +840,87 @@ public class FirstPersonController : MonoBehaviour
             LargeSizeState => Mathf.Max(0f, m_LargeMovementSpeedMultiplier),
             _ => 1f
         };
+        var catalog = WeaponManager.Instance?.CardModifierCatalog;
+        if (predictedPlayer.SizeState == SmallSizeState &&
+            modifiers.SmallTarget > 0)
+        {
+            float bonusPerStack = Mathf.Max(0f, catalog?.FindByKind(
+                Unity.MP_FPS.Cards.CardModifierKind.SmallTarget)?
+                .ValuePerStack ?? 0.1f);
+            speedMultiplier *= 1f + modifiers.SmallTarget * bonusPerStack;
+        }
+        if (predictedPlayer.SizeState == LargeSizeState &&
+            modifiers.HeavyFooted > 0)
+        {
+            float multiplierPerStack = Mathf.Max(0f, catalog?.FindByKind(
+                Unity.MP_FPS.Cards.CardModifierKind.HeavyFooted)?
+                .MovementSpeedMultiplierPerStack ?? 0.5f);
+            speedMultiplier *= Mathf.Pow(multiplierPerStack,
+                modifiers.HeavyFooted);
+        }
         if (predictedPlayer.MoveSlowTimeRemaining > 0f)
         {
             speedMultiplier *= 1f - Mathf.Clamp01(predictedPlayer.MoveSlowPercent);
         }
         jumpHeightMultiplier = 1f;
+    }
+
+    public float GetModifiedReloadTime(float baseReloadTime,
+        in PredictedPlayerGhost predictedPlayer,
+        in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers)
+    {
+        if (predictedPlayer.SizeState != SmallSizeState ||
+            modifiers.SmallTarget <= 0)
+        {
+            return Mathf.Max(0f, baseReloadTime);
+        }
+
+        float bonusPerStack = Mathf.Max(0f,
+            WeaponManager.Instance?.CardModifierCatalog?.FindByKind(
+                Unity.MP_FPS.Cards.CardModifierKind.SmallTarget)?
+                .ValuePerStack ?? 0.1f);
+        return Mathf.Max(0f, baseReloadTime) /
+               (1f + modifiers.SmallTarget * bonusPerStack);
+    }
+
+    public bool TryApplyBloodReload(ref PredictedPlayerGhost predictedPlayer,
+        uint weaponId, int magazineSize,
+        in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers)
+    {
+        var target = weaponId == WeaponManager.SecondaryWeaponId
+            ? Unity.MP_FPS.Cards.ModifierTarget.RightHand
+            : Unity.MP_FPS.Cards.ModifierTarget.LeftHand;
+        int stacks = modifiers.GetStacks(
+            Unity.MP_FPS.Cards.CardModifierKind.BloodReload, target);
+        if (stacks <= 0)
+        {
+            return false;
+        }
+
+        float baseCostPercent = Mathf.Max(0f,
+            WeaponManager.Instance?.CardModifierCatalog?.FindByKind(
+                Unity.MP_FPS.Cards.CardModifierKind.BloodReload)?
+                .ValuePerStack ?? 0.05f);
+        float healthCost = predictedPlayer.MaxHealth *
+                           (baseCostPercent / stacks);
+        predictedPlayer.CurrentHealth = Mathf.Max(1f,
+            predictedPlayer.CurrentHealth - healthCost);
+        predictedPlayer.CurrentAmmo = Mathf.Max(1, magazineSize);
+        predictedPlayer.ControllerState.IsReloadingState = false;
+        predictedPlayer.ReloadTimer = 0f;
+        if (weaponId == WeaponManager.SecondaryWeaponId)
+        {
+            predictedPlayer.ControllerState.SecondaryWeaponAmmo =
+                Mathf.Max(1, magazineSize);
+            predictedPlayer.SecondaryIsReloading = false;
+            predictedPlayer.SecondaryReloadTimer = 0f;
+        }
+        else
+        {
+            predictedPlayer.ControllerState.PrimaryWeaponAmmo =
+                Mathf.Max(1, magazineSize);
+        }
+        return true;
     }
 
     public void ApplyAirborneShotThrust(ref PredictedPlayerGhost predictedPlayer,
@@ -1628,6 +1710,7 @@ public class FirstPersonController : MonoBehaviour
         float projectileSpeed = 0f, float projectileScale = 1f,
         bool growsOverDistance = false, int maxBounces = 0,
         float growthPerMetre = 0f, float bounceVelocityRetention = 1f,
+        int wallPenetrations = 0, float wallDamageRetention = 0.4f,
         bool hasHomingTarget = true)
     {
         try
@@ -1690,7 +1773,8 @@ public class FirstPersonController : MonoBehaviour
             projectile.SetRuntimeMotion(isHoming, homingTurnSpeed);
             projectile.SetRuntimeProjectileProperties(projectileSpeed, projectileScale,
                 growsOverDistance, maxBounces, growthPerMetre,
-                bounceVelocityRetention);
+                bounceVelocityRetention, wallPenetrations,
+                wallDamageRetention);
 
             var projectileInfo = new Projectile.PredictedProjectileInfo
             {

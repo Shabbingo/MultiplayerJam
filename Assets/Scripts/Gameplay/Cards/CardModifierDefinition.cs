@@ -47,7 +47,17 @@ namespace Unity.MP_FPS.Cards
         SmallHealthCapacity,
         MirrorImage,
         SecondChance,
-        NullField
+        NullField,
+        ArmourPiercing,
+        RapidFire,
+        MoreHealth,
+        SmallTarget,
+        ConservationOfMass,
+        HeavyFooted,
+        TinyTerror,
+        GravityWell,
+        LastWord,
+        BloodReload
     }
 
     [CreateAssetMenu(fileName = "CardModifier", menuName = "Multiplayer Jam/Card Modifier")]
@@ -73,10 +83,18 @@ namespace Unity.MP_FPS.Cards
         [SerializeField, Min(0f)] private float m_EffectDurationSeconds;
         [SerializeField, Min(0f), Tooltip("World-space radius used by area-based card effects.")]
         private float m_EffectRadiusMetres;
+        [SerializeField, Min(0f), Tooltip("Optional inner radius used by effects with two distance bands.")]
+        private float m_SecondaryEffectRadiusMetres;
         [SerializeField, Min(0f), Tooltip("Additional base-damage percentage per stack. 0.10 means +10%.")]
         private float m_DamagePercentPerStack;
         [SerializeField, Min(0f), Tooltip("Multiplier applied to base damage while this card is active.")]
         private float m_BaseDamageMultiplier = 1f;
+        [SerializeField, Min(0f), Tooltip("Fire-interval multiplier applied per stack. Values below one increase fire rate.")]
+        private float m_FireIntervalMultiplierPerStack = 1f;
+        [SerializeField, Min(0f), Tooltip("Movement-speed multiplier applied per stack while the card condition is active.")]
+        private float m_MovementSpeedMultiplierPerStack = 1f;
+        [SerializeField, Min(0f), Tooltip("Incoming-damage multiplier applied per stack while the card condition is active.")]
+        private float m_IncomingDamageMultiplierPerStack = 1f;
         [SerializeField, Min(0f), Tooltip("Reload-time multiplier applied per stack. 1.15 means +15% per stack.")]
         private float m_ReloadTimeMultiplierPerStack = 1f;
         [SerializeField, Range(0.01f, 1f)] private float m_MinimumReloadMultiplier = 0.25f;
@@ -109,8 +127,15 @@ namespace Unity.MP_FPS.Cards
         public float ValuePerStack => m_ValuePerStack;
         public float EffectDurationSeconds => m_EffectDurationSeconds;
         public float EffectRadiusMetres => m_EffectRadiusMetres;
+        public float SecondaryEffectRadiusMetres => m_SecondaryEffectRadiusMetres;
         public float DamagePercentPerStack => m_DamagePercentPerStack;
         public float BaseDamageMultiplier => m_BaseDamageMultiplier;
+        public float FireIntervalMultiplierPerStack =>
+            m_FireIntervalMultiplierPerStack;
+        public float MovementSpeedMultiplierPerStack =>
+            m_MovementSpeedMultiplierPerStack;
+        public float IncomingDamageMultiplierPerStack =>
+            m_IncomingDamageMultiplierPerStack;
         public float ReloadTimeMultiplierPerStack => m_ReloadTimeMultiplierPerStack;
         public float MinimumReloadMultiplier => m_MinimumReloadMultiplier;
         public int MagazineDeltaPerStack => m_MagazineDeltaPerStack;
@@ -143,8 +168,16 @@ namespace Unity.MP_FPS.Cards
             m_BaseOfferWeight = Mathf.Max(0.01f, m_BaseOfferWeight);
             m_EffectDurationSeconds = Mathf.Max(0f, m_EffectDurationSeconds);
             m_EffectRadiusMetres = Mathf.Max(0f, m_EffectRadiusMetres);
+            m_SecondaryEffectRadiusMetres = Mathf.Max(0f,
+                m_SecondaryEffectRadiusMetres);
             m_DamagePercentPerStack = Mathf.Max(0f, m_DamagePercentPerStack);
             m_BaseDamageMultiplier = Mathf.Max(0f, m_BaseDamageMultiplier);
+            m_FireIntervalMultiplierPerStack = Mathf.Max(0f,
+                m_FireIntervalMultiplierPerStack);
+            m_MovementSpeedMultiplierPerStack = Mathf.Max(0f,
+                m_MovementSpeedMultiplierPerStack);
+            m_IncomingDamageMultiplierPerStack = Mathf.Max(0f,
+                m_IncomingDamageMultiplierPerStack);
             m_ReloadTimeMultiplierPerStack = Mathf.Max(0f,
                 m_ReloadTimeMultiplierPerStack);
             m_MinimumReloadMultiplier = Mathf.Clamp(m_MinimumReloadMultiplier,

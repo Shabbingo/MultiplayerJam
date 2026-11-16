@@ -38,6 +38,11 @@ namespace Unity.MP_FPS.Cards
         [Range(0f, 1f)] public float BounceVelocityRetention;
         [Min(0f)] public float BounceCountPerStack;
         [Range(0.01f, 1f)] public float MinimumReloadMultiplier;
+        [Range(0f, 1f)] public float WallDamageRetention;
+        [Min(0f)] public float RapidFireDamageMultiplier;
+        [Min(0f)] public float RapidFireIntervalMultiplier;
+        [Min(0f)] public float GravityWellPullPerStack;
+        [Min(0f)] public float LastWordDamagePerStack;
 
         public static ModifierGameplayTuning Default => new()
         {
@@ -66,7 +71,12 @@ namespace Unity.MP_FPS.Cards
             BulletGrowthPerMetre = 0.01f,
             BounceVelocityRetention = 1f,
             BounceCountPerStack = 1f,
-            MinimumReloadMultiplier = 0.25f
+            MinimumReloadMultiplier = 0.25f,
+            WallDamageRetention = 0.4f,
+            RapidFireDamageMultiplier = 0.3f,
+            RapidFireIntervalMultiplier = 0.35f,
+            GravityWellPullPerStack = 8f,
+            LastWordDamagePerStack = 0.2f
         };
     }
 
@@ -104,6 +114,10 @@ namespace Unity.MP_FPS.Cards
         public readonly bool GrowsOverDistance;
         public readonly float GrowthPerMetre;
         public readonly float BounceVelocityRetention;
+        public readonly int WallPenetrations;
+        public readonly float WallDamageRetention;
+        public readonly float GravityWellPullStrength;
+        public readonly float LastWordDamageMultiplier;
 
         public float SignedSizeDelta => Hand == WeaponHand.Right
             ? Mathf.Abs(Damage)
@@ -119,7 +133,9 @@ namespace Unity.MP_FPS.Cards
             float slowDuration, int maxBounces, float bleedDamagePerSecond,
             float bleedDuration, float lifeStealPercent, float projectileScale,
             bool growsOverDistance, float growthPerMetre,
-            float bounceVelocityRetention)
+            float bounceVelocityRetention, int wallPenetrations,
+            float wallDamageRetention, float gravityWellPullStrength,
+            float lastWordDamageMultiplier)
         {
             SourceProfile = sourceProfile;
             Hand = hand;
@@ -149,6 +165,10 @@ namespace Unity.MP_FPS.Cards
             GrowsOverDistance = growsOverDistance;
             GrowthPerMetre = growthPerMetre;
             BounceVelocityRetention = bounceVelocityRetention;
+            WallPenetrations = wallPenetrations;
+            WallDamageRetention = wallDamageRetention;
+            GravityWellPullStrength = gravityWellPullStrength;
+            LastWordDamageMultiplier = lastWordDamageMultiplier;
         }
     }
 
@@ -181,6 +201,14 @@ namespace Unity.MP_FPS.Cards
             int bleedStacks = modifiers.GetStacks(CardModifierKind.Bleed, target);
             int bounceStacks = modifiers.GetStacks(CardModifierKind.Bounce, target);
             int siphonStacks = modifiers.GetStacks(CardModifierKind.LifeSiphon, target);
+            int armourPiercingStacks = modifiers.GetStacks(
+                CardModifierKind.ArmourPiercing, target);
+            int rapidFireStacks = modifiers.GetStacks(CardModifierKind.RapidFire,
+                target);
+            int gravityWellStacks = modifiers.GetStacks(CardModifierKind.GravityWell,
+                target);
+            int lastWordStacks = modifiers.GetStacks(CardModifierKind.LastWord,
+                target);
             int bulletSizeStacks = modifiers.GetStacks(CardModifierKind.BulletSize,
                 ModifierTarget.BothHands);
             int bulletSpeedStacks = modifiers.GetStacks(CardModifierKind.BulletSpeed,
@@ -199,6 +227,11 @@ namespace Unity.MP_FPS.Cards
                 // drawback compounds so the weapon becomes a dedicated sustain tool.
                 damage *= Mathf.Pow(Mathf.Max(0f,
                     tuning.LifeSiphonDamageMultiplier), siphonStacks);
+            }
+            if (rapidFireStacks > 0)
+            {
+                damage *= Mathf.Pow(Mathf.Max(0f,
+                    tuning.RapidFireDamageMultiplier), rapidFireStacks);
             }
             float baseExplosionRadius = source.Behavior == ProjectileBehavior.AreaOfEffect
                 ? Mathf.Max(0f, source.AoeRadius)
@@ -260,7 +293,9 @@ namespace Unity.MP_FPS.Cards
                 hand,
                 scatter ? WeaponFireMode.Scatter : WeaponFireMode.Standard,
                 damage,
-                Mathf.Max(0.001f, source.CooldownInMs),
+                Mathf.Max(0.001f, source.CooldownInMs *
+                    Mathf.Pow(Mathf.Max(0f,
+                        tuning.RapidFireIntervalMultiplier), rapidFireStacks)),
                 Mathf.Max(0f, source.ProjectileReleaseDelay),
                 magazineSize,
                 Mathf.Max(0f, source.ReloadTime * reloadMultiplier),
@@ -289,7 +324,13 @@ namespace Unity.MP_FPS.Cards
                 growsOverDistance
                     ? growthStacks * Mathf.Max(0f, tuning.BulletGrowthPerMetre)
                     : 0f,
-                Mathf.Clamp01(tuning.BounceVelocityRetention));
+                Mathf.Clamp01(tuning.BounceVelocityRetention),
+                armourPiercingStacks,
+                Mathf.Clamp01(tuning.WallDamageRetention),
+                gravityWellStacks * Mathf.Max(0f,
+                    tuning.GravityWellPullPerStack),
+                1f + lastWordStacks * Mathf.Max(0f,
+                    tuning.LastWordDamagePerStack));
         }
 
         public static Vector3 ApplyScatterDirection(Vector3 forward,

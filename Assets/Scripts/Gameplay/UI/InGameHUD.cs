@@ -273,7 +273,10 @@ namespace Unity.MP_FPS
             if (m_ReflectChargeLabel != null)
             {
                 m_ReflectChargeLabel.text =
-                    $"REFLECT {playerData.ReflectCharges} / {Mathf.Max(1, playerData.MaxReflectCharges)}";
+                    playerData.ReflectShieldTimeRemaining > 0f
+                        ? $"SHIELD {playerData.ReflectShieldTimeRemaining:0.0}s"
+                        : $"REFLECT {playerData.ReflectCharges} / " +
+                          $"{Mathf.Max(1, playerData.MaxReflectCharges)}";
             }
             float pulse = 0.55f + 0.45f *
                 (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f));

@@ -91,6 +91,14 @@ namespace Unity.MP_FPS
             var bulletSpeed = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.BulletSpeed);
             var bulletGrowth = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.BulletGrowth);
             var bounce = m_CardModifierCatalog.FindByKind(Cards.CardModifierKind.Bounce);
+            var armourPiercing = m_CardModifierCatalog.FindByKind(
+                Cards.CardModifierKind.ArmourPiercing);
+            var rapidFire = m_CardModifierCatalog.FindByKind(
+                Cards.CardModifierKind.RapidFire);
+            var gravityWell = m_CardModifierCatalog.FindByKind(
+                Cards.CardModifierKind.GravityWell);
+            var lastWord = m_CardModifierCatalog.FindByKind(
+                Cards.CardModifierKind.LastWord);
             if (damage != null) tuning.DamagePerStack = damage.ValuePerStack;
             if (explosion != null)
                 tuning.ExplosionRadiusPerStack =
@@ -151,6 +159,18 @@ namespace Unity.MP_FPS
                 tuning.BounceCountPerStack = bounce.ValuePerStack;
                 tuning.BounceVelocityRetention = bounce.BounceVelocityRetention;
             }
+            if (armourPiercing != null)
+                tuning.WallDamageRetention = armourPiercing.BaseDamageMultiplier;
+            if (rapidFire != null)
+            {
+                tuning.RapidFireDamageMultiplier = rapidFire.BaseDamageMultiplier;
+                tuning.RapidFireIntervalMultiplier =
+                    rapidFire.FireIntervalMultiplierPerStack;
+            }
+            if (gravityWell != null)
+                tuning.GravityWellPullPerStack = gravityWell.ValuePerStack;
+            if (lastWord != null)
+                tuning.LastWordDamagePerStack = lastWord.ValuePerStack;
             return tuning;
         }
 

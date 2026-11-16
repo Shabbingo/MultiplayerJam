@@ -230,6 +230,10 @@ namespace Unity.MP_FPS
             int magazineSize = primaryProfile.SourceProfile != null
                 ? primaryProfile.MagazineSize
                 : 30;
+            float normalMaximumHealth = FirstPersonController.DefaultNormalMaxHealth *
+                (1f + modifiers.MoreHealth * Mathf.Max(0f,
+                    WeaponManager.Instance.CardModifierCatalog?.FindByKind(
+                        CardModifierKind.MoreHealth)?.ValuePerStack ?? 0f));
             var initialControllerState = new FirstPersonController.ControllerState();
             initialControllerState.PrimaryWeaponAmmo = magazineSize;
             initialControllerState.SecondaryWeaponAmmo = secondaryProfile.SourceProfile != null
@@ -242,9 +246,9 @@ namespace Unity.MP_FPS
             ecb.SetComponent(playerEntity, new PredictedPlayerGhost
             {
                 InputIndex = 0,
-                MaxHealth = FirstPersonController.DefaultNormalMaxHealth,
-                NormalSizeHealth = FirstPersonController.DefaultNormalMaxHealth,
-                CurrentHealth = FirstPersonController.DefaultNormalMaxHealth,
+                MaxHealth = normalMaximumHealth,
+                NormalSizeHealth = normalMaximumHealth,
+                CurrentHealth = normalMaximumHealth,
                 SizeState = FirstPersonController.NormalSizeState,
                 ControllerState = initialControllerState,
                 EquippedWeaponID = weaponId,

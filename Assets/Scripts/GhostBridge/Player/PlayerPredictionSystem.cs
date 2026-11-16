@@ -259,9 +259,19 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             !predictedPlayer.ValueRO.SecondaryIsReloading &&
                             secondaryWeaponData != null)
                         {
-                            predictedPlayer.ValueRW.SecondaryIsReloading = true;
-                            predictedPlayer.ValueRW.SecondaryReloadTimer =
-                                secondaryWeaponProfile.ReloadTime;
+                            if (!controllerLink.Controller.TryApplyBloodReload(
+                                    ref predictedPlayer.ValueRW,
+                                    WeaponManager.SecondaryWeaponId,
+                                    secondaryWeaponProfile.MagazineSize,
+                                    in modifiers.ValueRO))
+                            {
+                                predictedPlayer.ValueRW.SecondaryIsReloading = true;
+                                predictedPlayer.ValueRW.SecondaryReloadTimer =
+                                    controllerLink.Controller.GetModifiedReloadTime(
+                                        secondaryWeaponProfile.ReloadTime,
+                                        in predictedPlayer.ValueRO,
+                                        in modifiers.ValueRO);
+                            }
                             predictedPlayer.ValueRW.LastReloadTick =
                                 commandInput.Tick.TickIndexForValidTick;
                         }
@@ -311,8 +321,19 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
                                 predictedPlayer.ValueRO.CurrentAmmo < runtimeProfile.MagazineSize)
                             {
-                                predictedPlayer.ValueRW.ControllerState.IsReloadingState = true;
-                                predictedPlayer.ValueRW.ReloadTimer = runtimeProfile.ReloadTime;
+                                if (!controllerLink.Controller.TryApplyBloodReload(
+                                        ref predictedPlayer.ValueRW,
+                                        abilityWeaponId,
+                                        runtimeProfile.MagazineSize,
+                                        in modifiers.ValueRO))
+                                {
+                                    predictedPlayer.ValueRW.ControllerState.IsReloadingState = true;
+                                    predictedPlayer.ValueRW.ReloadTimer =
+                                        controllerLink.Controller.GetModifiedReloadTime(
+                                            runtimeProfile.ReloadTime,
+                                            in predictedPlayer.ValueRO,
+                                            in modifiers.ValueRO);
+                                }
                                 predictedPlayer.ValueRW.LastReloadTick = commandInput.Tick.TickIndexForValidTick;
                             }
                             
@@ -421,6 +442,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         runtimeProfile.MaxBounces,
                                         runtimeProfile.GrowthPerMetre,
                                         runtimeProfile.BounceVelocityRetention,
+                                        runtimeProfile.WallPenetrations,
+                                        runtimeProfile.WallDamageRetention,
                                         !runtimeProfile.TracksPlayers);
                                 }
                             }
@@ -440,6 +463,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 ref predictedPlayer.ValueRW, input, accumulateDT);
                             controllerLink.Controller.GetSizeMovementMultipliers(
                                 in predictedPlayer.ValueRO,
+                                in modifiers.ValueRO,
                                 out float speedMultiplier,
                                 out float jumpHeightMultiplier);
                             if (modifiers.ValueRO.ShieldSpeed > 0 &&

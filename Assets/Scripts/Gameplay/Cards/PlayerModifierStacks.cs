@@ -47,6 +47,21 @@ namespace Unity.MP_FPS.Cards
         [GhostField] public byte MirrorImage;
         [GhostField] public byte SecondChance;
         [GhostField] public byte NullField;
+        [GhostField] public byte LeftArmourPiercing;
+        [GhostField] public byte RightArmourPiercing;
+        [GhostField] public byte LeftRapidFire;
+        [GhostField] public byte RightRapidFire;
+        [GhostField] public byte MoreHealth;
+        [GhostField] public byte SmallTarget;
+        [GhostField] public byte ConservationOfMass;
+        [GhostField] public byte HeavyFooted;
+        [GhostField] public byte TinyTerror;
+        [GhostField] public byte LeftGravityWell;
+        [GhostField] public byte RightGravityWell;
+        [GhostField] public byte LeftLastWord;
+        [GhostField] public byte RightLastWord;
+        [GhostField] public byte LeftBloodReload;
+        [GhostField] public byte RightBloodReload;
 
         public int GetStacks(CardModifierKind kind, ModifierTarget target)
         {
@@ -92,6 +107,21 @@ namespace Unity.MP_FPS.Cards
                 (CardModifierKind.MirrorImage, ModifierTarget.Self) => MirrorImage,
                 (CardModifierKind.SecondChance, ModifierTarget.Self) => SecondChance,
                 (CardModifierKind.NullField, ModifierTarget.Self) => NullField,
+                (CardModifierKind.ArmourPiercing, ModifierTarget.LeftHand) => LeftArmourPiercing,
+                (CardModifierKind.ArmourPiercing, ModifierTarget.RightHand) => RightArmourPiercing,
+                (CardModifierKind.RapidFire, ModifierTarget.LeftHand) => LeftRapidFire,
+                (CardModifierKind.RapidFire, ModifierTarget.RightHand) => RightRapidFire,
+                (CardModifierKind.MoreHealth, ModifierTarget.Self) => MoreHealth,
+                (CardModifierKind.SmallTarget, ModifierTarget.Self) => SmallTarget,
+                (CardModifierKind.ConservationOfMass, ModifierTarget.Self) => ConservationOfMass,
+                (CardModifierKind.HeavyFooted, ModifierTarget.Self) => HeavyFooted,
+                (CardModifierKind.TinyTerror, ModifierTarget.Self) => TinyTerror,
+                (CardModifierKind.GravityWell, ModifierTarget.LeftHand) => LeftGravityWell,
+                (CardModifierKind.GravityWell, ModifierTarget.RightHand) => RightGravityWell,
+                (CardModifierKind.LastWord, ModifierTarget.LeftHand) => LeftLastWord,
+                (CardModifierKind.LastWord, ModifierTarget.RightHand) => RightLastWord,
+                (CardModifierKind.BloodReload, ModifierTarget.LeftHand) => LeftBloodReload,
+                (CardModifierKind.BloodReload, ModifierTarget.RightHand) => RightBloodReload,
                 _ => 0
             };
         }
@@ -190,6 +220,36 @@ namespace Unity.MP_FPS.Cards
                     return Increment(ref SecondChance);
                 case (CardModifierKind.NullField, ModifierTarget.Self):
                     return Increment(ref NullField);
+                case (CardModifierKind.ArmourPiercing, ModifierTarget.LeftHand):
+                    return Increment(ref LeftArmourPiercing);
+                case (CardModifierKind.ArmourPiercing, ModifierTarget.RightHand):
+                    return Increment(ref RightArmourPiercing);
+                case (CardModifierKind.RapidFire, ModifierTarget.LeftHand):
+                    return Increment(ref LeftRapidFire);
+                case (CardModifierKind.RapidFire, ModifierTarget.RightHand):
+                    return Increment(ref RightRapidFire);
+                case (CardModifierKind.MoreHealth, ModifierTarget.Self):
+                    return Increment(ref MoreHealth);
+                case (CardModifierKind.SmallTarget, ModifierTarget.Self):
+                    return Increment(ref SmallTarget);
+                case (CardModifierKind.ConservationOfMass, ModifierTarget.Self):
+                    return Increment(ref ConservationOfMass);
+                case (CardModifierKind.HeavyFooted, ModifierTarget.Self):
+                    return Increment(ref HeavyFooted);
+                case (CardModifierKind.TinyTerror, ModifierTarget.Self):
+                    return Increment(ref TinyTerror);
+                case (CardModifierKind.GravityWell, ModifierTarget.LeftHand):
+                    return Increment(ref LeftGravityWell);
+                case (CardModifierKind.GravityWell, ModifierTarget.RightHand):
+                    return Increment(ref RightGravityWell);
+                case (CardModifierKind.LastWord, ModifierTarget.LeftHand):
+                    return Increment(ref LeftLastWord);
+                case (CardModifierKind.LastWord, ModifierTarget.RightHand):
+                    return Increment(ref RightLastWord);
+                case (CardModifierKind.BloodReload, ModifierTarget.LeftHand):
+                    return Increment(ref LeftBloodReload);
+                case (CardModifierKind.BloodReload, ModifierTarget.RightHand):
+                    return Increment(ref RightBloodReload);
                 default:
                     return false;
             }

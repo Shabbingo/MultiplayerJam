@@ -43,6 +43,9 @@ namespace Unity.MP_FPS
         public float LifeStealPercent;
         public float GrowthPerMetre;
         public float BounceVelocityRetention;
+        public int WallPenetrations;
+        public float WallDamageRetention;
+        public float GravityWellPullStrength;
     }
 
     struct VfxSpawnData
@@ -58,6 +61,7 @@ namespace Unity.MP_FPS
         public Collider Collider;
         public Vector3 Point;
         public Vector3 Normal;
+        public int WallsPenetrated;
     }
 
     [WorldSystemFilter(WorldSystemFilterFlags.ServerSimulation)]
@@ -81,6 +85,7 @@ namespace Unity.MP_FPS
         private readonly List<int> m_ReflectPlayersScratch = new();
         private readonly Dictionary<int, int> m_SecondChanceUsesConsumed = new();
         private readonly Dictionary<int, float> m_SecondChanceInvulnerabilityTimers = new();
+        private readonly Dictionary<int, float> m_ConservationCooldownTimers = new();
         private int m_SecondChanceRound = -1;
         private readonly Dictionary<int, Entity> m_PlayerEntitiesByNetworkId = new();
         private readonly HashSet<Entity> m_RuntimeAreaHitEntities = new();
@@ -222,6 +227,7 @@ namespace Unity.MP_FPS
             m_ReflectPlayersScratch.Clear();
             m_SecondChanceUsesConsumed.Clear();
             m_SecondChanceInvulnerabilityTimers.Clear();
+            m_ConservationCooldownTimers.Clear();
             m_PlayerEntitiesByNetworkId.Clear();
             m_RuntimeAreaHitEntities.Clear();
             m_BleedEffects.Clear();
@@ -254,6 +260,7 @@ namespace Unity.MP_FPS
             UpdateReflectTimerDictionary(m_ReflectActiveTimers, deltaTime);
             UpdateReflectTimerDictionary(m_SecondChanceInvulnerabilityTimers,
                 deltaTime);
+            UpdateReflectTimerDictionary(m_ConservationCooldownTimers, deltaTime);
             UpdateBleedEffects(deltaTime, serverTick);
 
             s_PlayerMovementActive = true;
@@ -545,9 +552,19 @@ namespace Unity.MP_FPS
                         !predictedPlayer.ValueRO.SecondaryIsReloading &&
                         secondaryWeaponData != null)
                     {
-                        predictedPlayer.ValueRW.SecondaryIsReloading = true;
-                        predictedPlayer.ValueRW.SecondaryReloadTimer =
-                            secondaryWeaponProfile.ReloadTime;
+                        if (!playerGhost.Controller.TryApplyBloodReload(
+                                ref predictedPlayer.ValueRW,
+                                WeaponManager.SecondaryWeaponId,
+                                secondaryWeaponProfile.MagazineSize,
+                                in modifiers.ValueRO))
+                        {
+                            predictedPlayer.ValueRW.SecondaryIsReloading = true;
+                            predictedPlayer.ValueRW.SecondaryReloadTimer =
+                                playerGhost.Controller.GetModifiedReloadTime(
+                                    secondaryWeaponProfile.ReloadTime,
+                                    in predictedPlayer.ValueRO,
+                                    in modifiers.ValueRO);
+                        }
                         predictedPlayer.ValueRW.LastReloadTick = serverTick;
                     }
 
@@ -597,8 +614,19 @@ namespace Unity.MP_FPS
                             !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
                             predictedPlayer.ValueRO.CurrentAmmo < runtimeProfile.MagazineSize)
                         {
-                            predictedPlayer.ValueRW.ControllerState.IsReloadingState = true;
-                            predictedPlayer.ValueRW.ReloadTimer = runtimeProfile.ReloadTime;
+                            if (!playerGhost.Controller.TryApplyBloodReload(
+                                    ref predictedPlayer.ValueRW,
+                                    abilityWeaponId,
+                                    runtimeProfile.MagazineSize,
+                                    in modifiers.ValueRO))
+                            {
+                                predictedPlayer.ValueRW.ControllerState.IsReloadingState = true;
+                                predictedPlayer.ValueRW.ReloadTimer =
+                                    playerGhost.Controller.GetModifiedReloadTime(
+                                        runtimeProfile.ReloadTime,
+                                        in predictedPlayer.ValueRO,
+                                        in modifiers.ValueRO);
+                            }
                             predictedPlayer.ValueRW.LastReloadTick = serverTick;
                         }
 
@@ -608,6 +636,12 @@ namespace Unity.MP_FPS
                             (useGrowthProjectile ||
                              predictedPlayer.ValueRO.WeaponCooldown >= runtimeProfile.FireInterval))
                         {
+                            bool isFinalMagazineRound =
+                                predictedPlayer.ValueRO.CurrentAmmo == 1;
+                            float shotSignedSizeDelta = runtimeProfile.SignedSizeDelta *
+                                (isFinalMagazineRound
+                                    ? runtimeProfile.LastWordDamageMultiplier
+                                    : 1f);
                             predictedPlayer.ValueRW.WeaponCooldown = 0f;
                             predictedPlayer.ValueRW.CurrentAmmo--;
                             if (!useGrowthProjectile)
@@ -666,6 +700,7 @@ namespace Unity.MP_FPS
                                         : serverTick;
                                     if (TryGetClosestHitscanCollision(eyePosition, hitscanDirection,
                                             weaponData.HitscanRange, shooterNetworkId, rewindTick,
+                                            runtimeProfile.WallPenetrations,
                                             out var hit))
                                     {
                                         float distanceMultiplier = runtimeProfile.GrowsOverDistance
@@ -673,7 +708,9 @@ namespace Unity.MP_FPS
                                                 hit.Point) * runtimeProfile.GrowthPerMetre
                                             : 1f;
                                         float distanceScaledDelta =
-                                            runtimeProfile.SignedSizeDelta * distanceMultiplier;
+                                            shotSignedSizeDelta * distanceMultiplier *
+                                            Mathf.Pow(runtimeProfile.WallDamageRetention,
+                                                hit.WallsPenetrated);
                                         if (runtimeProfile.HasExplosion)
                                         {
                                             ApplyRuntimeAreaDamage(hit.Point,
@@ -689,6 +726,7 @@ namespace Unity.MP_FPS
                                                 runtimeProfile.BleedDamagePerSecond,
                                                 runtimeProfile.BleedDuration,
                                                 runtimeProfile.LifeStealPercent,
+                                                runtimeProfile.GravityWellPullStrength,
                                                 serverTick,
                                                 playerGhostLookup,
                                                 ghostOwnerLookup);
@@ -769,7 +807,7 @@ namespace Unity.MP_FPS
                                             SpawnTick = commandInput.Tick.TickIndexForValidTick,
                                             WeaponId = sourceWeaponId,
                                             TargetPosition = targetPoint,
-                                            SignedSizeDelta = runtimeProfile.SignedSizeDelta,
+                                            SignedSizeDelta = shotSignedSizeDelta,
                                             IsHoming = runtimeProfile.IsHoming ? (byte)1 : (byte)0,
                                             HasHomingTarget = runtimeProfile.IsHoming &&
                                                 !runtimeProfile.TracksPlayers ? (byte)1 : (byte)0,
@@ -789,7 +827,10 @@ namespace Unity.MP_FPS
                                             BleedDuration = runtimeProfile.BleedDuration,
                                             LifeStealPercent = runtimeProfile.LifeStealPercent,
                                             GrowthPerMetre = runtimeProfile.GrowthPerMetre,
-                                            BounceVelocityRetention = runtimeProfile.BounceVelocityRetention
+                                            BounceVelocityRetention = runtimeProfile.BounceVelocityRetention,
+                                            WallPenetrations = runtimeProfile.WallPenetrations,
+                                            WallDamageRetention = runtimeProfile.WallDamageRetention,
+                                            GravityWellPullStrength = runtimeProfile.GravityWellPullStrength
                                         });
                                     }
                                     else
@@ -847,7 +888,10 @@ namespace Unity.MP_FPS
                             BleedDuration = spawnData.BleedDuration,
                             LifeStealPercent = spawnData.LifeStealPercent,
                             GrowthPerMetre = spawnData.GrowthPerMetre,
-                            BounceVelocityRetention = spawnData.BounceVelocityRetention
+                            BounceVelocityRetention = spawnData.BounceVelocityRetention,
+                            WallPenetrations = spawnData.WallPenetrations,
+                            WallDamageRetention = spawnData.WallDamageRetention,
+                            GravityWellPullStrength = spawnData.GravityWellPullStrength
                         });
                     });
             }
@@ -884,13 +928,24 @@ namespace Unity.MP_FPS
                         var commandInput = commands[i + predictedClient.BeginInputIndex];
                         if (commandInput.TryGetPlayerMovementInput(predictedPlayer.ValueRO.InputIndex, out var input))
                         {
+                            int previousSizeState = predictedPlayer.ValueRO.SizeState;
                             controllerLink.Controller.ProcessSelfResize(
                                 ref predictedPlayer.ValueRW, input, movementDt,
                                 in modifiers.ValueRO);
+                            if (previousSizeState != FirstPersonController.SmallSizeState &&
+                                predictedPlayer.ValueRO.SizeState ==
+                                    FirstPersonController.SmallSizeState &&
+                                modifiers.ValueRO.ConservationOfMass > 0)
+                            {
+                                TryTriggerConservationOfMass(entity,
+                                    ghostOwnerLookup[entity].NetworkId,
+                                    modifiers.ValueRO.ConservationOfMass);
+                            }
                             controllerLink.Controller.ProcessResizeBounce(
                                 ref predictedPlayer.ValueRW, input, movementDt);
                             controllerLink.Controller.GetSizeMovementMultipliers(
                                 in predictedPlayer.ValueRO,
+                                in modifiers.ValueRO,
                                 out float speedMultiplier,
                                 out float jumpHeightMultiplier);
                             if (modifiers.ValueRO.ShieldSpeed > 0 &&
@@ -923,6 +978,15 @@ namespace Unity.MP_FPS
 
                     if (predictedPlayer.ValueRW.ControllerState.LandTriggered)
                     {
+                        if (predictedPlayer.ValueRO.SizeState ==
+                                FirstPersonController.LargeSizeState &&
+                            predictedPlayer.ValueRO.ControllerState.FallHeight >= 3f &&
+                            modifiers.ValueRO.HeavyFooted > 0)
+                        {
+                            TriggerHeavyFooted(entity,
+                                ghostOwnerLookup[entity].NetworkId,
+                                modifiers.ValueRO.HeavyFooted, serverTick);
+                        }
                         predictedPlayer.ValueRW.LastLandTick = serverTick;
                         predictedPlayer.ValueRW.ControllerState.LandTriggered = false;
                     }
@@ -1018,7 +1082,8 @@ namespace Unity.MP_FPS
         }
 
         private bool TryGetClosestHitscanCollision(Vector3 origin, Vector3 direction, float range,
-            int shooterNetworkId, uint rewindTick, out ShotCollision collision)
+            int shooterNetworkId, uint rewindTick, int wallPenetrations,
+            out ShotCollision collision)
         {
             int hitCount = UnityEngine.Physics.RaycastNonAlloc(
                 origin,
@@ -1028,29 +1093,9 @@ namespace Unity.MP_FPS
                 s_ShootableLayerMask,
                 QueryTriggerInteraction.Ignore);
 
-            float closestDistance = float.MaxValue;
+            float closestPlayerDistance = float.MaxValue;
             collision = default;
-            bool foundCollision = false;
-            for (int i = 0; i < hitCount; i++)
-            {
-                var candidate = m_HitscanCastResults[i];
-                if (candidate.collider == null ||
-                    candidate.collider.GetComponentInParent<PlayerGhost>() != null ||
-                    candidate.distance >= closestDistance)
-                {
-                    continue;
-                }
-
-                closestDistance = candidate.distance;
-                collision = new ShotCollision
-                {
-                    PlayerEntity = Entity.Null,
-                    Collider = candidate.collider,
-                    Point = candidate.point,
-                    Normal = candidate.normal
-                };
-                foundCollision = true;
-            }
+            bool foundPlayer = false;
 
             foreach (var pair in m_LagCompensatedHitboxes)
             {
@@ -1063,12 +1108,12 @@ namespace Unity.MP_FPS
                     !pair.Value.TryGetAtOrBefore(rewindTick, out var hitbox) ||
                     !RayIntersectsCapsule(origin, direction, hitbox.Point0, hitbox.Point1,
                         hitbox.Radius, out float distance, out Vector3 normal) ||
-                    distance > range || distance >= closestDistance)
+                    distance > range || distance >= closestPlayerDistance)
                 {
                     continue;
                 }
 
-                closestDistance = distance;
+                closestPlayerDistance = distance;
                 collision = new ShotCollision
                 {
                     PlayerEntity = targetEntity,
@@ -1076,10 +1121,98 @@ namespace Unity.MP_FPS
                     Point = origin + direction * distance,
                     Normal = normal
                 };
-                foundCollision = true;
+                foundPlayer = true;
             }
 
-            return foundCollision;
+            int geometryBeforeTarget = 0;
+            bool hasNonPenetrableGeometry = false;
+            float nearestGroundDistance = float.MaxValue;
+            for (int i = 0; i < hitCount; i++)
+            {
+                RaycastHit candidate = m_HitscanCastResults[i];
+                if (candidate.collider == null ||
+                    candidate.collider.GetComponentInParent<PlayerGhost>() != null ||
+                    candidate.distance >= closestPlayerDistance)
+                {
+                    continue;
+                }
+                geometryBeforeTarget++;
+                if (candidate.collider.gameObject.layer ==
+                    LayerMask.NameToLayer("Ground"))
+                {
+                    hasNonPenetrableGeometry = true;
+                    nearestGroundDistance = Mathf.Min(nearestGroundDistance,
+                        candidate.distance);
+                }
+            }
+
+            int allowedPenetrations = Mathf.Max(0, wallPenetrations);
+            if (foundPlayer && !hasNonPenetrableGeometry &&
+                geometryBeforeTarget <= allowedPenetrations)
+            {
+                collision.WallsPenetrated = geometryBeforeTarget;
+                return true;
+            }
+
+            int penetrableBeforeGround = 0;
+            if (hasNonPenetrableGeometry)
+            {
+                for (int i = 0; i < hitCount; i++)
+                {
+                    RaycastHit candidate = m_HitscanCastResults[i];
+                    if (candidate.collider != null &&
+                        candidate.collider.GetComponentInParent<PlayerGhost>() == null &&
+                        candidate.collider.gameObject.layer !=
+                            LayerMask.NameToLayer("Ground") &&
+                        candidate.distance < nearestGroundDistance)
+                    {
+                        penetrableBeforeGround++;
+                    }
+                }
+            }
+            int stopIndex = hasNonPenetrableGeometry
+                ? Mathf.Min(allowedPenetrations, penetrableBeforeGround)
+                : Mathf.Min(allowedPenetrations, geometryBeforeTarget);
+            float previousDistance = -1f;
+            RaycastHit stoppingHit = default;
+            bool foundStoppingHit = false;
+            for (int selection = 0; selection <= stopIndex; selection++)
+            {
+                float nextDistance = float.MaxValue;
+                foundStoppingHit = false;
+                for (int i = 0; i < hitCount; i++)
+                {
+                    RaycastHit candidate = m_HitscanCastResults[i];
+                    if (candidate.collider == null ||
+                        candidate.collider.GetComponentInParent<PlayerGhost>() != null ||
+                        candidate.distance <= previousDistance ||
+                        candidate.distance >= nextDistance)
+                    {
+                        continue;
+                    }
+                    nextDistance = candidate.distance;
+                    stoppingHit = candidate;
+                    foundStoppingHit = true;
+                }
+                if (!foundStoppingHit) break;
+                previousDistance = nextDistance;
+            }
+
+            if (!foundStoppingHit)
+            {
+                return false;
+            }
+
+            collision = new ShotCollision
+            {
+                PlayerEntity = Entity.Null,
+                Collider = stoppingHit.collider,
+                Point = stoppingHit.point,
+                Normal = stoppingHit.normal,
+                WallsPenetrated = Mathf.Min(allowedPenetrations,
+                    geometryBeforeTarget)
+            };
+            return true;
         }
 
         private void UpdateHitscanBloom(float deltaTime)
@@ -1268,6 +1401,100 @@ namespace Unity.MP_FPS
             m_SecondChanceRound = currentRound;
             m_SecondChanceUsesConsumed.Clear();
             m_SecondChanceInvulnerabilityTimers.Clear();
+        }
+
+        private void TryTriggerConservationOfMass(Entity sourceEntity,
+            int sourceNetworkId, int stacks)
+        {
+            if (stacks <= 0 ||
+                m_ConservationCooldownTimers.ContainsKey(sourceNetworkId) ||
+                !m_PlayerGhostLookup.HasComponent(sourceEntity))
+            {
+                return;
+            }
+
+            var card = WeaponManager.Instance?.CardModifierCatalog?
+                .FindByKind(Cards.CardModifierKind.ConservationOfMass);
+            float radius = Mathf.Max(0f, card?.EffectRadiusMetres ?? 4f);
+            float force = Mathf.Max(0f, card?.ValuePerStack ?? 8f) * stacks;
+            float cooldown = Mathf.Max(0.01f,
+                card?.EffectDurationSeconds ?? 10f);
+            m_ConservationCooldownTimers[sourceNetworkId] = cooldown;
+            ApplyRadialCardImpulse(sourceEntity, sourceNetworkId,
+                m_PlayerGhostLookup[sourceEntity].ControllerState.CurrentPosition,
+                radius, force, 0f, 0f, 0);
+        }
+
+        private void TriggerHeavyFooted(Entity sourceEntity, int sourceNetworkId,
+            int stacks, uint hitTick)
+        {
+            if (stacks <= 0 || !m_PlayerGhostLookup.HasComponent(sourceEntity))
+            {
+                return;
+            }
+
+            var card = WeaponManager.Instance?.CardModifierCatalog?
+                .FindByKind(Cards.CardModifierKind.HeavyFooted);
+            float radius = Mathf.Max(0f, card?.EffectRadiusMetres ?? 4f);
+            float damageRadius = Mathf.Max(0f,
+                card?.SecondaryEffectRadiusMetres ?? 1f);
+            float damage = Mathf.Max(0f, card?.ValuePerStack ?? 50f) * stacks;
+            float force = 8f * stacks;
+            ApplyRadialCardImpulse(sourceEntity, sourceNetworkId,
+                m_PlayerGhostLookup[sourceEntity].ControllerState.CurrentPosition,
+                radius, force, damageRadius, damage, hitTick);
+        }
+
+        private void ApplyRadialCardImpulse(Entity sourceEntity, int sourceNetworkId,
+            float3 origin, float radius, float force, float damageRadius,
+            float damage, uint hitTick)
+        {
+            foreach (var pair in m_PlayerEntitiesByNetworkId)
+            {
+                Entity targetEntity = pair.Value;
+                if (targetEntity == sourceEntity ||
+                    !m_PlayerGhostLookup.HasComponent(targetEntity) ||
+                    !ghostOwnerLookup.HasComponent(targetEntity))
+                {
+                    continue;
+                }
+
+                var target = m_PlayerGhostLookup.GetRefRW(targetEntity);
+                if (target.ValueRO.CurrentHealth <= 0f)
+                {
+                    continue;
+                }
+                float3 offset = target.ValueRO.ControllerState.CurrentPosition - origin;
+                float distance = math.length(offset);
+                if (distance > radius)
+                {
+                    continue;
+                }
+
+                float3 direction = math.normalizesafe(offset,
+                    new float3(0f, 1f, 0f));
+                direction.y = Mathf.Max(0.35f, direction.y);
+                direction = math.normalize(direction);
+                target.ValueRW.RecoilVelocity += direction * force;
+                if (target.ValueRO.ControllerState.MovementType ==
+                    FirstPersonController.MovementType.Standing)
+                {
+                    target.ValueRW.ControllerState.PreviousMovementType =
+                        FirstPersonController.MovementType.Standing;
+                    target.ValueRW.ControllerState.MovementType =
+                        FirstPersonController.MovementType.Falling;
+                    target.ValueRW.ControllerState.JumpFallSpeed =
+                        Mathf.Max(2f, target.ValueRO.ControllerState.JumpFallSpeed);
+                }
+
+                if (damage > 0f && distance <= damageRadius)
+                {
+                    ApplyIncomingWeaponDamage(targetEntity, sourceNetworkId,
+                        -damage, PlayerResizeEffect.None, 0f,
+                        0f, 0f, 0f, 0f, 0f, hitTick,
+                        m_PlayerGhostLookup, ghostOwnerLookup);
+                }
+            }
         }
 
         private bool TryActivateSecondChance(Entity playerEntity, int playerNetworkId,
@@ -1636,6 +1863,45 @@ namespace Unity.MP_FPS
                 return true;
             }
 
+            if (m_PlayerEntitiesByNetworkId.TryGetValue(damageSourceNetworkId,
+                    out Entity damageSourceEntity) &&
+                playerGhostLookup.HasComponent(damageSourceEntity) &&
+                damageSourceEntity != damageTargetEntity)
+            {
+                var sourcePlayer = playerGhostLookup[damageSourceEntity];
+                Cards.PlayerModifierStacks sourceModifiers =
+                    EntityManager.HasComponent<Cards.PlayerModifierStacks>(
+                        damageSourceEntity)
+                        ? EntityManager.GetComponentData<Cards.PlayerModifierStacks>(
+                            damageSourceEntity)
+                        : default;
+                Cards.PlayerModifierStacks targetModifiers =
+                    EntityManager.HasComponent<Cards.PlayerModifierStacks>(
+                        damageTargetEntity)
+                        ? EntityManager.GetComponentData<Cards.PlayerModifierStacks>(
+                            damageTargetEntity)
+                        : default;
+                var tinyTerrorCard = WeaponManager.Instance?.CardModifierCatalog?
+                    .FindByKind(Cards.CardModifierKind.TinyTerror);
+                if (sourcePlayer.SizeState == FirstPersonController.SmallSizeState &&
+                    sourcePlayer.SizeState < damagedPlayer.ValueRO.SizeState &&
+                    sourceModifiers.TinyTerror > 0)
+                {
+                    signedSizeDelta *= 1f + sourceModifiers.TinyTerror *
+                        Mathf.Max(0f, tinyTerrorCard?.ValuePerStack ?? 0.2f);
+                }
+                if (damagedPlayer.ValueRO.SizeState ==
+                        FirstPersonController.SmallSizeState &&
+                    damagedPlayer.ValueRO.SizeState < sourcePlayer.SizeState &&
+                    targetModifiers.TinyTerror > 0)
+                {
+                    signedSizeDelta *= Mathf.Pow(
+                        Mathf.Max(0f,
+                            tinyTerrorCard?.IncomingDamageMultiplierPerStack ?? 1.2f),
+                        targetModifiers.TinyTerror);
+                }
+            }
+
             float healthBeforeDamage = damagedPlayer.ValueRO.CurrentHealth;
             float appliedDelta = -Mathf.Abs(signedSizeDelta);
             if (appliedDelta < 0f)
@@ -1833,7 +2099,7 @@ namespace Unity.MP_FPS
             PlayerResizeEffect resizeEffect, float resizeEffectDuration,
             float slowPercent, float slowDuration,
             float bleedDamagePerSecond, float bleedDuration,
-            float lifeStealPercent, uint hitTick,
+            float lifeStealPercent, float gravityWellPullStrength, uint hitTick,
             ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
             ComponentLookup<GhostOwner> ownerLookup)
         {
@@ -1853,6 +2119,31 @@ namespace Unity.MP_FPS
                     ownerLookup[hitGhost.LinkedEntity].NetworkId == attackerNetworkId)
                 {
                     continue;
+                }
+
+                if (gravityWellPullStrength > 0f &&
+                    playerGhostLookup.HasComponent(hitGhost.LinkedEntity))
+                {
+                    var pulledPlayer = playerGhostLookup.GetRefRW(
+                        hitGhost.LinkedEntity);
+                    float3 pullDirection = (float3)impactPosition -
+                                           pulledPlayer.ValueRO.ControllerState.CurrentPosition;
+                    pullDirection.y = Mathf.Max(0.75f, pullDirection.y);
+                    pullDirection = math.normalizesafe(pullDirection,
+                        new float3(0f, 1f, 0f));
+                    pulledPlayer.ValueRW.RecoilVelocity += pullDirection *
+                        gravityWellPullStrength;
+                    if (pulledPlayer.ValueRO.ControllerState.MovementType ==
+                        FirstPersonController.MovementType.Standing)
+                    {
+                        pulledPlayer.ValueRW.ControllerState.PreviousMovementType =
+                            FirstPersonController.MovementType.Standing;
+                        pulledPlayer.ValueRW.ControllerState.MovementType =
+                            FirstPersonController.MovementType.Falling;
+                        pulledPlayer.ValueRW.ControllerState.JumpFallSpeed =
+                            Mathf.Max(2f,
+                                pulledPlayer.ValueRO.ControllerState.JumpFallSpeed);
+                    }
                 }
 
                 ApplyIncomingWeaponDamage(hitGhost.LinkedEntity,

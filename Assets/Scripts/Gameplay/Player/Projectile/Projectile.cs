@@ -62,6 +62,9 @@ namespace Unity.MP_FPS
             [GhostField] public float LifeStealPercent;
             [GhostField] public float GrowthPerMetre;
             [GhostField] public float BounceVelocityRetention;
+            [GhostField] public int WallPenetrations;
+            [GhostField] public float WallDamageRetention;
+            [GhostField] public float GravityWellPullStrength;
         }
 
         public class PredictedProjectileInfo
@@ -108,6 +111,8 @@ namespace Unity.MP_FPS
         private float _distanceTravelled;
         private float _growthPerMetre;
         private float _bounceVelocityRetention = 1f;
+        private int _remainingWallPenetrations;
+        private float _wallDamageRetention = 0.4f;
 
         public void SetGuidedTarget(Vector3 targetPosition, bool isActive = true)
         {
@@ -123,7 +128,8 @@ namespace Unity.MP_FPS
 
         public void SetRuntimeProjectileProperties(float speed, float scale,
             bool growsOverDistance, int maxBounces, float growthPerMetre,
-            float bounceVelocityRetention)
+            float bounceVelocityRetention, int wallPenetrations = 0,
+            float wallDamageRetention = 0.4f)
         {
             _runtimeProjectileSpeed = Mathf.Max(0f, speed);
             _runtimeProjectileScale = Mathf.Max(0.1f, scale);
@@ -131,6 +137,8 @@ namespace Unity.MP_FPS
             _runtimeMaxBounces = Mathf.Max(0, maxBounces);
             _growthPerMetre = Mathf.Max(0f, growthPerMetre);
             _bounceVelocityRetention = Mathf.Clamp01(bounceVelocityRetention);
+            _remainingWallPenetrations = Mathf.Max(0, wallPenetrations);
+            _wallDamageRetention = Mathf.Clamp01(wallDamageRetention);
             transform.localScale = Vector3.one * _runtimeProjectileScale;
         }
 
@@ -149,6 +157,10 @@ namespace Unity.MP_FPS
             _growthPerMetre = Mathf.Max(0f, projectileData.GrowthPerMetre);
             _bounceVelocityRetention = Mathf.Clamp01(
                 projectileData.BounceVelocityRetention);
+            _remainingWallPenetrations = Mathf.Max(0,
+                projectileData.WallPenetrations);
+            _wallDamageRetention = Mathf.Clamp01(
+                projectileData.WallDamageRetention);
             transform.localScale = Vector3.one * _runtimeProjectileScale;
             ApplyServerMotionState(projectileData);
         }
@@ -366,6 +378,11 @@ namespace Unity.MP_FPS
                     LayerMask.GetMask("Ground", "Default"),
                     QueryTriggerInteraction.Ignore))
             {
+                if (TryPenetrateGeometry(hit.collider, hit.point,
+                        displacement.normalized, false))
+                {
+                    return;
+                }
                 if (TryBounce(hit.point, hit.normal, weaponData))
                 {
                     return;
@@ -435,6 +452,11 @@ namespace Unity.MP_FPS
             {
                 var impactPosition = overlappingGeometry.ClosestPoint(transform.position);
                 Vector3 impactNormal = (transform.position - impactPosition).normalized;
+                if (TryPenetrateGeometry(overlappingGeometry, impactPosition,
+                        travelDirection))
+                {
+                    return true;
+                }
                 if (TryBounce(impactPosition, impactNormal, weaponData))
                 {
                     return true;
@@ -478,6 +500,13 @@ namespace Unity.MP_FPS
             }
 
             if (closestHit.collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") &&
+                TryPenetrateGeometry(closestHit.collider, closestHit.point,
+                    travelDirection))
+            {
+                return true;
+            }
+
+            if (closestHit.collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") &&
                 TryBounce(closestHit.point, closestHit.normal, weaponData))
             {
                 return true;
@@ -485,6 +514,44 @@ namespace Unity.MP_FPS
 
             HandleCollision(closestHit.collider, closestHit.point, closestHit.normal, weaponData,
                 projectileData, world, playerGhostLookup, ghostOwnerLookup);
+            return true;
+        }
+
+        private bool TryPenetrateGeometry(Collider geometry, Vector3 impactPosition,
+            Vector3 travelDirection, bool publishServerState = true)
+        {
+            if (_remainingWallPenetrations <= 0 || geometry == null ||
+                geometry.gameObject.layer == LayerMask.NameToLayer("Ground"))
+            {
+                return false;
+            }
+
+            Vector3 direction = travelDirection.sqrMagnitude > 0.0001f
+                ? travelDirection.normalized
+                : transform.forward;
+            Vector3 extents = geometry.bounds.extents;
+            float projectedThickness = 2f *
+                (Mathf.Abs(direction.x) * extents.x +
+                 Mathf.Abs(direction.y) * extents.y +
+                 Mathf.Abs(direction.z) * extents.z);
+            float clearance = Mathf.Max(ProjectileRadius * 2f,
+                projectedThickness + ProjectileRadius + BounceSurfaceOffset);
+            transform.position = impactPosition + direction * clearance;
+            _remainingWallPenetrations--;
+            _collisionGraceTimer = BounceCollisionGrace;
+
+            if (publishServerState && GhostGameObject != null &&
+                GhostGameObject.IsGhostLinked())
+            {
+                var projectileData =
+                    GhostGameObject.ReadGhostComponentData<ProjectileData>();
+                projectileData.SignedSizeDelta *= _wallDamageRetention;
+                projectileData.WallPenetrations = _remainingWallPenetrations;
+                projectileData.Position = transform.position;
+                projectileData.Velocity = _velocity;
+                projectileData.MotionRevision++;
+                GhostGameObject.WriteGhostComponentData(projectileData);
+            }
             return true;
         }
 
@@ -703,6 +770,7 @@ namespace Unity.MP_FPS
                 projectileData.BleedDamagePerSecond,
                 projectileData.BleedDuration,
                 projectileData.LifeStealPercent,
+                projectileData.GravityWellPullStrength,
                 serverCurrentTick,
                 playerGhostLookup,
                 ghostOwnerLookup);
