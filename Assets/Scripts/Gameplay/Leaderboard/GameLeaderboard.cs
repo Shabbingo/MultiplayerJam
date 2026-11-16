@@ -22,8 +22,8 @@ namespace Gameplay.Leaderboard
         private const float FinalMatchRestartDelay = 8f;
         private const float PickRevealDuration = 1.15f;
 
-        private RoundPhase _phase = RoundPhase.Combat;
-        private int _currentRound = 1;
+        private RoundPhase _phase = RoundPhase.WaitingForPlayers;
+        private int _currentRound;
         private bool _matchEnded;
         private float _matchRestartTimeRemaining;
         private FixedString64Bytes _winnerName;
@@ -42,6 +42,7 @@ namespace Gameplay.Leaderboard
         private float _roundStartTimer;
         private bool _finalAnnouncementPending;
         private float _finalSyncTimer;
+        private float _roundStateSyncTimer;
 
         // Client presentation state. RPCs update these even while the local player is dead.
         private int _localNetworkId = -1;
@@ -49,6 +50,7 @@ namespace Gameplay.Leaderboard
         private FixedString64Bytes _activeDraftPlayerName;
         private FixedString128Bytes _lastPickMessage;
         private DraftPickRequestRpc? _pendingClientPick;
+        private bool _pendingLobbyStartRequest;
 
         public bool IsMatchEnded => _matchEnded;
         public bool IsDrafting => _phase == RoundPhase.Drafting;
@@ -67,6 +69,15 @@ namespace Gameplay.Leaderboard
         public float MatchRestartTimeRemaining => _matchRestartTimeRemaining;
         public float MatchTimeRemaining => 0f;
         public int LocalNetworkId => _localNetworkId;
+        public bool IsWaitingInLobby => _phase == RoundPhase.WaitingForPlayers;
+        public bool BlocksGameplayInput => _phase is RoundPhase.WaitingForPlayers
+            or RoundPhase.PreparingRound;
+        public int LobbyPlayerCount => GetLobbyPlayerCount();
+        public bool IsLocalLobbyHost => IsWaitingInLobby &&
+                                        _localNetworkId >= 0 &&
+                                        _localNetworkId == GetLobbyHostNetworkId();
+        public bool CanLocalPlayerStartLobby => IsLocalLobbyHost &&
+                                                LobbyPlayerCount >= 2;
 
         private struct KillInfo
         {
@@ -159,6 +170,16 @@ namespace Gameplay.Leaderboard
             };
         }
 
+        public void RequestLobbyStart()
+        {
+            if (Role == MultiplayerRole.Server || !CanLocalPlayerStartLobby)
+            {
+                return;
+            }
+
+            _pendingLobbyStartRequest = true;
+        }
+
         public void RemovePlayer(int networkId)
         {
             if (Role != MultiplayerRole.Server || GhostGameObject == null ||
@@ -241,6 +262,18 @@ namespace Gameplay.Leaderboard
                     (ModifierTarget)request.Target);
             }
 
+            while (ConsumeDirectedRPC(out LobbyStartRequestRpc request))
+            {
+                TryStartLobbyMatch(request.RequesterNetworkId, buffer);
+            }
+
+            _roundStateSyncTimer -= deltaTime;
+            if (_roundStateSyncTimer <= 0f)
+            {
+                BroadcastRoundState();
+                _roundStateSyncTimer = 0.5f;
+            }
+
             UpdateRoundState(deltaTime, buffer);
         }
 
@@ -253,6 +286,25 @@ namespace Gameplay.Leaderboard
             {
                 SendDirectedRPC(_pendingClientPick.Value);
                 _pendingClientPick = null;
+            }
+
+            if (_pendingLobbyStartRequest)
+            {
+                SendDirectedRPC(new LobbyStartRequestRpc
+                {
+                    RequesterNetworkId = _localNetworkId
+                });
+                _pendingLobbyStartRequest = false;
+            }
+
+            while (ConsumeRPC(out RoundStateSyncRpc stateRpc))
+            {
+                _phase = (RoundPhase)stateRpc.Phase;
+                _currentRound = stateRpc.RoundNumber;
+                if (_phase == RoundPhase.PreparingRound)
+                {
+                    _roundStartTimer = stateRpc.SecondsRemaining;
+                }
             }
 
             while (ConsumeRPC(out KillFeedEntryRpc killFeedRpc))
@@ -360,6 +412,59 @@ namespace Gameplay.Leaderboard
                 AnnouncePlayerJoined(playerName);
                 Debug.Log($"[Server] Added player {networkId} ({playerName}) to the round match.");
             }
+        }
+
+        private bool TryStartLobbyMatch(int requesterNetworkId,
+            DynamicBuffer<PlayerScoreEntry> buffer)
+        {
+            if (_phase != RoundPhase.WaitingForPlayers || buffer.Length < 2 ||
+                requesterNetworkId != GetLobbyHostNetworkId(buffer))
+            {
+                return false;
+            }
+
+            _currentRound = 1;
+            _matchEnded = false;
+            _winnerName = default;
+            _eliminatedThisRound.Clear();
+            _finishingOrder.Clear();
+            _draftOrder.Clear();
+            _currentOffers.Clear();
+            _activeDraftNetworkId = -1;
+            _phase = RoundPhase.PreparingRound;
+            _roundStartTimer = GetRules().RoundStartDelay;
+
+            // Lobby participants already own fully spawned player ghosts. Reusing
+            // them avoids a destroy/respawn race where a remote client can remain
+            // spectating if its old ghost disappears before the replacement ghost
+            // and respawn-state RPC arrive.
+            BroadcastRPC(new RoundPreparingRpc
+            {
+                RoundNumber = _currentRound,
+                Delay = _roundStartTimer
+            });
+            BroadcastRoundState();
+            Debug.Log($"[Server] Lobby host {requesterNetworkId} started the match " +
+                      $"with {buffer.Length} players.");
+            return true;
+        }
+
+        private void BroadcastRoundState()
+        {
+            float secondsRemaining = _phase switch
+            {
+                RoundPhase.PreparingRound => Mathf.Max(0f, _roundStartTimer),
+                RoundPhase.Drafting => Mathf.Max(0f, _draftSecondsRemaining),
+                RoundPhase.MatchEnded => Mathf.Max(0f,
+                    _matchRestartTimeRemaining),
+                _ => 0f
+            };
+            BroadcastRPC(new RoundStateSyncRpc
+            {
+                Phase = (byte)_phase,
+                RoundNumber = _currentRound,
+                SecondsRemaining = secondsRemaining
+            });
         }
 
         private void ProcessAnnouncements(DynamicBuffer<PlayerScoreEntry> buffer)
@@ -799,6 +904,31 @@ namespace Gameplay.Leaderboard
             return false;
         }
 
+        private int GetLobbyPlayerCount()
+        {
+            if (GhostGameObject == null || !GhostGameObject.IsGhostLinked()) return 0;
+            return GhostGameObject.GetGhostDynamicBuffer<PlayerScoreEntry>().Length;
+        }
+
+        private int GetLobbyHostNetworkId()
+        {
+            if (GhostGameObject == null || !GhostGameObject.IsGhostLinked()) return -1;
+            return GetLobbyHostNetworkId(
+                GhostGameObject.GetGhostDynamicBuffer<PlayerScoreEntry>());
+        }
+
+        private static int GetLobbyHostNetworkId(
+            DynamicBuffer<PlayerScoreEntry> buffer)
+        {
+            if (buffer.Length == 0) return -1;
+            int hostNetworkId = buffer[0].NetworkId;
+            for (int i = 1; i < buffer.Length; i++)
+            {
+                hostNetworkId = Mathf.Min(hostNetworkId, buffer[i].NetworkId);
+            }
+            return hostNetworkId;
+        }
+
         private static FixedString64Bytes FindPlayerName(
             DynamicBuffer<PlayerScoreEntry> buffer, int networkId, string fallback)
         {
@@ -865,6 +995,19 @@ namespace Gameplay.Leaderboard
         public int RequesterNetworkId;
         public int CardId;
         public byte Target;
+    }
+
+    public struct LobbyStartRequestRpc : IRpcCommand, IGhostGameObjectDirectedRPC
+    {
+        public Unity.Entities.Hash128 TargetGuid;
+        public int RequesterNetworkId;
+    }
+
+    public struct RoundStateSyncRpc : IRpcCommand
+    {
+        public byte Phase;
+        public int RoundNumber;
+        public float SecondsRemaining;
     }
 
     public struct RoundPreparingRpc : IRpcCommand

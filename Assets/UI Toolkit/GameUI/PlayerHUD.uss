@@ -55,6 +55,39 @@
     background-color: rgba(90, 205, 255, 0.18);
 }
 
+#reflect-shield-frame.grace-shield-active {
+    border-color: rgb(255, 211, 72);
+    background-color: rgba(255, 179, 24, 0.24);
+}
+
+#grace-shield-label {
+    display: none;
+    position: absolute;
+    left: 10px;
+    top: 7px;
+    color: rgb(255, 225, 112);
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+#grace-shield-bar {
+    width: 100%;
+    height: 14px;
+    min-height: 14px;
+    margin-bottom: 2px;
+}
+
+#grace-shield-bar .unity-progress-bar,
+#grace-shield-bar .unity-progress-bar__background {
+    min-height: 14px;
+    max-height: 14px;
+}
+
+#grace-shield-bar .unity-progress-bar__progress {
+    height: 10px;
+    background-color: rgba(255, 194, 38, 0.95);
+}
+
 #reflect-cooldown-wheel,
 #reflect-ready-glow {
     position: absolute;
@@ -207,6 +240,64 @@
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+#damage-indicator-layer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.damage-indicator {
+    display: none;
+    position: absolute;
+    background-color: rgba(255, 35, 25, 0.42);
+    border-color: rgba(255, 135, 105, 0.9);
+    border-width: 2px;
+    border-radius: 18px;
+}
+
+.damage-indicator.damage-blocked {
+    background-color: rgba(20, 225, 255, 0.38);
+    border-color: rgba(130, 250, 255, 0.95);
+}
+
+.damage-indicator-side {
+    width: 9%;
+    height: 54%;
+    top: 23%;
+}
+
+.damage-indicator-horizontal {
+    width: 46%;
+    height: 9%;
+    left: 27%;
+}
+
+.damage-indicator-left {
+    left: -3%;
+    border-top-right-radius: 55px;
+    border-bottom-right-radius: 55px;
+}
+
+.damage-indicator-right {
+    right: -3%;
+    border-top-left-radius: 55px;
+    border-bottom-left-radius: 55px;
+}
+
+.damage-indicator-front {
+    top: -3%;
+    border-bottom-left-radius: 55px;
+    border-bottom-right-radius: 55px;
+}
+
+.damage-indicator-rear {
+    bottom: -3%;
+    border-top-left-radius: 55px;
+    border-top-right-radius: 55px;
 }
 
 #player-reticle {

@@ -245,3 +245,58 @@ ProgressBar .unity-progress-bar__progress {
 .section-separator {
     margin-bottom: 20px;
 }
+
+.lobby-panel {
+    display: none;
+    width: 640px;
+    min-height: 500px;
+    padding: 38px;
+    background-color: rgba(12, 18, 28, 0.96);
+    border-width: 2px;
+    border-color: rgb(90, 205, 255);
+    border-radius: 12px;
+}
+
+.lobby-title {
+    font-size: 42px;
+    -unity-font-style: bold;
+    color: rgb(125, 235, 255);
+    margin-bottom: 4px;
+}
+
+.lobby-session {
+    font-size: 18px;
+    color: rgb(170, 190, 210);
+    margin-bottom: 25px;
+}
+
+.lobby-player-count {
+    font-size: 24px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    margin-bottom: 10px;
+}
+
+.lobby-player-list {
+    min-height: 170px;
+    padding: 18px;
+    font-size: 22px;
+    -unity-text-align: upper-left;
+    background-color: rgba(0, 0, 0, 0.38);
+    border-width: 1px;
+    border-color: rgba(125, 235, 255, 0.45);
+    border-radius: 6px;
+}
+
+.lobby-status {
+    min-height: 52px;
+    margin-top: 18px;
+    font-size: 20px;
+    color: rgb(255, 215, 90);
+}
+
+.lobby-start-button {
+    height: 64px;
+    font-size: 24px;
+    -unity-font-style: bold;
+}

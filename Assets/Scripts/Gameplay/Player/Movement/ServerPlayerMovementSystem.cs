@@ -89,6 +89,7 @@ namespace Unity.MP_FPS
         private readonly Dictionary<int, int> m_SecondChanceUsesConsumed = new();
         private readonly Dictionary<int, float> m_SecondChanceInvulnerabilityTimers = new();
         private readonly Dictionary<int, float> m_ConservationCooldownTimers = new();
+        private readonly HashSet<Entity> m_HeavyFootedTriggeredThisAirborne = new();
         private int m_SecondChanceRound = -1;
         private readonly Dictionary<int, Entity> m_PlayerEntitiesByNetworkId = new();
         private readonly HashSet<Entity> m_RuntimeAreaHitEntities = new();
@@ -231,6 +232,7 @@ namespace Unity.MP_FPS
             m_SecondChanceUsesConsumed.Clear();
             m_SecondChanceInvulnerabilityTimers.Clear();
             m_ConservationCooldownTimers.Clear();
+            m_HeavyFootedTriggeredThisAirborne.Clear();
             m_PlayerEntitiesByNetworkId.Clear();
             m_RuntimeAreaHitEntities.Clear();
             m_BleedEffects.Clear();
@@ -386,6 +388,20 @@ namespace Unity.MP_FPS
                 }
             }
 
+            // Treat the lobby as an authoritative no-gameplay phase. This also
+            // protects against buffered input from the previous match and clients
+            // that have not yet presented their lobby UI.
+            if (LeaderboardManager.ServerInstance?.BlocksGameplayInput == true)
+            {
+                for (int commandIndex = 0; commandIndex < commands.Length;
+                     commandIndex++)
+                {
+                    ClientCommandInput commandInput = commands[commandIndex];
+                    commandInput.SuppressGameplayInput();
+                    commands[commandIndex] = commandInput;
+                }
+            }
+
             ghostOwnerLookup.Update(this);
             m_PlayerGhostLookup.Update(this);
             m_PredictedClientInputComponentLookup.Update(this);
@@ -429,10 +445,11 @@ namespace Unity.MP_FPS
             var projectileSpawnList = new NativeList<ProjectileSpawnData>(Allocator.Temp);
             var vfxSpawnList = new NativeList<VfxSpawnData>(Allocator.Temp);
 
-            foreach (var (predictedPlayer, owner, modifiers) in
+            foreach (var (predictedPlayer, owner, modifiers, entity) in
                      SystemAPI.Query<RefRW<PredictedPlayerGhost>, RefRO<GhostOwner>,
                          RefRO<Cards.PlayerModifierStacks>>()
-                         .WithAll<Simulate>())
+                         .WithAll<Simulate>()
+                         .WithEntityAccess())
             {
                 predictedPlayer.ValueRW.ReflectShieldTimeRemaining =
                     m_ReflectActiveTimers.TryGetValue(
@@ -451,6 +468,30 @@ namespace Unity.MP_FPS
                         owner.ValueRO.NetworkId, out float invulnerabilityRemaining)
                         ? invulnerabilityRemaining
                         : 0f;
+                if (EntityManager.HasComponent<GraceShieldState>(entity))
+                {
+                    GraceShieldState graceShield = EntityManager
+                        .GetComponentData<GraceShieldState>(entity);
+                    graceShield.Maximum = Mathf.Max(0f, graceShield.Maximum);
+                    graceShield.Amount = Mathf.Clamp(graceShield.Amount, 0f,
+                        graceShield.Maximum);
+                    graceShield.RechargeDelayRemaining = Mathf.Max(0f,
+                        graceShield.RechargeDelayRemaining - deltaTime);
+                    if (graceShield.RechargeDelayRemaining <= 0f &&
+                        graceShield.Amount < graceShield.Maximum)
+                    {
+                        graceShield.Amount = Mathf.MoveTowards(
+                            graceShield.Amount, graceShield.Maximum,
+                            GraceShieldState.DefaultRechargePerSecond * deltaTime);
+                    }
+                    EntityManager.SetComponentData(entity, graceShield);
+                    predictedPlayer.ValueRW.GraceShieldAmount =
+                        graceShield.Amount;
+                    predictedPlayer.ValueRW.GraceShieldMaximum =
+                        graceShield.Maximum;
+                    predictedPlayer.ValueRW.GraceShieldRechargeDelayRemaining =
+                        graceShield.RechargeDelayRemaining;
+                }
                 if (predictedPlayer.ValueRO.WeaponCooldown < float.MaxValue)
                 {
                     predictedPlayer.ValueRW.WeaponCooldown += deltaTime;
@@ -948,7 +989,8 @@ namespace Unity.MP_FPS
                             {
                                 TryTriggerConservationOfMass(entity,
                                     ghostOwnerLookup[entity].NetworkId,
-                                    modifiers.ValueRO.ConservationOfMass);
+                                    modifiers.ValueRO.ConservationOfMass,
+                                    serverTick);
                             }
                             controllerLink.Controller.ProcessResizeBounce(
                                 ref predictedPlayer.ValueRW, input, movementDt);
@@ -987,15 +1029,6 @@ namespace Unity.MP_FPS
 
                     if (predictedPlayer.ValueRW.ControllerState.LandTriggered)
                     {
-                        if (predictedPlayer.ValueRO.SizeState ==
-                                FirstPersonController.LargeSizeState &&
-                            predictedPlayer.ValueRO.ControllerState.FallHeight >= 3f &&
-                            modifiers.ValueRO.HeavyFooted > 0)
-                        {
-                            TriggerHeavyFooted(entity,
-                                ghostOwnerLookup[entity].NetworkId,
-                                modifiers.ValueRO.HeavyFooted, serverTick);
-                        }
                         predictedPlayer.ValueRW.LastLandTick = serverTick;
                         predictedPlayer.ValueRW.ControllerState.LandTriggered = false;
                     }
@@ -1004,15 +1037,20 @@ namespace Unity.MP_FPS
 
             foreach (var (transform,
                          predictedPlayer,
-                         controllerConsts, entity)
+                         controllerConsts, modifiers, entity)
                      in SystemAPI
                          .Query<RefRO<LocalTransform>, RefRW<PredictedPlayerGhost>,
-                             RefRO<PredictedPlayerControllerConsts>>()
+                             RefRO<PredictedPlayerControllerConsts>,
+                             RefRO<Cards.PlayerModifierStacks>>()
                          .WithAll<Simulate, PlayerControllerLink, GhostGameObjectLink>()
                          .WithNone<GhostGameObjectDeferredActivation>()
                          .WithEntityAccess())
             {
                 var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+                bool wasFalling = predictedPlayer.ValueRO.ControllerState.MovementType ==
+                                  FirstPersonController.MovementType.Falling;
+                float fallHeightBeforeMove =
+                    predictedPlayer.ValueRO.ControllerState.FallHeight;
                 if (math.lengthsq(predictedPlayer.ValueRO.AccumulatedMovement) > 0f)
                 {
                     controllerLink.Controller.ApplyMovementUpdate(ref predictedPlayer.ValueRW.ControllerState,
@@ -1022,6 +1060,43 @@ namespace Unity.MP_FPS
                 }
 
                 predictedPlayer.ValueRW.AccumulatedMovement = float3.zero;
+
+                bool isStanding = predictedPlayer.ValueRO.ControllerState.MovementType ==
+                                  FirstPersonController.MovementType.Standing;
+                bool landedThisUpdate = wasFalling && isStanding;
+                float completedFallHeight = Mathf.Max(fallHeightBeforeMove,
+                    predictedPlayer.ValueRO.ControllerState.FallHeight);
+                bool canStomp = modifiers.ValueRO.HeavyFooted > 0 &&
+                                predictedPlayer.ValueRO.SizeState ==
+                                FirstPersonController.LargeSizeState &&
+                                completedFallHeight >= 3f &&
+                                !m_HeavyFootedTriggeredThisAirborne.Contains(entity);
+
+                if (canStomp && landedThisUpdate)
+                {
+                    TryFindHeavyFootedStompTarget(entity,
+                        out Entity groundedStompTarget);
+                    TriggerHeavyFooted(entity,
+                        ghostOwnerLookup[entity].NetworkId,
+                        modifiers.ValueRO.HeavyFooted, serverTick,
+                        groundedStompTarget);
+                    m_HeavyFootedTriggeredThisAirborne.Add(entity);
+                }
+                else if (canStomp && !isStanding &&
+                         predictedPlayer.ValueRO.ControllerState.MovementType ==
+                         FirstPersonController.MovementType.Falling &&
+                         TryFindHeavyFootedStompTarget(entity,
+                             out Entity stompTarget))
+                {
+                    TriggerHeavyFooted(entity,
+                        ghostOwnerLookup[entity].NetworkId,
+                        modifiers.ValueRO.HeavyFooted, serverTick, stompTarget);
+                    m_HeavyFootedTriggeredThisAirborne.Add(entity);
+                }
+                else if (isStanding && !landedThisUpdate)
+                {
+                    m_HeavyFootedTriggeredThisAirborne.Remove(entity);
+                }
 
                 if (m_PendingSelfGrowthChecks.Remove(entity) &&
                     TryInstagibBlockedGrowth(entity, ref predictedPlayer.ValueRW))
@@ -1413,7 +1488,7 @@ namespace Unity.MP_FPS
         }
 
         private void TryTriggerConservationOfMass(Entity sourceEntity,
-            int sourceNetworkId, int stacks)
+            int sourceNetworkId, int stacks, uint hitTick)
         {
             if (stacks <= 0 ||
                 m_ConservationCooldownTimers.ContainsKey(sourceNetworkId) ||
@@ -1426,16 +1501,18 @@ namespace Unity.MP_FPS
                 .FindByKind(Cards.CardModifierKind.ConservationOfMass);
             float radius = Mathf.Max(0f, card?.EffectRadiusMetres ?? 4f);
             float force = Mathf.Max(0f, card?.ValuePerStack ?? 8f) * stacks;
+            float damage = Mathf.Max(0f,
+                card?.AreaDamagePerStack ?? 10f) * stacks;
             float cooldown = Mathf.Max(0.01f,
                 card?.EffectDurationSeconds ?? 10f);
             m_ConservationCooldownTimers[sourceNetworkId] = cooldown;
             ApplyRadialCardImpulse(sourceEntity, sourceNetworkId,
                 m_PlayerGhostLookup[sourceEntity].ControllerState.CurrentPosition,
-                radius, force, 0f, 0f, 0);
+                radius, force, radius, damage, hitTick);
         }
 
         private void TriggerHeavyFooted(Entity sourceEntity, int sourceNetworkId,
-            int stacks, uint hitTick)
+            int stacks, uint hitTick, Entity directStompTarget)
         {
             if (stacks <= 0 || !m_PlayerGhostLookup.HasComponent(sourceEntity))
             {
@@ -1452,6 +1529,106 @@ namespace Unity.MP_FPS
             ApplyRadialCardImpulse(sourceEntity, sourceNetworkId,
                 m_PlayerGhostLookup[sourceEntity].ControllerState.CurrentPosition,
                 radius, force, damageRadius, damage, hitTick);
+
+            // Vertically stacked player centres can be farther apart than the
+            // one-metre damage radius even when their capsules are touching.
+            // Guarantee that the player directly landed on receives the stomp.
+            if (directStompTarget != Entity.Null &&
+                m_PlayerGhostLookup.HasComponent(directStompTarget) &&
+                ghostOwnerLookup.HasComponent(directStompTarget))
+            {
+                float3 offset = m_PlayerGhostLookup[directStompTarget]
+                    .ControllerState.CurrentPosition -
+                    m_PlayerGhostLookup[sourceEntity]
+                        .ControllerState.CurrentPosition;
+                if (math.length(offset) > damageRadius)
+                {
+                    ApplyIncomingWeaponDamage(directStompTarget, sourceNetworkId,
+                        -damage, PlayerResizeEffect.None, 0f,
+                        0f, 0f, 0f, 0f, 0f, hitTick,
+                        m_PlayerGhostLookup, ghostOwnerLookup);
+                }
+            }
+        }
+
+        private bool TryFindHeavyFootedStompTarget(Entity sourceEntity,
+            out Entity stompTarget)
+        {
+            stompTarget = Entity.Null;
+            if (!m_PlayerGhostLookup.HasComponent(sourceEntity) ||
+                !EntityManager.HasComponent<PlayerControllerLink>(sourceEntity))
+            {
+                return false;
+            }
+
+            var sourcePlayer = m_PlayerGhostLookup[sourceEntity];
+            var sourceController = EntityManager
+                .GetComponentObject<PlayerControllerLink>(sourceEntity)?.Controller;
+            if (sourceController == null)
+            {
+                return false;
+            }
+
+            sourceController.GetCurrentHitboxCapsule(
+                sourcePlayer.ControllerState.CurrentPosition,
+                sourcePlayer.ControllerState.CurrentRotation,
+                out Vector3 sourcePoint0, out Vector3 sourcePoint1,
+                out float sourceRadius);
+            Vector3 sourceCentre = (sourcePoint0 + sourcePoint1) * 0.5f;
+            float sourceBottom = Mathf.Min(sourcePoint0.y, sourcePoint1.y) -
+                                 sourceRadius;
+            float closestHorizontalDistanceSq = float.MaxValue;
+
+            foreach (var pair in m_PlayerEntitiesByNetworkId)
+            {
+                Entity targetEntity = pair.Value;
+                if (targetEntity == sourceEntity ||
+                    !m_PlayerGhostLookup.HasComponent(targetEntity) ||
+                    m_PlayerGhostLookup[targetEntity].CurrentHealth <= 0f ||
+                    !EntityManager.HasComponent<PlayerControllerLink>(targetEntity))
+                {
+                    continue;
+                }
+
+                var targetPlayer = m_PlayerGhostLookup[targetEntity];
+                var targetController = EntityManager
+                    .GetComponentObject<PlayerControllerLink>(targetEntity)?.Controller;
+                if (targetController == null)
+                {
+                    continue;
+                }
+
+                targetController.GetCurrentHitboxCapsule(
+                    targetPlayer.ControllerState.CurrentPosition,
+                    targetPlayer.ControllerState.CurrentRotation,
+                    out Vector3 targetPoint0, out Vector3 targetPoint1,
+                    out float targetRadius);
+                Vector3 targetCentre = (targetPoint0 + targetPoint1) * 0.5f;
+                float targetTop = Mathf.Max(targetPoint0.y, targetPoint1.y) +
+                                  targetRadius;
+                float verticalGap = sourceBottom - targetTop;
+                float maximumPenetration = sourceRadius + targetRadius;
+                if (verticalGap < -maximumPenetration || verticalGap > 0.45f)
+                {
+                    continue;
+                }
+
+                Vector2 horizontalOffset = new(
+                    sourceCentre.x - targetCentre.x,
+                    sourceCentre.z - targetCentre.z);
+                float horizontalDistanceSq = horizontalOffset.sqrMagnitude;
+                float contactRadius = sourceRadius + targetRadius;
+                if (horizontalDistanceSq > contactRadius * contactRadius ||
+                    horizontalDistanceSq >= closestHorizontalDistanceSq)
+                {
+                    continue;
+                }
+
+                closestHorizontalDistanceSq = horizontalDistanceSq;
+                stompTarget = targetEntity;
+            }
+
+            return stompTarget != Entity.Null;
         }
 
         private void ApplyRadialCardImpulse(Entity sourceEntity, int sourceNetworkId,
@@ -1491,10 +1668,15 @@ namespace Unity.MP_FPS
                     target.ValueRW.ControllerState.PreviousMovementType =
                         FirstPersonController.MovementType.Standing;
                     target.ValueRW.ControllerState.MovementType =
-                        FirstPersonController.MovementType.Falling;
+                        FirstPersonController.MovementType.Jumping;
                     target.ValueRW.ControllerState.JumpFallSpeed =
-                        Mathf.Max(2f, target.ValueRO.ControllerState.JumpFallSpeed);
+                        Mathf.Max(2f, direction.y * force);
                 }
+
+                // Apply a small immediate pop so a grounded capsule clears the
+                // ground probe before the remaining recoil is integrated.
+                target.ValueRW.AccumulatedMovement += direction *
+                    Mathf.Min(0.35f, force * 0.04f);
 
                 if (damage > 0f && distance <= damageRadius)
                 {
@@ -1817,6 +1999,13 @@ namespace Unity.MP_FPS
             ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
             ComponentLookup<GhostOwner> ownerLookup)
         {
+            if (LeaderboardManager.ServerInstance != null &&
+                LeaderboardManager.ServerInstance.Phase !=
+                Cards.RoundPhase.Combat)
+            {
+                return false;
+            }
+
             if (!ownerLookup.HasComponent(intendedTargetEntity) ||
                 !playerGhostLookup.HasComponent(intendedTargetEntity))
             {
@@ -1912,13 +2101,18 @@ namespace Unity.MP_FPS
             }
 
             float healthBeforeDamage = damagedPlayer.ValueRO.CurrentHealth;
-            float appliedDelta = -Mathf.Abs(signedSizeDelta);
-            if (appliedDelta < 0f)
+            float incomingDamage = Mathf.Abs(signedSizeDelta);
+            float healthDamage = ApplyGraceShieldDamage(damageTargetEntity,
+                incomingDamage);
+            bool damageFullyAbsorbed = incomingDamage > 0f &&
+                                       healthDamage <= 0f;
+            if (healthDamage > 0f)
             {
                 float damageReduction = GetIncomingDamageReduction(
                     damageTargetEntity, in damagedPlayer.ValueRO);
-                appliedDelta *= 1f - Mathf.Clamp01(damageReduction);
+                healthDamage *= 1f - Mathf.Clamp01(damageReduction);
             }
+            float appliedDelta = -healthDamage;
             damagedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
                 damagedPlayer.ValueRO.CurrentHealth + appliedDelta,
                 0f,
@@ -1934,7 +2128,9 @@ namespace Unity.MP_FPS
                     slowDuration);
             }
             damagedPlayer.ValueRW.ControllerState.IsHit = true;
-            damagedPlayer.ValueRW.LastDamageAmount = Mathf.Abs(appliedDelta);
+            damagedPlayer.ValueRW.LastDamageAmount = EncodeDamageDirection(
+                in damagedPlayer.ValueRO, damageSourceNetworkId,
+                damageFullyAbsorbed);
             damagedPlayer.ValueRW.LastHitTick = hitTick;
 
             if (Mathf.Abs(bleedDamagePerSecond) > 0f && bleedDuration > 0f &&
@@ -1960,8 +2156,8 @@ namespace Unity.MP_FPS
                     ref rescuedPlayer);
                 if (secondChanceActivated)
                 {
-                    rescuedPlayer.LastDamageAmount = Mathf.Max(0f,
-                        healthBeforeDamage - rescuedPlayer.CurrentHealth);
+                    rescuedPlayer.LastDamageAmount = EncodeDamageDirection(
+                        in rescuedPlayer, damageSourceNetworkId, false);
                     damagedPlayer.ValueRW = rescuedPlayer;
                     RemoveBleedEffects(damageTargetEntity);
                 }
@@ -2103,6 +2299,41 @@ namespace Unity.MP_FPS
             return true;
         }
 
+        private float EncodeDamageDirection(in PredictedPlayerGhost damagedPlayer,
+            int sourceNetworkId, bool blocked)
+        {
+            if (!m_PlayerEntitiesByNetworkId.TryGetValue(sourceNetworkId,
+                    out Entity sourceEntity) ||
+                !m_PlayerGhostLookup.HasComponent(sourceEntity))
+            {
+                return blocked ? -5f : 5f;
+            }
+
+            float3 direction = m_PlayerGhostLookup[sourceEntity]
+                                   .ControllerState.CurrentPosition -
+                               damagedPlayer.ControllerState.CurrentPosition;
+            direction.y = 0f;
+            direction = math.normalizesafe(direction);
+            if (math.lengthsq(direction) <= 0.001f)
+            {
+                return blocked ? -5f : 5f;
+            }
+
+            quaternion rotation = damagedPlayer.ControllerState.CurrentRotation;
+            float3 right = math.mul(rotation, new float3(1f, 0f, 0f));
+            float3 forward = math.mul(rotation, new float3(0f, 0f, 1f));
+            right.y = 0f;
+            forward.y = 0f;
+            right = math.normalizesafe(right, new float3(1f, 0f, 0f));
+            forward = math.normalizesafe(forward, new float3(0f, 0f, 1f));
+            float sideAmount = math.dot(direction, right);
+            float forwardAmount = math.dot(direction, forward);
+            int marker = math.abs(sideAmount) > math.abs(forwardAmount)
+                ? sideAmount < 0f ? 1 : 2
+                : forwardAmount >= 0f ? 3 : 4;
+            return blocked ? -marker : marker;
+        }
+
         public void ApplyRuntimeAreaDamage(Vector3 impactPosition, float radius,
             int attackerNetworkId, float signedSizeDelta,
             PlayerResizeEffect resizeEffect, float resizeEffectDuration,
@@ -2171,6 +2402,36 @@ namespace Unity.MP_FPS
             }
         }
 
+        private float ApplyGraceShieldDamage(Entity targetEntity,
+            float incomingDamage)
+        {
+            incomingDamage = Mathf.Max(0f, incomingDamage);
+            if (incomingDamage <= 0f ||
+                !EntityManager.HasComponent<GraceShieldState>(targetEntity))
+            {
+                return incomingDamage;
+            }
+
+            GraceShieldState graceShield = EntityManager
+                .GetComponentData<GraceShieldState>(targetEntity);
+            // Taking any damage keeps the shield out of recharge, including hits
+            // received while the shield is already empty.
+            graceShield.RechargeDelayRemaining =
+                GraceShieldState.DefaultRechargeDelay;
+            float absorbedDamage = Mathf.Min(
+                Mathf.Max(0f, graceShield.Amount), incomingDamage);
+            if (absorbedDamage <= 0f)
+            {
+                EntityManager.SetComponentData(targetEntity, graceShield);
+                return incomingDamage;
+            }
+
+            graceShield.Amount = Mathf.Max(0f,
+                graceShield.Amount - absorbedDamage);
+            EntityManager.SetComponentData(targetEntity, graceShield);
+            return incomingDamage - absorbedDamage;
+        }
+
         private void UpdateBleedEffects(float deltaTime, uint hitTick)
         {
             for (int i = m_BleedEffects.Count - 1; i >= 0; i--)
@@ -2191,13 +2452,22 @@ namespace Unity.MP_FPS
                 }
 
                 float previous = player.CurrentHealth;
-                float incomingDamageMultiplier = 1f -
-                    GetIncomingDamageReduction(effect.Target, in player);
+                float incomingDamage = Mathf.Abs(effect.DamagePerSecond) *
+                                       deltaTime;
+                float healthDamage = ApplyGraceShieldDamage(effect.Target,
+                    incomingDamage);
+                bool damageFullyAbsorbed = incomingDamage > 0f &&
+                                           healthDamage <= 0f;
+                if (healthDamage > 0f)
+                {
+                    healthDamage *= 1f - GetIncomingDamageReduction(
+                        effect.Target, in player);
+                }
                 player.CurrentHealth = Mathf.Clamp(
-                    player.CurrentHealth + effect.DamagePerSecond * deltaTime *
-                    incomingDamageMultiplier,
+                    player.CurrentHealth - healthDamage,
                     0f, player.MaxHealth);
-                player.LastDamageAmount = Mathf.Abs(previous - player.CurrentHealth);
+                player.LastDamageAmount = EncodeDamageDirection(in player,
+                    effect.SourceNetworkId, damageFullyAbsorbed);
                 player.LastHitTick = hitTick;
                 effect.Remaining -= deltaTime;
 
@@ -2209,8 +2479,8 @@ namespace Unity.MP_FPS
                     if (victimId >= 0 && TryActivateSecondChance(effect.Target,
                             victimId, ref player))
                     {
-                        player.LastDamageAmount = Mathf.Max(0f,
-                            previous - player.CurrentHealth);
+                        player.LastDamageAmount = EncodeDamageDirection(in player,
+                            effect.SourceNetworkId, false);
                         EntityManager.SetComponentData(effect.Target, player);
                         RemoveBleedEffects(effect.Target);
                         i = Mathf.Min(i, m_BleedEffects.Count);

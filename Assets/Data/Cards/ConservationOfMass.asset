@@ -8,7 +8,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 29
   m_DisplayName: Conservation of Mass
-  m_Description: Entering small form emits a four-metre shockwave. Extra stacks increase force. Cooldown is ten seconds.
+  m_Description: Entering small form emits a four-metre shockwave that launches enemies and deals 10 damage per stack, whether they are grounded or airborne. Cooldown is ten seconds.
   m_Icon: {fileID: 0}
   m_StrengthScore: 3
   m_BaseOfferWeight: 1
@@ -18,3 +18,4 @@ MonoBehaviour:
   m_ValuePerStack: 8
   m_EffectDurationSeconds: 10
   m_EffectRadiusMetres: 4
+  m_AreaDamagePerStack: 10

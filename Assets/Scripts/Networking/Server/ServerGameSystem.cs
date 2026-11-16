@@ -257,7 +257,16 @@ namespace Unity.MP_FPS
                     ? secondaryProfile.FireInterval
                     : 0f,
                 MaxReflectCharges = 1 + modifiers.ExtraReflectCharges,
-                ReflectCharges = 1 + modifiers.ExtraReflectCharges
+                ReflectCharges = 1 + modifiers.ExtraReflectCharges,
+                GraceShieldAmount = GraceShieldState.DefaultMaximum,
+                GraceShieldMaximum = GraceShieldState.DefaultMaximum,
+                GraceShieldRechargeDelayRemaining = 0f
+            });
+            ecb.AddComponent(playerEntity, new GraceShieldState
+            {
+                Amount = GraceShieldState.DefaultMaximum,
+                Maximum = GraceShieldState.DefaultMaximum,
+                RechargeDelayRemaining = 0f
             });
             ecb.AddComponent(playerEntity, new PlayerCharacterInitialized());
             ecb.SetComponentEnabled<PlayerCharacterInitialized>(playerEntity, false);

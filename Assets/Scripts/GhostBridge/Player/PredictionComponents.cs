@@ -82,6 +82,9 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public int MaxReflectCharges;
     [GhostField] public int SecondChanceUsesRemaining;
     [GhostField] public float SecondChanceInvulnerabilityTimeRemaining;
+    [GhostField] public float GraceShieldAmount;
+    [GhostField] public float GraceShieldMaximum;
+    [GhostField] public float GraceShieldRechargeDelayRemaining;
     [GhostField] public float MoveSlowPercent;
     [GhostField] public float MoveSlowTimeRemaining;
     [GhostField] public float3 RecoilVelocity;
@@ -93,6 +96,8 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public bool SecondaryIsReloading;
     
     [GhostField] public int CurrentAmmo;
+    // Directional hit marker: +/-1 left, +/-2 right, +/-3 front,
+    // +/-4 rear, +/-5 unknown. Negative values mean the hit was blocked.
     [GhostField] public float LastDamageAmount;
     [GhostField] public uint LastHitTick;
     [GhostField] public uint LastShotTick;
@@ -104,4 +109,20 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public uint LastReloadTick;
     [GhostField] public uint LastGrenadeShotTick;
     [GhostField] public float ReloadTimer;
+}
+
+// Server-authoritative rechargeable overshield. Only the current and maximum
+// amounts above are replicated for presentation; recharge timing stays private.
+public struct GraceShieldState : IComponentData
+{
+    // Two baseline 40-damage hits exhaust a full shield.
+    public const float DefaultMaximum = 80f;
+    public const float DefaultRechargeDelay = 3f;
+    public const float DefaultRechargeDuration = 3f;
+    public const float DefaultRechargePerSecond =
+        DefaultMaximum / DefaultRechargeDuration;
+
+    public float Amount;
+    public float Maximum;
+    public float RechargeDelayRemaining;
 }

@@ -6,6 +6,7 @@ Shader "MultiplayerJam/Reflect Energy Shield"
         _RimPower ("Rim Power", Range(0.5, 8)) = 2.4
         _PulseSpeed ("Pulse Speed", Range(0, 20)) = 9
         _WaveScale ("Wave Scale", Range(0, 30)) = 8
+        _ShellThickness ("Shell Thickness", Range(0, 0.08)) = 0
     }
 
     SubShader
@@ -50,13 +51,16 @@ Shader "MultiplayerJam/Reflect Energy Shield"
                 float _RimPower;
                 float _PulseSpeed;
                 float _WaveScale;
+                float _ShellThickness;
             CBUFFER_END
 
             Varyings Vert(Attributes input)
             {
                 Varyings output;
+                float3 expandedPositionOS = input.positionOS.xyz +
+                    normalize(input.normalOS) * _ShellThickness;
                 VertexPositionInputs positionInputs =
-                    GetVertexPositionInputs(input.positionOS.xyz);
+                    GetVertexPositionInputs(expandedPositionOS);
                 VertexNormalInputs normalInputs =
                     GetVertexNormalInputs(input.normalOS);
                 output.positionHCS = positionInputs.positionCS;

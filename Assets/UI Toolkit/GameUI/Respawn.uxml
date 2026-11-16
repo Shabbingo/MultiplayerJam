@@ -7,6 +7,14 @@
                     <ui:Label text="Respawning in X..." name="RespawnMessage" picking-mode="Ignore" />
                 </ui:VisualElement>
             </ui:VisualElement>
+            <ui:VisualElement name="LobbyPanel" class="lobby-panel">
+                <ui:Label text="MATCH LOBBY" name="LobbyTitle" class="lobby-title" picking-mode="Ignore"/>
+                <ui:Label text="SESSION" name="LobbySession" class="lobby-session" picking-mode="Ignore"/>
+                <ui:Label text="PLAYERS 0" name="LobbyPlayerCount" class="lobby-player-count" picking-mode="Ignore"/>
+                <ui:Label text="Waiting for players..." name="LobbyPlayerList" class="lobby-player-list" picking-mode="Ignore"/>
+                <ui:Label text="WAITING FOR HOST" name="LobbyStatus" class="lobby-status" picking-mode="Ignore"/>
+                <ui:Button text="START MATCH" name="LobbyStartButton" class="lobby-start-button"/>
+            </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

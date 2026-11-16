@@ -1,3 +1,4 @@
+using Gameplay.Leaderboard;
 using Unity.Entities;
 using Unity.MP_FPS;
 using Unity.Mathematics;
@@ -77,6 +78,18 @@ public partial class ClientInputReaderSystem : SystemBase
                 var controls = (InputSystem_Actions)user.actions;
 
                 var playerInput = new PlayerInput();
+
+                if (LeaderboardManager.ClientInstance?.BlocksGameplayInput == true)
+                {
+                    // UI Toolkit still receives mouse input, but no gameplay input
+                    // reaches prediction or the server while the lobby is open.
+                    _shrinkInputHeld = false;
+                    _growInputHeld = false;
+                    playerInput.LookYawPitchDegrees = _accumulatedLook;
+                    input.ValueRW.SetInput(0, playerInput);
+                    movementInput.ValueRW.SetInput(0, playerInput);
+                    continue;
+                }
 
                 ProcessGameplayInput(controls, ref playerInput);
 

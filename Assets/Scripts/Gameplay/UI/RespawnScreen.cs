@@ -1,6 +1,8 @@
 ﻿using Unity.Entities;
+using Gameplay.Leaderboard;
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Unity.Collections;
 using Unity.NetCode;
 using UnityEngine;
@@ -15,6 +17,13 @@ namespace Unity.MP_FPS.UI
         public Camera RespawnCamera;
         private VisualElement m_RespawnScreen;
         private Label m_RespawnTimerLabel;
+        private VisualElement m_RespawnContent;
+        private VisualElement m_LobbyPanel;
+        private Label m_LobbySessionLabel;
+        private Label m_LobbyPlayerCountLabel;
+        private Label m_LobbyPlayerListLabel;
+        private Label m_LobbyStatusLabel;
+        private Button m_LobbyStartButton;
 
         private bool m_IsRespawning;
         private uint m_LastRespawnSequence;
@@ -27,6 +36,7 @@ namespace Unity.MP_FPS.UI
         private Quaternion m_LastPlayerCameraRotation = Quaternion.identity;
         private bool m_HasLastPlayerCameraPose;
         private bool m_WasSpectating;
+        private bool m_WasShowingLobby;
         private readonly List<SpectatorTarget> m_SpectatorTargets = new();
 
         private readonly struct SpectatorTarget
@@ -57,6 +67,17 @@ namespace Unity.MP_FPS.UI
         {
             m_RespawnScreen = GetComponent<UIDocument>().rootVisualElement;
             m_RespawnTimerLabel = m_RespawnScreen.Q<Label>("RespawnMessage");
+            m_RespawnContent = m_RespawnScreen.Q<VisualElement>("UIWrapper");
+            m_LobbyPanel = m_RespawnScreen.Q<VisualElement>("LobbyPanel");
+            m_LobbySessionLabel = m_RespawnScreen.Q<Label>("LobbySession");
+            m_LobbyPlayerCountLabel = m_RespawnScreen.Q<Label>("LobbyPlayerCount");
+            m_LobbyPlayerListLabel = m_RespawnScreen.Q<Label>("LobbyPlayerList");
+            m_LobbyStatusLabel = m_RespawnScreen.Q<Label>("LobbyStatus");
+            m_LobbyStartButton = m_RespawnScreen.Q<Button>("LobbyStartButton");
+            if (m_LobbyStartButton != null)
+            {
+                m_LobbyStartButton.clicked += OnLobbyStartClicked;
+            }
             m_RespawnScreen.style.display = DisplayStyle.None;
             m_IsRespawning = false;
             m_LastRespawnSequence = ClientRespawnState.Sequence;
@@ -66,9 +87,19 @@ namespace Unity.MP_FPS.UI
 
         private void OnDisable()
         {
+            if (m_LobbyStartButton != null)
+            {
+                m_LobbyStartButton.clicked -= OnLobbyStartClicked;
+            }
             m_IsRespawning = false;
             if (m_SpectatorAudioListener != null) m_SpectatorAudioListener.enabled = false;
             RespawnCamera.gameObject.SetActive(false);
+            if (m_WasShowingLobby)
+            {
+                UnityEngine.Cursor.lockState = CursorLockMode.None;
+                UnityEngine.Cursor.visible = true;
+                m_WasShowingLobby = false;
+            }
         }
 
         void LateUpdate()
@@ -80,8 +111,18 @@ namespace Unity.MP_FPS.UI
                 if (m_SpectatorAudioListener != null) m_SpectatorAudioListener.enabled = false;
                 m_IsRespawning = false;
                 m_WasSpectating = false;
+                HideLobby(false);
                 return;
             }
+
+            LeaderboardManager roundManager = LeaderboardManager.ClientInstance;
+            if (roundManager != null && roundManager.IsWaitingInLobby)
+            {
+                ShowLobby(roundManager);
+                return;
+            }
+
+            HideLobby(true);
 
             CachePlayerCameraPose();
             bool isSpectating = UpdateSpectatorCamera();
@@ -134,7 +175,13 @@ namespace Unity.MP_FPS.UI
 
             if (m_RespawnTimerLabel != null)
             {
-                if (isSpectating && m_SpectatorTargets.Count > 0)
+                if (roundManager != null && roundManager.IsPreparingRound)
+                {
+                    m_RespawnTimerLabel.text =
+                        $"ROUND {roundManager.CurrentRound} STARTING IN " +
+                        $"{Mathf.CeilToInt(roundManager.RoundStartTimeRemaining)}";
+                }
+                else if (isSpectating && m_SpectatorTargets.Count > 0)
                 {
                     SpectatorTarget target = m_SpectatorTargets[m_SpectatorIndex];
                     string prefix = ClientRespawnState.IsRespawning
@@ -153,6 +200,115 @@ namespace Unity.MP_FPS.UI
                     m_RespawnTimerLabel.text = "WAITING FOR NEXT ROUND";
                 }
             }
+        }
+
+        private void ShowLobby(LeaderboardManager roundManager)
+        {
+            m_RespawnScreen.style.display = DisplayStyle.Flex;
+            if (m_RespawnContent != null)
+            {
+                m_RespawnContent.style.display = DisplayStyle.None;
+            }
+            if (m_LobbyPanel != null)
+            {
+                m_LobbyPanel.style.display = DisplayStyle.Flex;
+            }
+
+            RespawnCamera.gameObject.SetActive(false);
+            if (m_SpectatorAudioListener != null)
+            {
+                m_SpectatorAudioListener.enabled = false;
+            }
+
+            // Reassert this every frame because the player camera/controller may
+            // otherwise recapture the pointer after the lobby first appears.
+            UnityEngine.Cursor.lockState = CursorLockMode.None;
+            UnityEngine.Cursor.visible = true;
+            m_WasShowingLobby = true;
+
+            List<LeaderboardManager.PlayerScoreEntry> players =
+                roundManager.GetScores();
+            players.Sort((left, right) =>
+                left.NetworkId.CompareTo(right.NetworkId));
+            int hostNetworkId = players.Count > 0 ? players[0].NetworkId : -1;
+            var roster = new StringBuilder();
+            foreach (LeaderboardManager.PlayerScoreEntry player in players)
+            {
+                bool isHost = player.NetworkId == hostNetworkId;
+                bool isLocal = player.NetworkId == roundManager.LocalNetworkId;
+                roster.Append(isHost ? "★ " : "• ");
+                roster.Append(player.PlayerName.ToString());
+                if (isHost) roster.Append("  [HOST]");
+                if (isLocal) roster.Append("  [YOU]");
+                roster.AppendLine();
+            }
+
+            if (m_LobbyPlayerCountLabel != null)
+            {
+                m_LobbyPlayerCountLabel.text =
+                    $"PLAYERS  {players.Count} / {GameManager.MaxPlayer}";
+            }
+            if (m_LobbyPlayerListLabel != null)
+            {
+                m_LobbyPlayerListLabel.text = players.Count > 0
+                    ? roster.ToString().TrimEnd()
+                    : "Waiting for players...";
+            }
+
+            string sessionCode = GameManager.GameConnection?.Session?.Code;
+            if (string.IsNullOrWhiteSpace(sessionCode))
+            {
+                sessionCode = ConnectionSettings.Instance.SessionCode;
+            }
+            if (m_LobbySessionLabel != null)
+            {
+                m_LobbySessionLabel.text = string.IsNullOrWhiteSpace(sessionCode)
+                    ? "DIRECT CONNECTION LOBBY"
+                    : $"SESSION CODE  {sessionCode}";
+            }
+
+            bool isHostClient = roundManager.IsLocalLobbyHost;
+            bool canStart = roundManager.CanLocalPlayerStartLobby;
+            if (m_LobbyStartButton != null)
+            {
+                m_LobbyStartButton.style.display = isHostClient
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+                m_LobbyStartButton.SetEnabled(canStart);
+            }
+            if (m_LobbyStatusLabel != null)
+            {
+                m_LobbyStatusLabel.text = isHostClient
+                    ? canStart
+                        ? "ALL CONNECTED — START WHEN EVERYONE IS READY"
+                        : "WAITING FOR AT LEAST 2 PLAYERS"
+                    : "WAITING FOR THE HOST TO START THE MATCH";
+            }
+        }
+
+        private void HideLobby(bool lockCursorForGame)
+        {
+            if (m_LobbyPanel != null)
+            {
+                m_LobbyPanel.style.display = DisplayStyle.None;
+            }
+            if (m_RespawnContent != null)
+            {
+                m_RespawnContent.style.display = DisplayStyle.Flex;
+            }
+            if (!m_WasShowingLobby) return;
+
+            m_WasShowingLobby = false;
+            if (lockCursorForGame)
+            {
+                UnityEngine.Cursor.lockState = CursorLockMode.Locked;
+                UnityEngine.Cursor.visible = false;
+            }
+        }
+
+        private static void OnLobbyStartClicked()
+        {
+            LeaderboardManager.ClientInstance?.RequestLobbyStart();
         }
 
         private bool UpdateSpectatorCamera()

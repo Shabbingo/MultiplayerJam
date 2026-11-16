@@ -1,5 +1,6 @@
 // #define PREDICTION_DEBUG_LOGGING
 
+using Gameplay.Leaderboard;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -200,6 +201,17 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                 // commands.Add(inputCommand);
             }
             //}
+        }
+
+        if (LeaderboardManager.ClientInstance?.BlocksGameplayInput == true)
+        {
+            for (int commandIndex = 0; commandIndex < commands.Length;
+                 commandIndex++)
+            {
+                ClientCommandInput commandInput = commands[commandIndex];
+                commandInput.SuppressGameplayInput();
+                commands[commandIndex] = commandInput;
+            }
         }
 
         var allowTickBatching = AllowPredictedTickBatching();

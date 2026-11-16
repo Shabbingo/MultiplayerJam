@@ -140,4 +140,15 @@ public struct ClientCommandInput : ICommandData
     {
         PlayerInput = clientInput.PlayerInput;
     }
+
+    public void SuppressGameplayInput()
+    {
+        // Keep the last replicated view direction stable while removing every
+        // action that can move, resize, shield, reload, or fire a weapon.
+        float2 lookYawPitchDegrees = PlayerInput.LookYawPitchDegrees;
+        PlayerInput = new PlayerInput
+        {
+            LookYawPitchDegrees = lookYawPitchDegrees
+        };
+    }
 }

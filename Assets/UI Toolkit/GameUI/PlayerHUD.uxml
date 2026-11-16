@@ -19,7 +19,9 @@
                 <ui:VisualElement name="reflect-cooldown-bottom" class="reflect-cooldown-segment" picking-mode="Ignore"/>
                 <ui:VisualElement name="reflect-cooldown-left" class="reflect-cooldown-segment" picking-mode="Ignore"/>
             </ui:VisualElement>
+            <ui:ProgressBar value="80" high-value="80" title="OVERSHIELD" name="grace-shield-bar" class="kits-progress-bar"/>
             <ui:ProgressBar value="63.8" title="HEALTH" name="player-health-bar" class="kits-progress-bar"/>
+            <ui:Label name="grace-shield-label" text="OVERSHIELD 80 / 80" picking-mode="Ignore"/>
             <ui:Label name="reflect-charge-label" text="REFLECT 1 / 1" picking-mode="Ignore" style="position: absolute; right: 10px; top: 7px; color: white; font-size: 11px; -unity-font-style: bold;"/>
         </ui:VisualElement>
         <ui:ProgressBar name="player-stamina-bar" low-value="0" high-value="5" value="5" title="SHRINK" class="kits-progress-bar kits-shrink-resource-bar"/>
@@ -27,5 +29,11 @@
     </ui:VisualElement>
     <ui:VisualElement name="reticle-container" picking-mode="Ignore">
         <ui:VisualElement name="player-reticle" picking-mode="Ignore"/>
+    </ui:VisualElement>
+    <ui:VisualElement name="damage-indicator-layer" picking-mode="Ignore">
+        <ui:VisualElement name="damage-indicator-left" picking-mode="Ignore" class="damage-indicator damage-indicator-side damage-indicator-left"/>
+        <ui:VisualElement name="damage-indicator-right" picking-mode="Ignore" class="damage-indicator damage-indicator-side damage-indicator-right"/>
+        <ui:VisualElement name="damage-indicator-front" picking-mode="Ignore" class="damage-indicator damage-indicator-horizontal damage-indicator-front"/>
+        <ui:VisualElement name="damage-indicator-rear" picking-mode="Ignore" class="damage-indicator damage-indicator-horizontal damage-indicator-rear"/>
     </ui:VisualElement>
 </ui:UXML>

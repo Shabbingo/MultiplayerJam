@@ -99,6 +99,8 @@ namespace Unity.MP_FPS.Cards
         private float m_SecondaryEffectRadiusMetres;
         [SerializeField, Min(0f), Tooltip("Additional base-damage percentage per stack. 0.10 means +10%.")]
         private float m_DamagePercentPerStack;
+        [SerializeField, Min(0f), Tooltip("Flat area damage dealt per stack by card-triggered shockwaves.")]
+        private float m_AreaDamagePerStack;
         [SerializeField, Min(0f), Tooltip("Multiplier applied to base damage while this card is active.")]
         private float m_BaseDamageMultiplier = 1f;
         [SerializeField, Min(0f), Tooltip("Fire-interval multiplier applied per stack. Values below one increase fire rate.")]
@@ -152,6 +154,7 @@ namespace Unity.MP_FPS.Cards
         public float EffectRadiusMetres => m_EffectRadiusMetres;
         public float SecondaryEffectRadiusMetres => m_SecondaryEffectRadiusMetres;
         public float DamagePercentPerStack => m_DamagePercentPerStack;
+        public float AreaDamagePerStack => m_AreaDamagePerStack;
         public float BaseDamageMultiplier => m_BaseDamageMultiplier;
         public float FireIntervalMultiplierPerStack =>
             m_FireIntervalMultiplierPerStack;
@@ -196,6 +199,7 @@ namespace Unity.MP_FPS.Cards
             m_SecondaryEffectRadiusMetres = Mathf.Max(0f,
                 m_SecondaryEffectRadiusMetres);
             m_DamagePercentPerStack = Mathf.Max(0f, m_DamagePercentPerStack);
+            m_AreaDamagePerStack = Mathf.Max(0f, m_AreaDamagePerStack);
             m_BaseDamageMultiplier = Mathf.Max(0f, m_BaseDamageMultiplier);
             m_FireIntervalMultiplierPerStack = Mathf.Max(0f,
                 m_FireIntervalMultiplierPerStack);

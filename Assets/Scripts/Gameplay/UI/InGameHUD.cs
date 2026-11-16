@@ -23,6 +23,14 @@ namespace Unity.MP_FPS
         private VisualElement m_ReflectCooldownLeft;
         private VisualElement m_ReflectReadyGlow;
         private Label m_ReflectChargeLabel;
+        private Label m_GraceShieldLabel;
+        private ProgressBar m_GraceShieldBar;
+        private VisualElement m_DamageIndicatorLeft;
+        private VisualElement m_DamageIndicatorRight;
+        private VisualElement m_DamageIndicatorFront;
+        private VisualElement m_DamageIndicatorRear;
+        private VisualElement[] m_DamageIndicators;
+        private bool[] m_ActiveDamageIndicators;
         private ProgressBar m_SelfResizeChargeBar;
         private ProgressBar m_ShrinkAmmoBar;
         private ProgressBar m_GrowAmmoBar;
@@ -35,9 +43,12 @@ namespace Unity.MP_FPS
 
         // UI-side timer to ensure shot feedback is visible for a minimum duration.
         private float m_shotFeedbackTimer = 0f;
+        private uint m_LastProcessedHitTick;
+        private float m_DamageIndicatorTimer;
 
         // The reticle will stay white for at least 100ms after a shot.
         private const float k_ShotFeedbackDuration = 0.1f;
+        private const float k_DamageIndicatorDuration = 0.75f;
         private static readonly Color k_HealthBarColor = new Color(0.29f, 0.83f, 0.43f, 0.75f);
         private const string k_CrossReticleClass = "kits-reticle-cross";
         private const string k_TCrossReticleClass = "kits-reticle-tcross";
@@ -63,6 +74,24 @@ namespace Unity.MP_FPS
             m_ReflectCooldownLeft = m_RootElement.Q<VisualElement>("reflect-cooldown-left");
             m_ReflectReadyGlow = m_RootElement.Q<VisualElement>("reflect-ready-glow");
             m_ReflectChargeLabel = m_RootElement.Q<Label>("reflect-charge-label");
+            m_GraceShieldLabel = m_RootElement.Q<Label>("grace-shield-label");
+            m_GraceShieldBar = m_RootElement.Q<ProgressBar>("grace-shield-bar");
+            m_DamageIndicatorLeft = m_RootElement.Q<VisualElement>(
+                "damage-indicator-left");
+            m_DamageIndicatorRight = m_RootElement.Q<VisualElement>(
+                "damage-indicator-right");
+            m_DamageIndicatorFront = m_RootElement.Q<VisualElement>(
+                "damage-indicator-front");
+            m_DamageIndicatorRear = m_RootElement.Q<VisualElement>(
+                "damage-indicator-rear");
+            m_DamageIndicators = new[]
+            {
+                m_DamageIndicatorLeft,
+                m_DamageIndicatorRight,
+                m_DamageIndicatorFront,
+                m_DamageIndicatorRear
+            };
+            m_ActiveDamageIndicators = new bool[m_DamageIndicators.Length];
             if (m_HealthBar != null)
             {
                 m_PlayerHealthBarFill = m_HealthBar.Q<VisualElement>(null, "unity-progress-bar__progress");
@@ -141,7 +170,45 @@ namespace Unity.MP_FPS
 
             m_ReflectShieldFrame?.EnableInClassList(
                 "reflect-shield-active", playerData.ReflectShieldTimeRemaining > 0f);
+            bool hasGraceShield = playerData.GraceShieldMaximum > 0f;
+            bool graceShieldActive = hasGraceShield &&
+                                     playerData.GraceShieldAmount > 0f;
+            m_ReflectShieldFrame?.EnableInClassList(
+                "grace-shield-active", graceShieldActive);
+            if (m_GraceShieldBar != null)
+            {
+                m_GraceShieldBar.style.display = hasGraceShield
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+                m_GraceShieldBar.highValue = Mathf.Max(1f,
+                    playerData.GraceShieldMaximum);
+                m_GraceShieldBar.value = playerData.GraceShieldAmount;
+            }
+            if (m_GraceShieldLabel != null)
+            {
+                m_GraceShieldLabel.style.display = hasGraceShield
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+                if (hasGraceShield)
+                {
+                    if (playerData.GraceShieldAmount <= 0f &&
+                        playerData.GraceShieldRechargeDelayRemaining > 0f)
+                    {
+                        m_GraceShieldLabel.text =
+                            $"OVERSHIELD BREAK " +
+                            $"{playerData.GraceShieldRechargeDelayRemaining:0.0}s";
+                    }
+                    else
+                    {
+                        m_GraceShieldLabel.text =
+                            $"OVERSHIELD " +
+                            $"{Mathf.CeilToInt(playerData.GraceShieldAmount)} / " +
+                            $"{Mathf.CeilToInt(playerData.GraceShieldMaximum)}";
+                    }
+                }
+            }
             UpdateReflectCooldownWheel(in playerData, in modifiers);
+            UpdateDamageIndicator(in playerData);
 
             // Update Health Bar
             if (m_HealthBar != null)
@@ -223,6 +290,93 @@ namespace Unity.MP_FPS
             UpdateReticleVisual(playerData, in modifiers);
         }
 
+        private void UpdateDamageIndicator(in PredictedPlayerGhost playerData)
+        {
+            if (m_DamageIndicators == null)
+            {
+                return;
+            }
+
+            if (playerData.LastHitTick != 0 &&
+                playerData.LastHitTick != m_LastProcessedHitTick)
+            {
+                m_LastProcessedHitTick = playerData.LastHitTick;
+                HideDamageIndicators();
+
+                bool damageWasBlocked = playerData.LastDamageAmount < 0f;
+                int directionMarker = Mathf.RoundToInt(
+                    Mathf.Abs(playerData.LastDamageAmount));
+                if (directionMarker >= 1 && directionMarker <= 4)
+                {
+                    ShowDamageIndicator(directionMarker - 1, damageWasBlocked);
+                }
+                else
+                {
+                    ShowAllDamageIndicators(damageWasBlocked);
+                }
+
+                m_DamageIndicatorTimer = k_DamageIndicatorDuration;
+            }
+
+            if (m_DamageIndicatorTimer <= 0f)
+            {
+                HideDamageIndicators();
+                return;
+            }
+
+            m_DamageIndicatorTimer = Mathf.Max(0f,
+                m_DamageIndicatorTimer - Time.unscaledDeltaTime);
+            float opacity = Mathf.Clamp01(
+                m_DamageIndicatorTimer / k_DamageIndicatorDuration);
+            for (int i = 0; i < m_DamageIndicators.Length; i++)
+            {
+                if (m_ActiveDamageIndicators[i] && m_DamageIndicators[i] != null)
+                {
+                    m_DamageIndicators[i].style.opacity = opacity;
+                }
+            }
+        }
+
+        private void ShowDamageIndicator(int index, bool damageWasBlocked)
+        {
+            if (index < 0 || index >= m_DamageIndicators.Length ||
+                m_DamageIndicators[index] == null)
+            {
+                return;
+            }
+
+            VisualElement indicator = m_DamageIndicators[index];
+            m_ActiveDamageIndicators[index] = true;
+            indicator.EnableInClassList("damage-blocked", damageWasBlocked);
+            indicator.style.display = DisplayStyle.Flex;
+            indicator.style.opacity = 1f;
+        }
+
+        private void ShowAllDamageIndicators(bool damageWasBlocked)
+        {
+            for (int i = 0; i < m_DamageIndicators.Length; i++)
+            {
+                ShowDamageIndicator(i, damageWasBlocked);
+            }
+        }
+
+        private void HideDamageIndicators()
+        {
+            if (m_DamageIndicators == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < m_DamageIndicators.Length; i++)
+            {
+                m_ActiveDamageIndicators[i] = false;
+                if (m_DamageIndicators[i] != null)
+                {
+                    m_DamageIndicators[i].style.display = DisplayStyle.None;
+                }
+            }
+        }
+
         private static void UpdateAbilityAmmoDisplay(Label label, ProgressBar bar,
             string abilityName, int ammo, int capacity)
         {
@@ -262,7 +416,8 @@ namespace Unity.MP_FPS
                 Mathf.Clamp01(cooldownProgress * 4f - 3f));
 
             bool isReady = playerData.ReflectCharges > 0;
-            string secondChanceStatus = modifiers.SecondChance > 0
+            string secondChanceStatus = modifiers.SecondChance > 0 &&
+                                        playerData.SecondChanceUsesRemaining >= 0
                 ? $"\nSECOND CHANCE: {playerData.SecondChanceUsesRemaining} / " +
                   $"{modifiers.SecondChance}"
                 : string.Empty;

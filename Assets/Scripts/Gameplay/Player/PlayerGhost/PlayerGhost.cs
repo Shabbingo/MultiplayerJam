@@ -31,6 +31,10 @@ namespace Unity.MP_FPS
         [SerializeField] private Color m_ReflectShieldColour = new(0.12f, 0.68f, 1f, 0.42f);
         [SerializeField] private Color m_NullFieldShieldColour = new(0.62f, 0.22f, 1f, 0.5f);
         [SerializeField] private Color m_SecondChanceGlowColour = new(1f, 0.68f, 0.08f, 1f);
+        [Header("Overshield Silhouette")]
+        [SerializeField] private Color m_GraceShieldColour = new(1f, 0.68f, 0.08f, 0.68f);
+        [SerializeField, Range(0.001f, 0.08f)]
+        private float m_GraceShieldShellThickness = 0.018f;
         [SerializeField] private Vector3 m_ReflectShieldOffset = new(0f, 1f, 0f);
         [SerializeField] private Vector3 m_ReflectShieldScale = new(1.5f, 2.4f, 1.5f);
         [field: SerializeField] public Transform CameraTarget { get; private set; }
@@ -84,6 +88,8 @@ namespace Unity.MP_FPS
         private Light m_ReflectGlow;
         private MeshRenderer m_ReflectShieldRenderer;
         private Material m_ReflectShieldMaterial;
+        private Material m_GraceShieldMaterial;
+        private readonly List<OvershieldRendererPair> m_GraceShieldRenderers = new();
         private readonly List<MirrorSnapshot> m_MirrorHistory = new();
         private readonly List<MirrorDecoy> m_MirrorDecoys = new();
         private bool m_WasReflectShieldActive;
@@ -102,6 +108,12 @@ namespace Unity.MP_FPS
             public GameObject Instance;
             public float MovementDelay;
             public float ExpiresAt;
+        }
+
+        private sealed class OvershieldRendererPair
+        {
+            public Renderer Source;
+            public Renderer Shell;
         }
 
         private CinemachineTargetGroup m_TargetGroup;
@@ -270,6 +282,7 @@ namespace Unity.MP_FPS
             {
                 ConfigureWizardVisuals();
                 CreateReflectGlow();
+                CreateGraceShieldSilhouette();
             }
 
             if (Role != MultiplayerRole.Server &&
@@ -394,6 +407,160 @@ namespace Unity.MP_FPS
             m_ReflectShieldRenderer.enabled = false;
         }
 
+        private void CreateGraceShieldSilhouette()
+        {
+            Shader shieldShader = Shader.Find("MultiplayerJam/Reflect Energy Shield");
+            if (shieldShader == null)
+            {
+                Debug.LogWarning("Overshield silhouette shader could not be found.");
+                return;
+            }
+
+            m_GraceShieldMaterial = new Material(shieldShader)
+            {
+                name = "Runtime Yellow Overshield Silhouette Material"
+            };
+            m_GraceShieldMaterial.SetColor("_ShieldColor", m_GraceShieldColour);
+            m_GraceShieldMaterial.SetFloat("_RimPower", 1.65f);
+            m_GraceShieldMaterial.SetFloat("_PulseSpeed", 5f);
+            m_GraceShieldMaterial.SetFloat("_WaveScale", 5f);
+            m_GraceShieldMaterial.SetFloat("_ShellThickness",
+                m_GraceShieldShellThickness);
+
+            CreateGraceShieldSilhouette(m_OwnerVisuals);
+            CreateGraceShieldSilhouette(m_OtherPlayerVisuals);
+        }
+
+        private void CreateGraceShieldSilhouette(GameObject visualRoot)
+        {
+            if (visualRoot == null || m_GraceShieldMaterial == null)
+            {
+                return;
+            }
+
+            // Take a snapshot before adding shells so they cannot be cloned again.
+            Renderer[] sourceRenderers =
+                visualRoot.GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer sourceRenderer in sourceRenderers)
+            {
+                Renderer shellRenderer = sourceRenderer switch
+                {
+                    SkinnedMeshRenderer skinnedRenderer =>
+                        CreateSkinnedOvershieldShell(skinnedRenderer),
+                    MeshRenderer meshRenderer =>
+                        CreateMeshOvershieldShell(meshRenderer),
+                    _ => null
+                };
+
+                if (shellRenderer == null)
+                {
+                    continue;
+                }
+
+                ConfigureOvershieldShell(sourceRenderer, shellRenderer);
+                m_GraceShieldRenderers.Add(new OvershieldRendererPair
+                {
+                    Source = sourceRenderer,
+                    Shell = shellRenderer
+                });
+            }
+        }
+
+        private SkinnedMeshRenderer CreateSkinnedOvershieldShell(
+            SkinnedMeshRenderer source)
+        {
+            if (source.sharedMesh == null)
+            {
+                return null;
+            }
+
+            GameObject shellObject = CreateOvershieldShellObject(source);
+            var shell = shellObject.AddComponent<SkinnedMeshRenderer>();
+            shell.sharedMesh = source.sharedMesh;
+            shell.rootBone = source.rootBone;
+            shell.bones = source.bones;
+            shell.quality = source.quality;
+            shell.updateWhenOffscreen = source.updateWhenOffscreen;
+            Bounds shellBounds = source.localBounds;
+            shellBounds.Expand(m_GraceShieldShellThickness * 2f + 0.04f);
+            shell.localBounds = shellBounds;
+            return shell;
+        }
+
+        private MeshRenderer CreateMeshOvershieldShell(MeshRenderer source)
+        {
+            if (!source.TryGetComponent(out MeshFilter sourceFilter) ||
+                sourceFilter.sharedMesh == null)
+            {
+                return null;
+            }
+
+            GameObject shellObject = CreateOvershieldShellObject(source);
+            var shellFilter = shellObject.AddComponent<MeshFilter>();
+            shellFilter.sharedMesh = sourceFilter.sharedMesh;
+            return shellObject.AddComponent<MeshRenderer>();
+        }
+
+        private static GameObject CreateOvershieldShellObject(Renderer source)
+        {
+            var shellObject = new GameObject(
+                $"{source.gameObject.name} Overshield Silhouette");
+            shellObject.layer = source.gameObject.layer;
+            shellObject.transform.SetParent(source.transform, false);
+            shellObject.transform.localPosition = Vector3.zero;
+            shellObject.transform.localRotation = Quaternion.identity;
+            shellObject.transform.localScale = Vector3.one;
+            return shellObject;
+        }
+
+        private void ConfigureOvershieldShell(Renderer source, Renderer shell)
+        {
+            int materialCount = Mathf.Max(1, source.sharedMaterials.Length);
+            var shellMaterials = new Material[materialCount];
+            for (int i = 0; i < shellMaterials.Length; i++)
+            {
+                shellMaterials[i] = m_GraceShieldMaterial;
+            }
+
+            shell.sharedMaterials = shellMaterials;
+            shell.shadowCastingMode =
+                UnityEngine.Rendering.ShadowCastingMode.Off;
+            shell.receiveShadows = false;
+            shell.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            shell.reflectionProbeUsage =
+                UnityEngine.Rendering.ReflectionProbeUsage.Off;
+            shell.allowOcclusionWhenDynamic = false;
+            shell.sortingLayerID = source.sortingLayerID;
+            shell.sortingOrder = source.sortingOrder + 1;
+            shell.enabled = false;
+        }
+
+        private void UpdateGraceShieldSilhouette(bool active,
+            float shieldAmount, float shieldMaximum)
+        {
+            if (m_GraceShieldMaterial != null)
+            {
+                float strength = shieldMaximum > 0f
+                    ? Mathf.Clamp01(shieldAmount / shieldMaximum)
+                    : 1f;
+                Color colour = m_GraceShieldColour;
+                colour.a *= Mathf.Lerp(0.72f, 1f, strength);
+                m_GraceShieldMaterial.SetColor("_ShieldColor", colour);
+            }
+
+            foreach (OvershieldRendererPair pair in m_GraceShieldRenderers)
+            {
+                if (pair.Shell == null)
+                {
+                    continue;
+                }
+
+                pair.Shell.enabled = active && pair.Source != null &&
+                                     pair.Source.enabled &&
+                                     pair.Source.gameObject.activeInHierarchy;
+            }
+        }
+
         private static Transform FindDescendant(GameObject root, string childName)
         {
             if (root == null)
@@ -487,6 +654,10 @@ namespace Unity.MP_FPS
             {
                 Destroy(m_ReflectShieldMaterial);
             }
+            if (m_GraceShieldMaterial != null)
+            {
+                Destroy(m_GraceShieldMaterial);
+            }
 
             if (PlayerGhostManager.TryGetInstanceByRole(Role, out var playerManager))
             {
@@ -543,8 +714,12 @@ namespace Unity.MP_FPS
 
             var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
             bool reflectShieldActive = predictedPlayerGhost.ReflectShieldTimeRemaining > 0f;
-            bool secondChanceProtected =
+            bool graceShieldActive = predictedPlayerGhost.GraceShieldAmount > 0f;
+            bool secondChanceProtected = !graceShieldActive &&
                 predictedPlayerGhost.SecondChanceInvulnerabilityTimeRemaining > 0f;
+            UpdateGraceShieldSilhouette(graceShieldActive,
+                predictedPlayerGhost.GraceShieldAmount,
+                predictedPlayerGhost.GraceShieldMaximum);
             if (m_ReflectGlow != null)
             {
                 m_ReflectGlow.enabled = reflectShieldActive || secondChanceProtected;
