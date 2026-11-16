@@ -14,19 +14,36 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 35
   m_DisplayName: Grenade Launcher
-  m_Description: Converts the selected hand into a grenade launcher. Projectiles travel at 45% speed in a gravity-driven arc; extra stacks make the arc higher and heavier.
+  m_Description: Converts the selected hand into a grenade launcher. Projectiles
+    travel at 45% speed in a gravity-driven arc; extra stacks make the arc higher
+    and heavier.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_StrengthScore: 2
   m_BaseOfferWeight: 1
   m_Category: 1
   m_Kind: 37
   m_AllowedTargets: 3
   m_ValuePerStack: 1
+  m_EffectDurationSeconds: 0
   m_EffectRadiusMetres: 2
+  m_SecondaryEffectRadiusMetres: 0
+  m_DamagePercentPerStack: 0
+  m_AreaDamagePerStack: 0
   m_BaseDamageMultiplier: 1
+  m_FireIntervalMultiplierPerStack: 1
+  m_MovementSpeedMultiplierPerStack: 1
+  m_IncomingDamageMultiplierPerStack: 1
+  m_ReloadTimeMultiplierPerStack: 1
+  m_MinimumReloadMultiplier: 0.25
+  m_MagazineDeltaPerStack: 0
+  m_ProjectileScalePerStack: 0
   m_ProjectileSpeedMultiplierPerStack: 0.45
   m_LobUpwardSpeedPerStack: 8
   m_ProjectileGravityPerStack: 20
   m_ProjectileScaleMultiplierPerStack: 1
+  m_AoeRadiusAdjustmentPerStack: 0
   m_ExplosionRadiusMultiplierPerStack: 1
+  m_ScatterHalfAngleDegrees: 7.5
   m_BounceVelocityRetention: 1
+  m_DamageReductionPercent: 0
+  m_TeleportFreezeSeconds: 0.1

@@ -3,19 +3,47 @@
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8ea0d67bb85b448c8ea2f83f32a65fb1, type: 3}
   m_Name: Conservation of Mass
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 29
   m_DisplayName: Conservation of Mass
-  m_Description: Entering small form emits a four-metre shockwave that launches enemies and deals 10 damage per stack, whether they are grounded or airborne. Cooldown is ten seconds.
+  m_Description: Entering small form emits a four-metre shockwave that launches enemies
+    and deals 10 damage per stack, whether they are grounded or airborne. Cooldown
+    is ten seconds.
   m_Icon: {fileID: 0}
   m_StrengthScore: 3
   m_BaseOfferWeight: 1
   m_Category: 3
   m_Kind: 31
   m_AllowedTargets: 4
-  m_ValuePerStack: 8
+  m_ValuePerStack: 30
   m_EffectDurationSeconds: 10
-  m_EffectRadiusMetres: 4
+  m_EffectRadiusMetres: 7
+  m_SecondaryEffectRadiusMetres: 0
+  m_DamagePercentPerStack: 0
   m_AreaDamagePerStack: 10
+  m_BaseDamageMultiplier: 1
+  m_FireIntervalMultiplierPerStack: 1
+  m_MovementSpeedMultiplierPerStack: 1
+  m_IncomingDamageMultiplierPerStack: 1
+  m_ReloadTimeMultiplierPerStack: 1
+  m_MinimumReloadMultiplier: 0.25
+  m_MagazineDeltaPerStack: 0
+  m_ProjectileScalePerStack: 0
+  m_ProjectileSpeedMultiplierPerStack: 1
+  m_LobUpwardSpeedPerStack: 0
+  m_ProjectileGravityPerStack: 0
+  m_ProjectileScaleMultiplierPerStack: 1
+  m_AoeRadiusAdjustmentPerStack: 0
+  m_ExplosionRadiusMultiplierPerStack: 1
+  m_ScatterHalfAngleDegrees: 7.5
+  m_BounceVelocityRetention: 1
+  m_DamageReductionPercent: 0
+  m_TeleportFreezeSeconds: 0.1
