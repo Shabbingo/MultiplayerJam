@@ -65,6 +65,9 @@ namespace Unity.MP_FPS
             [GhostField] public int WallPenetrations;
             [GhostField] public float WallDamageRetention;
             [GhostField] public float GravityWellPullStrength;
+            [GhostField] public byte IsLobbedProjectile;
+            [GhostField] public float LobUpwardSpeed;
+            [GhostField] public float ProjectileGravity;
         }
 
         public class PredictedProjectileInfo
@@ -113,6 +116,9 @@ namespace Unity.MP_FPS
         private float _bounceVelocityRetention = 1f;
         private int _remainingWallPenetrations;
         private float _wallDamageRetention = 0.4f;
+        private bool _runtimeLobbedProjectile;
+        private float _runtimeLobUpwardSpeed;
+        private float _runtimeProjectileGravity;
 
         public void SetGuidedTarget(Vector3 targetPosition, bool isActive = true)
         {
@@ -129,7 +135,10 @@ namespace Unity.MP_FPS
         public void SetRuntimeProjectileProperties(float speed, float scale,
             bool growsOverDistance, int maxBounces, float growthPerMetre,
             float bounceVelocityRetention, int wallPenetrations = 0,
-            float wallDamageRetention = 0.4f)
+            float wallDamageRetention = 0.4f,
+            bool isLobbedProjectile = false,
+            float lobUpwardSpeed = 0f,
+            float projectileGravity = 0f)
         {
             _runtimeProjectileSpeed = Mathf.Max(0f, speed);
             _runtimeProjectileScale = Mathf.Max(0.1f, scale);
@@ -139,6 +148,9 @@ namespace Unity.MP_FPS
             _bounceVelocityRetention = Mathf.Clamp01(bounceVelocityRetention);
             _remainingWallPenetrations = Mathf.Max(0, wallPenetrations);
             _wallDamageRetention = Mathf.Clamp01(wallDamageRetention);
+            _runtimeLobbedProjectile = isLobbedProjectile;
+            _runtimeLobUpwardSpeed = Mathf.Max(0f, lobUpwardSpeed);
+            _runtimeProjectileGravity = Mathf.Max(0f, projectileGravity);
             transform.localScale = Vector3.one * _runtimeProjectileScale;
         }
 
@@ -161,6 +173,11 @@ namespace Unity.MP_FPS
                 projectileData.WallPenetrations);
             _wallDamageRetention = Mathf.Clamp01(
                 projectileData.WallDamageRetention);
+            _runtimeLobbedProjectile = projectileData.IsLobbedProjectile != 0;
+            _runtimeLobUpwardSpeed = Mathf.Max(0f,
+                projectileData.LobUpwardSpeed);
+            _runtimeProjectileGravity = Mathf.Max(0f,
+                projectileData.ProjectileGravity);
             transform.localScale = Vector3.one * _runtimeProjectileScale;
             ApplyServerMotionState(projectileData);
         }
@@ -266,13 +283,13 @@ namespace Unity.MP_FPS
                 ? _runtimeProjectileSpeed
                 : weaponData.ProjectileSpeed;
             _velocity = transform.forward * launchSpeed;
-            if (_runtimeHoming)
+            if (IsLobbedProjectile(weaponData))
+            {
+                _velocity += Vector3.up * GetLobUpwardSpeed(weaponData);
+            }
+            else if (_runtimeHoming)
             {
                 _velocity += Vector3.up * weaponData.GuidedLaunchUpwardSpeed;
-            }
-            else if (weaponData.IsLobbedProjectile)
-            {
-                _velocity += Vector3.up * weaponData.LobUpwardSpeed;
             }
 
             _motionInitialized = true;
@@ -305,10 +322,30 @@ namespace Unity.MP_FPS
                     _velocity = steeredDirection * speed;
                 }
             }
-            else if (weaponData.IsLobbedProjectile)
+            if (IsLobbedProjectile(weaponData))
             {
-                _velocity += Vector3.down * (weaponData.ProjectileGravity * deltaTime);
+                _velocity += Vector3.down *
+                    (GetProjectileGravity(weaponData) * deltaTime);
             }
+        }
+
+        private bool IsLobbedProjectile(WeaponData weaponData)
+        {
+            return _runtimeLobbedProjectile || weaponData.IsLobbedProjectile;
+        }
+
+        private float GetLobUpwardSpeed(WeaponData weaponData)
+        {
+            return _runtimeLobbedProjectile
+                ? _runtimeLobUpwardSpeed
+                : Mathf.Max(0f, weaponData.LobUpwardSpeed);
+        }
+
+        private float GetProjectileGravity(WeaponData weaponData)
+        {
+            return _runtimeLobbedProjectile
+                ? _runtimeProjectileGravity
+                : Mathf.Max(0f, weaponData.ProjectileGravity);
         }
 
         private bool HasClearLineOfSight(Vector3 toTarget)
@@ -366,7 +403,7 @@ namespace Unity.MP_FPS
             _collisionGraceTimer = Mathf.Max(0f, _collisionGraceTimer - deltaTime);
             Vector3 displacement = _velocity * deltaTime;
 
-            if ((weaponData.IsLobbedProjectile || _runtimeMaxBounces > 0) &&
+            if ((IsLobbedProjectile(weaponData) || _runtimeMaxBounces > 0) &&
                 _collisionGraceTimer <= 0f &&
                 displacement.sqrMagnitude > 0.000001f &&
                 UnityEngine.Physics.SphereCast(

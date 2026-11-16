@@ -10,3 +10,5 @@ MonoBehaviour:
   m_CardsPerOffer: 3
   m_SecondsPerDraftTurn: 20
   m_RoundStartDelay: 2
+  m_FoundationalBoostRounds: 3
+  m_FoundationalStartingWeightMultiplier: 3

@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Icon: {fileID: 0}
   m_StrengthScore: 3
   m_BaseOfferWeight: 1
+  m_Category: 3
   m_Kind: 20
   m_AllowedTargets: 4
   m_ValuePerStack: 0.5

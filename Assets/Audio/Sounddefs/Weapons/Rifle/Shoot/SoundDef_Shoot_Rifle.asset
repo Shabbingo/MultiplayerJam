@@ -40,14 +40,14 @@ MonoBehaviour:
     PitchMin: 0
     PitchMax: 400
   DistanceInfo:
-    VolumeDistMin: 1.5
-    VolumeDistMax: 30
+    VolumeDistMin: 5
+    VolumeDistMax: 60
     SpatialBlend: 1
     DopplerScale: 0
     VolumeRolloffMode: 1
     LPFRollOffCurveType: 4
     LPF_MinCutoff: 6000
-    LPF_MaxDistance: 32
+    LPF_MaxDistance: 60
     HPFRollOffCurveType: 0
     HPF_MinCutoff: 0
     HPF_MaxDistance: 0

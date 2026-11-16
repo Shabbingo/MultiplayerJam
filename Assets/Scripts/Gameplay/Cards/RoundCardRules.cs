@@ -21,9 +21,18 @@ namespace Unity.MP_FPS.Cards
         [SerializeField, Min(1f)] private float m_SecondsPerDraftTurn = 20f;
         [SerializeField, Min(0f)] private float m_RoundStartDelay = 2f;
 
+        [Header("Early Draft Weighting")]
+        [SerializeField, Min(0), Tooltip("Number of opening rounds in which Foundational cards receive an offer-weight bonus.")]
+        private int m_FoundationalBoostRounds = 3;
+        [SerializeField, Min(1f), Tooltip("Foundational offer-weight multiplier in round one. It smoothly returns to 1 after the boost rounds.")]
+        private float m_FoundationalStartingWeightMultiplier = 3f;
+
         public int RoundWinsToWin => m_RoundWinsToWin;
         public int CardsPerOffer => m_CardsPerOffer;
         public float SecondsPerDraftTurn => m_SecondsPerDraftTurn;
         public float RoundStartDelay => m_RoundStartDelay;
+        public int FoundationalBoostRounds => m_FoundationalBoostRounds;
+        public float FoundationalStartingWeightMultiplier =>
+            m_FoundationalStartingWeightMultiplier;
     }
 }

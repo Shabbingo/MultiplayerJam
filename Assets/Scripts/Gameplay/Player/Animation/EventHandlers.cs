@@ -14,6 +14,8 @@ namespace Unity.MP_FPS
         [NonSerialized] public bool onDoubleJump;
         [NonSerialized] public bool onJumpStart;
 
+        private float m_LastFootstepTime = float.NegativeInfinity;
+
         public void OnCharEvent(AnimationEvent e)
         {
             onFootDown = true;
@@ -36,8 +38,15 @@ namespace Unity.MP_FPS
         {
             if (onFootDown)
             {
-                GameManager.Instance.SoundSystem.CreateEmitter(footstep, transform);
                 onFootDown = false;
+
+                if (footstep != null &&
+                    Time.time - m_LastFootstepTime >= minFootstepInterval &&
+                    GameManager.Instance?.SoundSystem != null)
+                {
+                    m_LastFootstepTime = Time.time;
+                    GameManager.Instance.SoundSystem.CreateEmitter(footstep, transform);
+                }
             }
         }
     }

@@ -62,6 +62,8 @@ namespace Unity.MP_FPS.Cards
         [GhostField] public byte RightLastWord;
         [GhostField] public byte LeftBloodReload;
         [GhostField] public byte RightBloodReload;
+        [GhostField] public byte LeftGrenadeLauncher;
+        [GhostField] public byte RightGrenadeLauncher;
 
         public int GetStacks(CardModifierKind kind, ModifierTarget target)
         {
@@ -122,6 +124,8 @@ namespace Unity.MP_FPS.Cards
                 (CardModifierKind.LastWord, ModifierTarget.RightHand) => RightLastWord,
                 (CardModifierKind.BloodReload, ModifierTarget.LeftHand) => LeftBloodReload,
                 (CardModifierKind.BloodReload, ModifierTarget.RightHand) => RightBloodReload,
+                (CardModifierKind.GrenadeLauncher, ModifierTarget.LeftHand) => LeftGrenadeLauncher,
+                (CardModifierKind.GrenadeLauncher, ModifierTarget.RightHand) => RightGrenadeLauncher,
                 _ => 0
             };
         }
@@ -250,6 +254,10 @@ namespace Unity.MP_FPS.Cards
                     return Increment(ref LeftBloodReload);
                 case (CardModifierKind.BloodReload, ModifierTarget.RightHand):
                     return Increment(ref RightBloodReload);
+                case (CardModifierKind.GrenadeLauncher, ModifierTarget.LeftHand):
+                    return Increment(ref LeftGrenadeLauncher);
+                case (CardModifierKind.GrenadeLauncher, ModifierTarget.RightHand):
+                    return Increment(ref RightGrenadeLauncher);
                 default:
                     return false;
             }

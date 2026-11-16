@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ea0d67bb85b448c8ea2f83f32a65fb1, type: 3}
+  m_Name: Grenade Launcher
+  m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
+  m_CardId: 35
+  m_DisplayName: Grenade Launcher
+  m_Description: Converts the selected hand into a grenade launcher. Projectiles travel at 45% speed in a gravity-driven arc; extra stacks make the arc higher and heavier.
+  m_Icon: {fileID: 0}
+  m_StrengthScore: 3
+  m_BaseOfferWeight: 1
+  m_Category: 1
+  m_Kind: 37
+  m_AllowedTargets: 3
+  m_ValuePerStack: 1
+  m_EffectRadiusMetres: 2
+  m_BaseDamageMultiplier: 1
+  m_ProjectileSpeedMultiplierPerStack: 0.45
+  m_LobUpwardSpeedPerStack: 8
+  m_ProjectileGravityPerStack: 20
+  m_ProjectileScaleMultiplierPerStack: 1
+  m_ExplosionRadiusMultiplierPerStack: 1
+  m_BounceVelocityRetention: 1

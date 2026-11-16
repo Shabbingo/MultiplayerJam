@@ -19,6 +19,16 @@ namespace Unity.MP_FPS.Cards
         Right
     }
 
+    public enum CardCategory : byte
+    {
+        Unclassified,
+        Foundational,
+        BuildAround,
+        Synergy,
+        Utility,
+        Wildcard
+    }
+
     public enum CardModifierKind : byte
     {
         DamagePercent,
@@ -57,7 +67,8 @@ namespace Unity.MP_FPS.Cards
         TinyTerror,
         GravityWell,
         LastWord,
-        BloodReload
+        BloodReload,
+        GrenadeLauncher
     }
 
     [CreateAssetMenu(fileName = "CardModifier", menuName = "Multiplayer Jam/Card Modifier")]
@@ -72,6 +83,7 @@ namespace Unity.MP_FPS.Cards
         [Header("Drafting")]
         [SerializeField, Range(1, 5)] private int m_StrengthScore = 1;
         [SerializeField, Min(0.01f)] private float m_BaseOfferWeight = 1f;
+        [SerializeField] private CardCategory m_Category = CardCategory.Unclassified;
 
         [Header("Effect")]
         [SerializeField] private CardModifierKind m_Kind;
@@ -104,6 +116,10 @@ namespace Unity.MP_FPS.Cards
         private float m_ProjectileScalePerStack;
         [SerializeField, Min(0f), Tooltip("Projectile-speed multiplier applied per stack. 1.3 is 30% faster, 0.7 is 30% slower, and 1 leaves speed unchanged.")]
         private float m_ProjectileSpeedMultiplierPerStack = 1f;
+        [SerializeField, Min(0f), Tooltip("Upward launch velocity added per stack to a lobbed projectile.")]
+        private float m_LobUpwardSpeedPerStack;
+        [SerializeField, Min(0f), Tooltip("Downward acceleration added per stack to a lobbed projectile.")]
+        private float m_ProjectileGravityPerStack;
         [SerializeField, Min(0f), Tooltip("Projectile-scale multiplier per stack.")]
         private float m_ProjectileScaleMultiplierPerStack = 1f;
         [SerializeField, InspectorName("AOE Radius Adjustment Per Stack"),
@@ -122,6 +138,13 @@ namespace Unity.MP_FPS.Cards
         public Sprite Icon => m_Icon;
         public int StrengthScore => m_StrengthScore;
         public float BaseOfferWeight => m_BaseOfferWeight;
+        public CardCategory Category => m_Category;
+        public string CategoryDisplayName => m_Category switch
+        {
+            CardCategory.BuildAround => "Build Around",
+            CardCategory.Unclassified => "General",
+            _ => m_Category.ToString()
+        };
         public CardModifierKind Kind => m_Kind;
         public ModifierTarget AllowedTargets => m_AllowedTargets;
         public float ValuePerStack => m_ValuePerStack;
@@ -142,6 +165,8 @@ namespace Unity.MP_FPS.Cards
         public float ProjectileScalePerStack => m_ProjectileScalePerStack;
         public float ProjectileSpeedMultiplierPerStack =>
             m_ProjectileSpeedMultiplierPerStack;
+        public float LobUpwardSpeedPerStack => m_LobUpwardSpeedPerStack;
+        public float ProjectileGravityPerStack => m_ProjectileGravityPerStack;
         public float ProjectileScaleMultiplierPerStack =>
             m_ProjectileScaleMultiplierPerStack;
         public float AoeRadiusAdjustmentPerStack =>
@@ -186,6 +211,10 @@ namespace Unity.MP_FPS.Cards
                 m_ProjectileScalePerStack);
             m_ProjectileSpeedMultiplierPerStack = Mathf.Max(0f,
                 m_ProjectileSpeedMultiplierPerStack);
+            m_LobUpwardSpeedPerStack = Mathf.Max(0f,
+                m_LobUpwardSpeedPerStack);
+            m_ProjectileGravityPerStack = Mathf.Max(0f,
+                m_ProjectileGravityPerStack);
             m_ProjectileScaleMultiplierPerStack = Mathf.Max(0f,
                 m_ProjectileScaleMultiplierPerStack);
             m_ExplosionRadiusMultiplierPerStack = Mathf.Max(0f,

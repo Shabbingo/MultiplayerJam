@@ -99,6 +99,8 @@ namespace Unity.MP_FPS
                 Cards.CardModifierKind.GravityWell);
             var lastWord = m_CardModifierCatalog.FindByKind(
                 Cards.CardModifierKind.LastWord);
+            var grenadeLauncher = m_CardModifierCatalog.FindByKind(
+                Cards.CardModifierKind.GrenadeLauncher);
             if (damage != null) tuning.DamagePerStack = damage.ValuePerStack;
             if (explosion != null)
                 tuning.ExplosionRadiusPerStack =
@@ -171,6 +173,17 @@ namespace Unity.MP_FPS
                 tuning.GravityWellPullPerStack = gravityWell.ValuePerStack;
             if (lastWord != null)
                 tuning.LastWordDamagePerStack = lastWord.ValuePerStack;
+            if (grenadeLauncher != null)
+            {
+                tuning.GrenadeSpeedMultiplier =
+                    grenadeLauncher.ProjectileSpeedMultiplierPerStack;
+                tuning.GrenadeExplosionRadius =
+                    grenadeLauncher.EffectRadiusMetres;
+                tuning.LobUpwardSpeedPerStack =
+                    grenadeLauncher.LobUpwardSpeedPerStack;
+                tuning.ProjectileGravityPerStack =
+                    grenadeLauncher.ProjectileGravityPerStack;
+            }
             return tuning;
         }
 

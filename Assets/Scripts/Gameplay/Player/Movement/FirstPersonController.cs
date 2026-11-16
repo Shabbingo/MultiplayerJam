@@ -1711,7 +1711,8 @@ public class FirstPersonController : MonoBehaviour
         bool growsOverDistance = false, int maxBounces = 0,
         float growthPerMetre = 0f, float bounceVelocityRetention = 1f,
         int wallPenetrations = 0, float wallDamageRetention = 0.4f,
-        bool hasHomingTarget = true)
+        bool hasHomingTarget = true, bool isLobbedProjectile = false,
+        float lobUpwardSpeed = 0f, float projectileGravity = 0f)
     {
         try
         {
@@ -1774,7 +1775,8 @@ public class FirstPersonController : MonoBehaviour
             projectile.SetRuntimeProjectileProperties(projectileSpeed, projectileScale,
                 growsOverDistance, maxBounces, growthPerMetre,
                 bounceVelocityRetention, wallPenetrations,
-                wallDamageRetention);
+                wallDamageRetention, isLobbedProjectile,
+                lobUpwardSpeed, projectileGravity);
 
             var projectileInfo = new Projectile.PredictedProjectileInfo
             {

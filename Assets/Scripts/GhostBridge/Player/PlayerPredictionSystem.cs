@@ -420,7 +420,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                             (float3)cosmeticDirection;
                                     }
 
-                                    var directionToTarget = weaponData.IsLobbedProjectile
+                                    var directionToTarget = runtimeProfile.IsLobbedProjectile
                                         ? cosmeticDirection
                                         : (targetPoint - (Vector3)shotOriginPosition).normalized;
                                     var spawnRotation = Quaternion.LookRotation(directionToTarget);
@@ -444,7 +444,10 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         runtimeProfile.BounceVelocityRetention,
                                         runtimeProfile.WallPenetrations,
                                         runtimeProfile.WallDamageRetention,
-                                        !runtimeProfile.TracksPlayers);
+                                        !runtimeProfile.TracksPlayers,
+                                        runtimeProfile.IsLobbedProjectile,
+                                        runtimeProfile.LobUpwardSpeed,
+                                        runtimeProfile.ProjectileGravity);
                                 }
                             }
 

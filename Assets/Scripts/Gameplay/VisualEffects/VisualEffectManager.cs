@@ -127,6 +127,17 @@ namespace Unity.MP_FPS
                     spawnPoint = player.transform; // Fallback
                 }
 
+                // Audio is gameplay feedback, so do not make it wait for the
+                // asynchronous muzzle-flash load. Remote shots also receive a
+                // small boost so they remain readable over the local weapon mix.
+                if (weaponData.WeaponFireSfx != null &&
+                    GameManager.Instance?.SoundSystem != null)
+                {
+                    float shotVolume = isFirstPerson ? 1f : 1.25f;
+                    GameManager.Instance.SoundSystem.CreateEmitter(
+                        weaponData.WeaponFireSfx, spawnPoint, shotVolume);
+                }
+
                 try
                 {
                     var vfxInstance = await weaponData.MuzzleFlashVfxPrefab.GhostPrefab.InstantiateAsync(
@@ -141,8 +152,6 @@ namespace Unity.MP_FPS
                     vfxInstance.AddComponent<DestroyAfterDelay>().Lifetime = 0.5f;
 
                     vfxInstance.SetActive(true);
-
-                    GameManager.Instance.SoundSystem.CreateEmitter(weaponData.WeaponFireSfx, spawnPoint);
                 }
                 catch (Exception e)
                 {

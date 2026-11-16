@@ -530,10 +530,13 @@ namespace Gameplay.Leaderboard
             var catalog = WeaponManager.Instance?.CardModifierCatalog;
             int finishingPosition = _finishingOrder.IndexOf(_activeDraftNetworkId);
             if (finishingPosition < 0) finishingPosition = _draftIndex;
+            RoundCardRules rules = GetRules();
             var generated = CardOfferGenerator.Generate(catalog, in owned,
                 finishingPosition, Mathf.Max(1, _finishingOrder.Count),
-                GetRules().CardsPerOffer,
-                (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663));
+                rules.CardsPerOffer,
+                (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663),
+                _currentRound, rules.FoundationalBoostRounds,
+                rules.FoundationalStartingWeightMultiplier);
 
             _currentOffers.Clear();
             _currentOffers.AddRange(generated);

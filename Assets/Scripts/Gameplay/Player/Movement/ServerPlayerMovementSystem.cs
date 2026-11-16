@@ -46,6 +46,9 @@ namespace Unity.MP_FPS
         public int WallPenetrations;
         public float WallDamageRetention;
         public float GravityWellPullStrength;
+        public byte IsLobbedProjectile;
+        public float LobUpwardSpeed;
+        public float ProjectileGravity;
     }
 
     struct VfxSpawnData
@@ -793,7 +796,7 @@ namespace Unity.MP_FPS
                                         }
 
                                         // Use calculated shotOriginPosition for direction calculation
-                                        Vector3 directionToTarget = weaponData.IsLobbedProjectile
+                                        Vector3 directionToTarget = runtimeProfile.IsLobbedProjectile
                                             ? shotDirection
                                             : (targetPoint - (Vector3)shotOriginPosition).normalized;
                                         Quaternion spawnRotation = Quaternion.LookRotation(directionToTarget);
@@ -830,7 +833,10 @@ namespace Unity.MP_FPS
                                             BounceVelocityRetention = runtimeProfile.BounceVelocityRetention,
                                             WallPenetrations = runtimeProfile.WallPenetrations,
                                             WallDamageRetention = runtimeProfile.WallDamageRetention,
-                                            GravityWellPullStrength = runtimeProfile.GravityWellPullStrength
+                                            GravityWellPullStrength = runtimeProfile.GravityWellPullStrength,
+                                            IsLobbedProjectile = runtimeProfile.IsLobbedProjectile ? (byte)1 : (byte)0,
+                                            LobUpwardSpeed = runtimeProfile.LobUpwardSpeed,
+                                            ProjectileGravity = runtimeProfile.ProjectileGravity
                                         });
                                     }
                                     else
@@ -891,7 +897,10 @@ namespace Unity.MP_FPS
                             BounceVelocityRetention = spawnData.BounceVelocityRetention,
                             WallPenetrations = spawnData.WallPenetrations,
                             WallDamageRetention = spawnData.WallDamageRetention,
-                            GravityWellPullStrength = spawnData.GravityWellPullStrength
+                            GravityWellPullStrength = spawnData.GravityWellPullStrength,
+                            IsLobbedProjectile = spawnData.IsLobbedProjectile,
+                            LobUpwardSpeed = spawnData.LobUpwardSpeed,
+                            ProjectileGravity = spawnData.ProjectileGravity
                         });
                     });
             }

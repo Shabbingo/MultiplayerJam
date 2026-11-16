@@ -43,6 +43,10 @@ namespace Unity.MP_FPS.Cards
         [Min(0f)] public float RapidFireIntervalMultiplier;
         [Min(0f)] public float GravityWellPullPerStack;
         [Min(0f)] public float LastWordDamagePerStack;
+        [Min(0f)] public float GrenadeSpeedMultiplier;
+        [Min(0f)] public float GrenadeExplosionRadius;
+        [Min(0f)] public float LobUpwardSpeedPerStack;
+        [Min(0f)] public float ProjectileGravityPerStack;
 
         public static ModifierGameplayTuning Default => new()
         {
@@ -76,7 +80,11 @@ namespace Unity.MP_FPS.Cards
             RapidFireDamageMultiplier = 0.3f,
             RapidFireIntervalMultiplier = 0.35f,
             GravityWellPullPerStack = 8f,
-            LastWordDamagePerStack = 0.2f
+            LastWordDamagePerStack = 0.2f,
+            GrenadeSpeedMultiplier = 0.45f,
+            GrenadeExplosionRadius = 2f,
+            LobUpwardSpeedPerStack = 8f,
+            ProjectileGravityPerStack = 20f
         };
     }
 
@@ -118,6 +126,9 @@ namespace Unity.MP_FPS.Cards
         public readonly float WallDamageRetention;
         public readonly float GravityWellPullStrength;
         public readonly float LastWordDamageMultiplier;
+        public readonly bool IsLobbedProjectile;
+        public readonly float LobUpwardSpeed;
+        public readonly float ProjectileGravity;
 
         public float SignedSizeDelta => Hand == WeaponHand.Right
             ? Mathf.Abs(Damage)
@@ -135,7 +146,8 @@ namespace Unity.MP_FPS.Cards
             bool growsOverDistance, float growthPerMetre,
             float bounceVelocityRetention, int wallPenetrations,
             float wallDamageRetention, float gravityWellPullStrength,
-            float lastWordDamageMultiplier)
+            float lastWordDamageMultiplier, bool isLobbedProjectile,
+            float lobUpwardSpeed, float projectileGravity)
         {
             SourceProfile = sourceProfile;
             Hand = hand;
@@ -169,6 +181,9 @@ namespace Unity.MP_FPS.Cards
             WallDamageRetention = wallDamageRetention;
             GravityWellPullStrength = gravityWellPullStrength;
             LastWordDamageMultiplier = lastWordDamageMultiplier;
+            IsLobbedProjectile = isLobbedProjectile;
+            LobUpwardSpeed = lobUpwardSpeed;
+            ProjectileGravity = projectileGravity;
         }
     }
 
@@ -209,6 +224,8 @@ namespace Unity.MP_FPS.Cards
                 target);
             int lastWordStacks = modifiers.GetStacks(CardModifierKind.LastWord,
                 target);
+            int grenadeLauncherStacks = modifiers.GetStacks(
+                CardModifierKind.GrenadeLauncher, target);
             int bulletSizeStacks = modifiers.GetStacks(CardModifierKind.BulletSize,
                 ModifierTarget.BothHands);
             int bulletSpeedStacks = modifiers.GetStacks(CardModifierKind.BulletSpeed,
@@ -285,8 +302,30 @@ namespace Unity.MP_FPS.Cards
             float projectileSpeed = source.ProjectileSpeed *
                                     Mathf.Pow(tuning.BulletSpeedMultiplierPerStack,
                                         bulletSpeedStacks);
+            if (grenadeLauncherStacks > 0)
+            {
+                // The conversion happens once; additional stacks shape the arc
+                // without making the projectile exponentially slower.
+                projectileSpeed *= Mathf.Max(0f,
+                    tuning.GrenadeSpeedMultiplier);
+                // Preserve grenade behaviour when combined with a source-changing
+                // card such as Scatter, whose base projectiles are not explosive.
+                explosionRadius = Mathf.Max(explosionRadius,
+                    tuning.GrenadeExplosionRadius);
+            }
             explosionRadius *= Mathf.Pow(tuning.BulletSpeedExplosionMultiplier,
                 bulletSpeedStacks);
+
+            bool isLobbedProjectile = source.IsLobbedProjectile ||
+                                      grenadeLauncherStacks > 0;
+            float lobUpwardSpeed = (source.IsLobbedProjectile
+                ? Mathf.Max(0f, source.LobUpwardSpeed)
+                : 0f) + grenadeLauncherStacks *
+                Mathf.Max(0f, tuning.LobUpwardSpeedPerStack);
+            float projectileGravity = (source.IsLobbedProjectile
+                ? Mathf.Max(0f, source.ProjectileGravity)
+                : 0f) + grenadeLauncherStacks *
+                Mathf.Max(0f, tuning.ProjectileGravityPerStack);
 
             return new RuntimeWeaponProfile(
                 source,
@@ -330,7 +369,10 @@ namespace Unity.MP_FPS.Cards
                 gravityWellStacks * Mathf.Max(0f,
                     tuning.GravityWellPullPerStack),
                 1f + lastWordStacks * Mathf.Max(0f,
-                    tuning.LastWordDamagePerStack));
+                    tuning.LastWordDamagePerStack),
+                isLobbedProjectile,
+                lobUpwardSpeed,
+                projectileGravity);
         }
 
         public static Vector3 ApplyScatterDirection(Vector3 forward,
