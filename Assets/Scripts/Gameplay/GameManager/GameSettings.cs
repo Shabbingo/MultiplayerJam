@@ -45,7 +45,7 @@ namespace Unity.MP_FPS
         // V2 lowers the supported minimum and intentionally starts existing
         // installs from the new 40-degree baseline once.
         const string k_CameraFovKey = "CameraFovV2";
-        const string k_HoldToShrinkKey = "HoldToShrink";
+        const string k_ToggleSelfResizeKey = "ToggleSelfResize";
         const string k_KillLimitKey = "MatchKillLimit";
         const string k_TimeLimitMinutesKey = "MatchTimeLimitMinutes";
         const string k_SelectedMapSceneKey = "SelectedMapScene";
@@ -61,7 +61,7 @@ namespace Unity.MP_FPS
                 PlayerPrefs.GetFloat(k_MouseSensitivityKey, 1.5f), 0.1f, 5f);
             m_CameraFov = Mathf.Clamp(
                 PlayerPrefs.GetFloat(k_CameraFovKey, 40f), 40f, 110f);
-            m_HoldToShrink = PlayerPrefs.GetInt(k_HoldToShrinkKey, 1) != 0;
+            m_ToggleSelfResize = PlayerPrefs.GetInt(k_ToggleSelfResizeKey, 1) != 0;
             m_MatchKillLimit = Mathf.Clamp(PlayerPrefs.GetInt(k_KillLimitKey, 20), 1, 100);
             m_MatchTimeLimitMinutes = Mathf.Clamp(
                 PlayerPrefs.GetInt(k_TimeLimitMinutesKey, 10), 1, 60);
@@ -306,20 +306,20 @@ namespace Unity.MP_FPS
             }
         }
 
-        bool m_HoldToShrink = true;
+        bool m_ToggleSelfResize = true;
         [CreateProperty]
-        public bool HoldToShrink
+        public bool ToggleSelfResize
         {
-            get => m_HoldToShrink;
+            get => m_ToggleSelfResize;
             set
             {
-                if (m_HoldToShrink == value)
+                if (m_ToggleSelfResize == value)
                 {
                     return;
                 }
 
-                m_HoldToShrink = value;
-                PlayerPrefs.SetInt(k_HoldToShrinkKey, value ? 1 : 0);
+                m_ToggleSelfResize = value;
+                PlayerPrefs.SetInt(k_ToggleSelfResizeKey, value ? 1 : 0);
                 Notify();
             }
         }

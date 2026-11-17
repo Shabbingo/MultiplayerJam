@@ -26,6 +26,7 @@ namespace Unity.MP_FPS.Client
             public const string OptionsBackButton = "OptionsBackButton";
             public const string SensitivitySlider = "MouseSensitivitySlider";
             public const string CameraFovSlider = "CameraFovSlider";
+            public const string ToggleSelfResize = "ToggleSelfResize";
             public const string KillLimitSlider = "KillLimitSlider";
             public const string TimeLimitSlider = "TimeLimitSlider";
             public const string MapDropdown = "MapDropdown";
@@ -46,6 +47,7 @@ namespace Unity.MP_FPS.Client
         Button m_OptionsBackButton;
         Slider m_SensitivitySlider;
         Slider m_CameraFovSlider;
+        Toggle m_ToggleSelfResize;
         SliderInt m_KillLimitSlider;
         SliderInt m_TimeLimitSlider;
         DropdownField m_MapDropdown;
@@ -137,6 +139,10 @@ namespace Unity.MP_FPS.Client
             RefreshCameraFovSlider();
             m_CameraFovSlider.RegisterValueChangedCallback(OnCameraFovChanged);
 
+            m_ToggleSelfResize = m_MainMenu.Q<Toggle>(UIElementNames.ToggleSelfResize);
+            RefreshToggleSelfResize();
+            m_ToggleSelfResize.RegisterValueChangedCallback(OnToggleSelfResizeChanged);
+
             m_KillLimitSlider = m_MainMenu.Q<SliderInt>(UIElementNames.KillLimitSlider);
             m_KillLimitSlider.RegisterValueChangedCallback(OnKillLimitChanged);
             m_TimeLimitSlider = m_MainMenu.Q<SliderInt>(UIElementNames.TimeLimitSlider);
@@ -169,6 +175,7 @@ namespace Unity.MP_FPS.Client
             m_OptionsBackButton.clicked -= OnOptionsBackPressed;
             m_SensitivitySlider.UnregisterValueChangedCallback(OnSensitivityChanged);
             m_CameraFovSlider.UnregisterValueChangedCallback(OnCameraFovChanged);
+            m_ToggleSelfResize.UnregisterValueChangedCallback(OnToggleSelfResizeChanged);
             m_KillLimitSlider.UnregisterValueChangedCallback(OnKillLimitChanged);
             m_TimeLimitSlider.UnregisterValueChangedCallback(OnTimeLimitChanged);
             m_MapDropdown.UnregisterValueChangedCallback(OnMapChanged);
@@ -225,6 +232,7 @@ namespace Unity.MP_FPS.Client
             m_SensitivitySlider.SetValueWithoutNotify(GameSettings.Instance.MouseSensitivity);
             UpdateSensitivityLabel(m_SensitivitySlider.value);
             RefreshCameraFovSlider();
+            RefreshToggleSelfResize();
             RefreshMatchSettings();
             RefreshMapChoices();
             m_ConnectionPanel.style.display = DisplayStyle.None;
@@ -259,6 +267,17 @@ namespace Unity.MP_FPS.Client
         {
             GameSettings.Instance.CameraFov = evt.newValue;
             m_CameraFovSlider.label = $"Camera FOV: {GameSettings.Instance.CameraFov:0}";
+        }
+
+        void RefreshToggleSelfResize()
+        {
+            m_ToggleSelfResize.SetValueWithoutNotify(
+                GameSettings.Instance.ToggleSelfResize);
+        }
+
+        void OnToggleSelfResizeChanged(ChangeEvent<bool> evt)
+        {
+            GameSettings.Instance.ToggleSelfResize = evt.newValue;
         }
 
         void RefreshMatchSettings()

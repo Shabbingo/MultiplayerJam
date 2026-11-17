@@ -16,6 +16,7 @@ namespace Unity.MP_FPS
             public const string QuitButton = "QuitButton";
             public const string SensitivitySlider = "MouseSensitivitySlider";
             public const string CameraFovSlider = "CameraFovSlider";
+            public const string ToggleSelfResize = "ToggleSelfResize";
             public const string SelfShrinkBindingButton = "SelfShrinkBindingButton";
             public const string SelfGrowBindingButton = "SelfGrowBindingButton";
             public const string ReflectBindingButton = "ReflectBindingButton";
@@ -27,6 +28,7 @@ namespace Unity.MP_FPS
         Button m_QuitButton;
         Slider m_SensitivitySlider;
         Slider m_CameraFovSlider;
+        Toggle m_ToggleSelfResize;
         Button m_SelfShrinkBindingButton;
         Button m_SelfGrowBindingButton;
         Button m_ReflectBindingButton;
@@ -64,6 +66,10 @@ namespace Unity.MP_FPS
             RefreshCameraFovSlider();
             m_CameraFovSlider.RegisterValueChangedCallback(OnCameraFovChanged);
 
+            m_ToggleSelfResize = root.Q<Toggle>(UIElementNames.ToggleSelfResize);
+            RefreshToggleSelfResize();
+            m_ToggleSelfResize.RegisterValueChangedCallback(OnToggleSelfResizeChanged);
+
             m_SelfShrinkBindingButton = root.Q<Button>(UIElementNames.SelfShrinkBindingButton);
             m_SelfGrowBindingButton = root.Q<Button>(UIElementNames.SelfGrowBindingButton);
             m_ReflectBindingButton = root.Q<Button>(UIElementNames.ReflectBindingButton);
@@ -83,6 +89,7 @@ namespace Unity.MP_FPS
             m_QuitButton.clicked -= OnQuitPressed;
             m_SensitivitySlider.UnregisterValueChangedCallback(OnSensitivityChanged);
             m_CameraFovSlider.UnregisterValueChangedCallback(OnCameraFovChanged);
+            m_ToggleSelfResize.UnregisterValueChangedCallback(OnToggleSelfResizeChanged);
             m_SelfShrinkBindingButton.clicked -= StartSelfShrinkRebind;
             m_SelfGrowBindingButton.clicked -= StartSelfGrowRebind;
             m_ReflectBindingButton.clicked -= StartReflectRebind;
@@ -107,6 +114,7 @@ namespace Unity.MP_FPS
             {
                 RefreshSensitivitySlider();
                 RefreshCameraFovSlider();
+                RefreshToggleSelfResize();
                 RefreshBindings();
             }
             GameSettings.Instance.IsPauseMenuOpen = !GameSettings.Instance.IsPauseMenuOpen;
@@ -136,6 +144,17 @@ namespace Unity.MP_FPS
         {
             GameSettings.Instance.CameraFov = evt.newValue;
             m_CameraFovSlider.label = $"Camera FOV: {GameSettings.Instance.CameraFov:0}";
+        }
+
+        void RefreshToggleSelfResize()
+        {
+            m_ToggleSelfResize.SetValueWithoutNotify(
+                GameSettings.Instance.ToggleSelfResize);
+        }
+
+        void OnToggleSelfResizeChanged(ChangeEvent<bool> evt)
+        {
+            GameSettings.Instance.ToggleSelfResize = evt.newValue;
         }
 
         void StartSelfShrinkRebind() => StartRebind(

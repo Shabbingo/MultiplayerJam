@@ -126,6 +126,8 @@ namespace Unity.MP_FPS.UI
 
             CachePlayerCameraPose();
             bool isSpectating = UpdateSpectatorCamera();
+            bool draftUiOwnsOverlay = roundManager != null &&
+                                      roundManager.IsDrafting;
             if (!ClientRespawnState.IsRespawning && !isSpectating)
             {
                 m_IsRespawning = false;
@@ -165,7 +167,13 @@ namespace Unity.MP_FPS.UI
                 m_IsRespawning = true;
                 m_LastRespawnSequence = ClientRespawnState.Sequence;
             }
-            m_RespawnScreen.style.display = DisplayStyle.Flex;
+            // The card draft is a full-screen interaction and must remain visible
+            // for players who joined or died during the round. Keep their spectator
+            // camera active as the background, but suppress this higher-priority
+            // "waiting for next round" overlay while the draft UI owns the screen.
+            m_RespawnScreen.style.display = draftUiOwnsOverlay
+                ? DisplayStyle.None
+                : DisplayStyle.Flex;
 
             if (ClientRespawnState.IsRespawning)
             {

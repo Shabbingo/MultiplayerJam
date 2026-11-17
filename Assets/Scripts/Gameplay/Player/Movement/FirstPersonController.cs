@@ -36,9 +36,9 @@ public class FirstPersonController : MonoBehaviour
     [SerializeField, Min(1f)] private float m_LargeMaxHealth = 150f;
     [SerializeField, Range(0f, 1f), Tooltip("Fraction of all incoming damage prevented while in the large stance.")]
     private float m_LargeIncomingDamageReduction = 0.25f;
-    [SerializeField, Min(0f), Tooltip("Movement multiplier while Ctrl is held.")]
+    [SerializeField, Min(0f), Tooltip("Movement multiplier while using the small stance.")]
     private float m_SmallMovementSpeedMultiplier = 1.5f;
-    [SerializeField, Min(0f), Tooltip("Movement multiplier while Shift is held.")]
+    [SerializeField, Min(0f), Tooltip("Movement multiplier while using the large stance.")]
     private float m_LargeMovementSpeedMultiplier = 0.5f;
     [Header("Weapon Input")]
     [SerializeField, Min(0f),
@@ -711,20 +711,20 @@ public class FirstPersonController : MonoBehaviour
         int previousSizeState = predictedPlayer.SizeState;
         int requestedSizeState = previousSizeState;
 
-        // A key-down event selects its stance. With no transition event, the
-        // existing stance is intentionally preserved while the key remains held.
+        // Toggle mode is carried in the network command so client prediction and
+        // the authoritative server always interpret the press the same way.
         if (input.SelfGrowPressed != input.SelfShrinkPressed)
         {
-            requestedSizeState = input.SelfGrowPressed
-                ? LargeSizeState
-                : SmallSizeState;
+            requestedSizeState = ResolveSelfResizeTarget(previousSizeState,
+                input.SelfGrowPressed, input.SelfShrinkPressed,
+                input.ToggleSelfResizeMode);
         }
 
-        // A release only cancels the stance owned by that key. Applying releases
-        // after presses also ensures a very quick press/release within one command
-        // finishes at normal size.
-        if ((requestedSizeState == LargeSizeState && input.SelfGrowReleased) ||
-            (requestedSizeState == SmallSizeState && input.SelfShrinkReleased))
+        // Hold mode retains the original release-to-middle behaviour. Toggle mode
+        // deliberately ignores key-up events.
+        if (!input.ToggleSelfResizeMode &&
+            ((requestedSizeState == LargeSizeState && input.SelfGrowReleased) ||
+             (requestedSizeState == SmallSizeState && input.SelfShrinkReleased)))
         {
             requestedSizeState = NormalSizeState;
         }
@@ -780,6 +780,44 @@ public class FirstPersonController : MonoBehaviour
                 ? SmallSizeState
                 : NormalSizeState;
         return predictedPlayer.SizeState != requestedSizeState;
+    }
+
+    public int GetSelfResizeDirection(in PredictedPlayerGhost predictedPlayer,
+        bool growPressed, bool shrinkPressed, bool toggleMode)
+    {
+        if (predictedPlayer.CurrentHealth <= 0f || growPressed == shrinkPressed)
+        {
+            return 0;
+        }
+
+        int targetState = ResolveSelfResizeTarget(predictedPlayer.SizeState,
+            growPressed, shrinkPressed, toggleMode);
+        return Math.Sign(targetState - predictedPlayer.SizeState);
+    }
+
+    private static int ResolveSelfResizeTarget(int currentSizeState,
+        bool growPressed, bool shrinkPressed, bool toggleMode)
+    {
+        if (growPressed == shrinkPressed)
+        {
+            return currentSizeState;
+        }
+
+        if (!toggleMode)
+        {
+            return growPressed ? LargeSizeState : SmallSizeState;
+        }
+
+        if (growPressed)
+        {
+            return currentSizeState == LargeSizeState
+                ? NormalSizeState
+                : LargeSizeState;
+        }
+
+        return currentSizeState == SmallSizeState
+            ? NormalSizeState
+            : SmallSizeState;
     }
 
     public float GetMaximumHealthForSizeState(int sizeState,

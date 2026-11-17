@@ -978,8 +978,13 @@ namespace Gameplay.Leaderboard
             var store = World.GetExistingSystemManaged<PlayerRunModifierStoreSystem>();
             if (store == null) return;
 
+            // During the result reveal, the current draft entry has already been
+            // applied even though _draftIndex advances only after the reveal timer.
+            int firstPendingDraftIndex = _pickRevealTimer > 0f
+                ? _draftIndex + 1
+                : _draftIndex;
             int loserProjectedCardCount = store.GetCardPickCount(loserNetworkId);
-            for (int i = _draftIndex; i < _draftOrder.Count; i++)
+            for (int i = firstPendingDraftIndex; i < _draftOrder.Count; i++)
             {
                 DraftTurnEntry pendingTurn = _draftOrder[i];
                 if (pendingTurn.NetworkId == loserNetworkId &&
@@ -995,7 +1000,7 @@ namespace Gameplay.Leaderboard
 
                 int projectedJoinerCardCount =
                     store.GetCardPickCount(lateJoinerNetworkId);
-                for (int i = _draftIndex; i < _draftOrder.Count; i++)
+                for (int i = firstPendingDraftIndex; i < _draftOrder.Count; i++)
                 {
                     if (_draftOrder[i].NetworkId == lateJoinerNetworkId)
                         projectedJoinerCardCount++;

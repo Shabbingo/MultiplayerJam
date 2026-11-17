@@ -118,14 +118,17 @@ public partial class ClientInputReaderSystem : SystemBase
                     shrinkReleasedThisHold);
                 playerInput.SetFlag(PlayerInput.InputFlag.SelfGrowReleased,
                     growReleasedThisHold);
+                playerInput.SetFlag(PlayerInput.InputFlag.ToggleSelfResizeMode,
+                    GameSettings.Instance.ToggleSelfResize);
 
                 // Visual feedback uses the same persistent press edge. This ECS
                 // group may update more than once during one rendered frame.
                 if (!resizePulseHandled && currentLocalPlayerController != null)
                 {
-                    int resizeDirection = growPressedThisHold == shrinkPressedThisHold
-                        ? 0
-                        : growPressedThisHold ? 1 : -1;
+                    int resizeDirection = currentLocalPlayerController
+                        .GetSelfResizeDirection(in currentLocalPlayerData,
+                            growPressedThisHold, shrinkPressedThisHold,
+                            GameSettings.Instance.ToggleSelfResize);
 
                     // Do not pulse when both stance keys are physically held.
                     if (shrinkHeld && growHeld)
@@ -133,9 +136,7 @@ public partial class ClientInputReaderSystem : SystemBase
                         resizeDirection = 0;
                     }
 
-                    if (resizeDirection != 0 &&
-                        currentLocalPlayerController.CanSelfResize(
-                            in currentLocalPlayerData, resizeDirection))
+                    if (resizeDirection != 0)
                     {
                         CameraResizePulseEffect.TriggerConfigured(resizeDirection);
                         resizePulseHandled = true;

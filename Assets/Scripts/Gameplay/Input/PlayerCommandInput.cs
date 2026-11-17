@@ -5,7 +5,8 @@ using Unity.NetCode;
 
 public struct PlayerInput
 {
-    private const uint HeldStateMask = (uint)(InputFlag.Shoot | InputFlag.GrowShot);
+    private const uint HeldStateMask = (uint)(InputFlag.Shoot | InputFlag.GrowShot |
+        InputFlag.ToggleSelfResizeMode);
 
     public enum InputFlag
     {
@@ -18,7 +19,8 @@ public struct PlayerInput
         SelfGrowPressed = 1 << 12,
         ReflectPressed = 1 << 13,
         SelfShrinkReleased = 1 << 14,
-        SelfGrowReleased = 1 << 15
+        SelfGrowReleased = 1 << 15,
+        ToggleSelfResizeMode = 1 << 16
     }
 
     public float2 MoveInput;
@@ -35,6 +37,8 @@ public struct PlayerInput
     public bool SelfGrowPressed => (InputFlags & (uint)InputFlag.SelfGrowPressed) != 0;
     public bool SelfShrinkReleased => (InputFlags & (uint)InputFlag.SelfShrinkReleased) != 0;
     public bool SelfGrowReleased => (InputFlags & (uint)InputFlag.SelfGrowReleased) != 0;
+    public bool ToggleSelfResizeMode =>
+        (InputFlags & (uint)InputFlag.ToggleSelfResizeMode) != 0;
     public bool ReflectPressed => (InputFlags & (uint)InputFlag.ReflectPressed) != 0;
 
     public void SetFlag(InputFlag flag, bool set)
