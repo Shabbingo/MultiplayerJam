@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 14
   m_DisplayName: Bullet Size
-  m_Description: Increases both hands' bullet scale by 0.5 and damage by 10%. Larger
+  m_Description: Increases the selected hand's bullet scale by 0.5 and damage by 10%. Larger
     bullets may clip walls.
   m_Icon: {fileID: 0}
   m_StrengthScore: 1

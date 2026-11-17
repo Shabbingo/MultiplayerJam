@@ -14,14 +14,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 10
   m_DisplayName: More Ammo
-  m_Description: Adds two bullets to both magazines, but increases reload time by
+  m_Description: Adds two bullets to the selected magazine, but increases reload time by
     15%.
   m_Icon: {fileID: 0}
   m_StrengthScore: 2
   m_BaseOfferWeight: 1
   m_Category: 1
   m_Kind: 9
-  m_AllowedTargets: 0
+  m_AllowedTargets: 3
   m_ValuePerStack: 2
   m_EffectDurationSeconds: 0
   m_EffectRadiusMetres: 0

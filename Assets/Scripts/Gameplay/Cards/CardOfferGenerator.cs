@@ -69,8 +69,7 @@ namespace Unity.MP_FPS.Cards
         {
             return IsAvailable(card, ModifierTarget.LeftHand, in owned) ||
                    IsAvailable(card, ModifierTarget.RightHand, in owned) ||
-                   IsAvailable(card, ModifierTarget.Self, in owned) ||
-                   IsAvailable(card, ModifierTarget.BothHands, in owned);
+                   IsAvailable(card, ModifierTarget.Self, in owned);
         }
 
         private static bool IsAvailable(CardModifierDefinition card,
@@ -189,8 +188,7 @@ namespace Unity.MP_FPS.Cards
             float progress = Mathf.InverseLerp(safeStartRound - 1,
                 safeFullRound, Mathf.Max(1, roundNumber));
 
-            bool isSelfCard = card.Allows(ModifierTarget.Self);
-            if (isSelfCard)
+            if (card.Allows(ModifierTarget.Self))
             {
                 return Mathf.Lerp(
                     Mathf.Max(0f, selfCardStartingWeightMultiplier),

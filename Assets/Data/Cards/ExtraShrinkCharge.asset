@@ -20,7 +20,7 @@ MonoBehaviour:
   m_BaseOfferWeight: 1
   m_Category: 4
   m_Kind: 17
-  m_AllowedTargets: 3
+  m_AllowedTargets: 4
   m_ValuePerStack: 1
   m_EffectDurationSeconds: 0
   m_EffectRadiusMetres: 0

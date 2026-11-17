@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 16
   m_DisplayName: Bullet Size/Distance
-  m_Description: Bullets from both hands grow larger and deal more damage over distance.
+  m_Description: Bullets from the selected hand grow larger and deal more damage over distance.
     Large shots may clip walls.
   m_Icon: {fileID: 0}
   m_StrengthScore: 2

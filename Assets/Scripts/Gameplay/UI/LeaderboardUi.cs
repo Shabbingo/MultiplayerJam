@@ -32,7 +32,6 @@ namespace Unity.MP_FPS.UI
         private Button _leftTargetButton;
         private Button _selfTargetButton;
         private Button _rightTargetButton;
-        private Button _bothTargetButton;
         private readonly List<ScoreUiPlayerInfo> _items = new();
 
         private float _timer;
@@ -70,11 +69,9 @@ namespace Unity.MP_FPS.UI
             _leftTargetButton = _rootElement.Q<Button>("target-left");
             _selfTargetButton = _rootElement.Q<Button>("target-self");
             _rightTargetButton = _rootElement.Q<Button>("target-right");
-            _bothTargetButton = _rootElement.Q<Button>("target-both");
             _leftTargetButton.clicked += () => SubmitTarget(ModifierTarget.LeftHand);
             _selfTargetButton.clicked += () => SubmitTarget(ModifierTarget.Self);
             _rightTargetButton.clicked += () => SubmitTarget(ModifierTarget.RightHand);
-            _bothTargetButton.clicked += () => SubmitTarget(ModifierTarget.BothHands);
 
             _listView.itemsSource = _items;
             _listView.makeItem = () => ScoreItemTemplate.Instantiate();
@@ -240,12 +237,12 @@ namespace Unity.MP_FPS.UI
                         ? manager.IsCatchUpAdaptationPick
                             ? $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} — ADAPTATION PICK: EITHER HAND OR SELF"
                             : $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} — {manager.CurrentRoundHandName} HAND OR SELF"
-                        : $"WEAPON CARDS APPLY TO {manager.CurrentRoundHandName} HAND THIS ROUND — SELF CARDS APPLY TO YOU"
+                        : $"WEAPON CARDS APPLY TO {manager.CurrentRoundHandName} HAND — SELF CARDS ARE ALWAYS ALLOWED"
                     : manager.IsLateJoinCatchUpDraft
                         ? manager.IsCatchUpAdaptationPick
                             ? $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — EITHER HAND IS OPEN"
                             : $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — {manager.CurrentRoundHandName} HAND ROUND"
-                        : $"{manager.CurrentRoundHandName} HAND WEAPON CARDS • SELF CARDS ARE ALWAYS ALLOWED";
+                        : $"{manager.CurrentRoundHandName} HAND WEAPON CARDS • SELF CARDS ALWAYS ALLOWED";
             }
             else
             {
@@ -338,7 +335,6 @@ namespace Unity.MP_FPS.UI
             _leftTargetButton.SetEnabled(false);
             _selfTargetButton.SetEnabled(false);
             _rightTargetButton.SetEnabled(false);
-            _bothTargetButton.SetEnabled(false);
         }
 
         private void RefreshTargetButtons(LeaderboardManager manager)
@@ -351,8 +347,6 @@ namespace Unity.MP_FPS.UI
                 manager.CanApplyDraftCardToTarget(card, ModifierTarget.Self));
             _rightTargetButton.SetEnabled(canChoose &&
                 manager.CanApplyDraftCardToTarget(card, ModifierTarget.RightHand));
-            _bothTargetButton.SetEnabled(canChoose &&
-                manager.CanApplyDraftCardToTarget(card, ModifierTarget.BothHands));
         }
 
         private void UpdateLeaderboardUI()

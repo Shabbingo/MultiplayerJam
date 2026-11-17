@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 15
   m_DisplayName: Bullet Speed
-  m_Description: Increases both hands' bullet speed by 30%, but reduces splash radius
+  m_Description: Increases the selected hand's bullet speed by 30%, but reduces splash radius
     by 50% and bullet size by 20%.
   m_Icon: {fileID: 0}
   m_StrengthScore: 2

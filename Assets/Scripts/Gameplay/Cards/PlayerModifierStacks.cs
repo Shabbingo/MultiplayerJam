@@ -34,9 +34,12 @@ namespace Unity.MP_FPS.Cards
         [GhostField] public byte RightBounce;
         [GhostField] public byte LeftLifeSiphon;
         [GhostField] public byte RightLifeSiphon;
-        [GhostField] public byte BulletSize;
-        [GhostField] public byte BulletSpeed;
-        [GhostField] public byte BulletGrowth;
+        [GhostField] public byte LeftBulletSize;
+        [GhostField] public byte RightBulletSize;
+        [GhostField] public byte LeftBulletSpeed;
+        [GhostField] public byte RightBulletSpeed;
+        [GhostField] public byte LeftBulletGrowth;
+        [GhostField] public byte RightBulletGrowth;
         [GhostField] public byte ExtraResizeCharges;
         [GhostField] public byte SlowShield;
         [GhostField] public byte SwapOnReflect;
@@ -94,12 +97,13 @@ namespace Unity.MP_FPS.Cards
                 (CardModifierKind.Bounce, ModifierTarget.RightHand) => RightBounce,
                 (CardModifierKind.LifeSiphon, ModifierTarget.LeftHand) => LeftLifeSiphon,
                 (CardModifierKind.LifeSiphon, ModifierTarget.RightHand) => RightLifeSiphon,
-                (CardModifierKind.BulletSize, ModifierTarget.BothHands) => BulletSize,
-                (CardModifierKind.BulletSpeed, ModifierTarget.BothHands) => BulletSpeed,
-                (CardModifierKind.BulletGrowth, ModifierTarget.BothHands) => BulletGrowth,
-                (CardModifierKind.ReloadSpeed, ModifierTarget.BothHands) => LeftReloadSpeed,
-                (CardModifierKind.MagazineCapacity, ModifierTarget.BothHands) => LeftMagazineCapacity,
-                (CardModifierKind.ExtraResizeCharge, ModifierTarget.BothHands) => ExtraResizeCharges,
+                (CardModifierKind.BulletSize, ModifierTarget.LeftHand) => LeftBulletSize,
+                (CardModifierKind.BulletSize, ModifierTarget.RightHand) => RightBulletSize,
+                (CardModifierKind.BulletSpeed, ModifierTarget.LeftHand) => LeftBulletSpeed,
+                (CardModifierKind.BulletSpeed, ModifierTarget.RightHand) => RightBulletSpeed,
+                (CardModifierKind.BulletGrowth, ModifierTarget.LeftHand) => LeftBulletGrowth,
+                (CardModifierKind.BulletGrowth, ModifierTarget.RightHand) => RightBulletGrowth,
+                (CardModifierKind.ExtraResizeCharge, ModifierTarget.Self) => ExtraResizeCharges,
                 (CardModifierKind.SlowShield, ModifierTarget.Self) => SlowShield,
                 (CardModifierKind.SwapOnReflect, ModifierTarget.Self) => SwapOnReflect,
                 (CardModifierKind.ReflectHealing, ModifierTarget.Self) => ReflectHealing,
@@ -194,17 +198,19 @@ namespace Unity.MP_FPS.Cards
                     return Increment(ref LeftLifeSiphon);
                 case (CardModifierKind.LifeSiphon, ModifierTarget.RightHand):
                     return Increment(ref RightLifeSiphon);
-                case (CardModifierKind.BulletSize, ModifierTarget.BothHands):
-                    return Increment(ref BulletSize);
-                case (CardModifierKind.BulletSpeed, ModifierTarget.BothHands):
-                    return Increment(ref BulletSpeed);
-                case (CardModifierKind.BulletGrowth, ModifierTarget.BothHands):
-                    return Increment(ref BulletGrowth);
-                case (CardModifierKind.ReloadSpeed, ModifierTarget.BothHands):
-                    return IncrementBoth(ref LeftReloadSpeed, ref RightReloadSpeed);
-                case (CardModifierKind.MagazineCapacity, ModifierTarget.BothHands):
-                    return IncrementBoth(ref LeftMagazineCapacity, ref RightMagazineCapacity);
-                case (CardModifierKind.ExtraResizeCharge, ModifierTarget.BothHands):
+                case (CardModifierKind.BulletSize, ModifierTarget.LeftHand):
+                    return Increment(ref LeftBulletSize);
+                case (CardModifierKind.BulletSize, ModifierTarget.RightHand):
+                    return Increment(ref RightBulletSize);
+                case (CardModifierKind.BulletSpeed, ModifierTarget.LeftHand):
+                    return Increment(ref LeftBulletSpeed);
+                case (CardModifierKind.BulletSpeed, ModifierTarget.RightHand):
+                    return Increment(ref RightBulletSpeed);
+                case (CardModifierKind.BulletGrowth, ModifierTarget.LeftHand):
+                    return Increment(ref LeftBulletGrowth);
+                case (CardModifierKind.BulletGrowth, ModifierTarget.RightHand):
+                    return Increment(ref RightBulletGrowth);
+                case (CardModifierKind.ExtraResizeCharge, ModifierTarget.Self):
                     return Increment(ref ExtraResizeCharges);
                 case (CardModifierKind.SlowShield, ModifierTarget.Self):
                     return Increment(ref SlowShield);
@@ -276,12 +282,5 @@ namespace Unity.MP_FPS.Cards
             return true;
         }
 
-        private static bool IncrementBoth(ref byte left, ref byte right)
-        {
-            if (left == byte.MaxValue || right == byte.MaxValue) return false;
-            left++;
-            right++;
-            return true;
-        }
     }
 }

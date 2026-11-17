@@ -9,8 +9,7 @@ namespace Unity.MP_FPS.Cards
         None = 0,
         LeftHand = 1 << 0,
         RightHand = 1 << 1,
-        Self = 1 << 2,
-        BothHands = 1 << 3
+        Self = 1 << 2
     }
 
     public enum WeaponHand : byte
@@ -227,6 +226,20 @@ namespace Unity.MP_FPS.Cards
             m_BounceVelocityRetention = Mathf.Clamp01(m_BounceVelocityRetention);
             m_DamageReductionPercent = Mathf.Clamp01(m_DamageReductionPercent);
             m_TeleportFreezeSeconds = Mathf.Max(0f, m_TeleportFreezeSeconds);
+
+            // Weapon modifiers are always assigned to exactly one hand. The draft
+            // decides which hand is legal for the current round.
+            if (m_Kind is CardModifierKind.BulletSize or
+                CardModifierKind.BulletSpeed or
+                CardModifierKind.BulletGrowth)
+            {
+                m_AllowedTargets = ModifierTarget.LeftHand |
+                                   ModifierTarget.RightHand;
+            }
+            else if (m_Kind == CardModifierKind.ExtraResizeCharge)
+            {
+                m_AllowedTargets = ModifierTarget.Self;
+            }
         }
     }
 }

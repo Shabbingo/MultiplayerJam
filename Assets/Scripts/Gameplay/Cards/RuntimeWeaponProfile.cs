@@ -269,11 +269,11 @@ namespace Unity.MP_FPS.Cards
             int grenadeLauncherStacks = modifiers.GetStacks(
                 CardModifierKind.GrenadeLauncher, target);
             int bulletSizeStacks = modifiers.GetStacks(CardModifierKind.BulletSize,
-                ModifierTarget.BothHands);
+                target);
             int bulletSpeedStacks = modifiers.GetStacks(CardModifierKind.BulletSpeed,
-                ModifierTarget.BothHands);
+                target);
             int growthStacks = modifiers.GetStacks(CardModifierKind.BulletGrowth,
-                ModifierTarget.BothHands);
+                target);
             bool growsOverDistance = growthStacks > 0;
             float damage = bleedStacks > 0
                 ? 0f

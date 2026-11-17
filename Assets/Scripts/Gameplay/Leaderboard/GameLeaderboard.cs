@@ -788,7 +788,6 @@ namespace Gameplay.Leaderboard
             {
                 ModifierTarget.LeftHand => "LEFT HAND",
                 ModifierTarget.RightHand => "RIGHT HAND",
-                ModifierTarget.BothHands => "BOTH HANDS",
                 _ => "SELF"
             };
             var message = new FixedString128Bytes(
