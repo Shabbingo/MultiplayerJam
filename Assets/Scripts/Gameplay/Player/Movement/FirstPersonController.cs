@@ -40,6 +40,10 @@ public class FirstPersonController : MonoBehaviour
     private float m_SmallMovementSpeedMultiplier = 1.5f;
     [SerializeField, Min(0f), Tooltip("Movement multiplier while Shift is held.")]
     private float m_LargeMovementSpeedMultiplier = 0.5f;
+    [Header("Weapon Input")]
+    [SerializeField, Min(0f),
+     Tooltip("Seconds after firing one hand before the opposite hand may fire. Continued fire from the same hand is unaffected.")]
+    private float m_SharedWeaponCooldown = 0.5f;
     [SerializeField, Min(0f), Tooltip("Downward speed applied when shrinking while already airborne.")]
     private float m_AirShrinkPushSpeed = 7f;
 
@@ -53,6 +57,21 @@ public class FirstPersonController : MonoBehaviour
 
     public float LargeIncomingDamageReduction =>
         Mathf.Clamp01(m_LargeIncomingDamageReduction);
+
+    public bool CanUseWeapon(in PredictedPlayerGhost predictedPlayer,
+        uint weaponId)
+    {
+        return predictedPlayer.CrossWeaponCooldownRemaining <= 0f ||
+               predictedPlayer.CrossWeaponCooldownOwner == weaponId;
+    }
+
+    public void StartCrossWeaponCooldown(ref PredictedPlayerGhost predictedPlayer,
+        uint weaponId)
+    {
+        predictedPlayer.CrossWeaponCooldownOwner = weaponId;
+        predictedPlayer.CrossWeaponCooldownRemaining = Mathf.Max(0f,
+            m_SharedWeaponCooldown);
+    }
 
     /// <summary>
     /// Returns the player's actual world-scale multiplier for damage, projectile

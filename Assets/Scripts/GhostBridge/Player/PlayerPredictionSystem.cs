@@ -91,6 +91,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                  SystemAPI.Query<RefRW<PredictedPlayerGhost>,
                      RefRO<Unity.MP_FPS.Cards.PlayerModifierStacks>>().WithAll<Simulate>())
         {
+            predictedPlayer.ValueRW.CrossWeaponCooldownRemaining = Mathf.Max(0f,
+                predictedPlayer.ValueRO.CrossWeaponCooldownRemaining - dt);
             if (predictedPlayer.ValueRO.WeaponCooldown < float.MaxValue)
             {
                 predictedPlayer.ValueRW.WeaponCooldown += dt;
@@ -251,6 +253,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         var secondaryWeaponData = secondaryWeaponProfile.SourceProfile;
                         if (growthInputRequested &&
                             !predictedPlayer.ValueRO.GrowShotPending &&
+                            controllerLink.Controller.CanUseWeapon(
+                                in predictedPlayer.ValueRO,
+                                WeaponManager.SecondaryWeaponId) &&
                             !predictedPlayer.ValueRO.SecondaryIsReloading &&
                             predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo > 0 &&
                             secondaryWeaponData != null &&
@@ -261,6 +266,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             predictedPlayer.ValueRW.GrowShotPending = true;
                             predictedPlayer.ValueRW.GrowShotReleaseTimer =
                                 secondaryWeaponProfile.ProjectileReleaseDelay;
+                            controllerLink.Controller.StartCrossWeaponCooldown(
+                                ref predictedPlayer.ValueRW,
+                                WeaponManager.SecondaryWeaponId);
                             predictedPlayer.ValueRW.LastGrenadeShotTick =
                                 commandInput.Tick.TickIndexForValidTick;
                         }
@@ -305,6 +313,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
 
                         predictedPlayer.ValueRW.ShrinkCastHeld = input.Shoot &&
                             !growthInputRequested &&
+                            controllerLink.Controller.CanUseWeapon(
+                                in predictedPlayer.ValueRO,
+                                WeaponManager.PrimaryWeaponId) &&
                             predictedPlayer.ValueRO.CurrentAmmo > 0 &&
                             !predictedPlayer.ValueRO.ControllerState.IsReloadingState;
                         var weaponBeforeAbility = default(WeaponManager.TemporaryWeaponState);
@@ -349,7 +360,10 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 predictedPlayer.ValueRW.LastReloadTick = commandInput.Tick.TickIndexForValidTick;
                             }
                             
-                            if (wantsToShoot && !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
+                            if (wantsToShoot &&
+                                controllerLink.Controller.CanUseWeapon(
+                                    in predictedPlayer.ValueRO, abilityWeaponId) &&
+                                !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
                                 predictedPlayer.ValueRO.CurrentAmmo > 0 &&
                                 (useGrowthProjectile ||
                                  predictedPlayer.ValueRO.WeaponCooldown >= runtimeProfile.FireInterval))
@@ -358,6 +372,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 predictedPlayer.ValueRW.CurrentAmmo--;
                                 if (!useGrowthProjectile)
                                 {
+                                    controllerLink.Controller.StartCrossWeaponCooldown(
+                                        ref predictedPlayer.ValueRW,
+                                        WeaponManager.PrimaryWeaponId);
                                     predictedPlayer.ValueRW.LastShotTick =
                                         commandInput.Tick.TickIndexForValidTick;
                                 }

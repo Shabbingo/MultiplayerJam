@@ -92,6 +92,8 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public uint EquippedWeaponID;
     [GhostField] public float WeaponCooldown;   // Timer to control rate of fire
     [GhostField] public float SecondaryWeaponCooldown;
+    [GhostField] public float CrossWeaponCooldownRemaining;
+    [GhostField] public uint CrossWeaponCooldownOwner;
     [GhostField] public float SecondaryReloadTimer;
     [GhostField] public bool SecondaryIsReloading;
     
