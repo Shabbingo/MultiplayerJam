@@ -24,6 +24,7 @@ namespace Unity.MP_FPS
         private const float BounceSurfaceOffset = 0.025f;
         private const float BounceCollisionGrace = 0.04f;
         private const float HardReconciliationDistance = 2f;
+        private const string UnpenetrableTag = "Unpenetrable";
 
         private Vector3 _velocity;
         private bool _motionInitialized;
@@ -569,7 +570,8 @@ namespace Unity.MP_FPS
             Vector3 travelDirection, bool publishServerState = true)
         {
             if (_remainingWallPenetrations <= 0 || geometry == null ||
-                geometry.gameObject.layer == LayerMask.NameToLayer("Ground"))
+                IsOnLayerInHierarchy(geometry, "Ground") ||
+                HasTagInHierarchy(geometry, UnpenetrableTag))
             {
                 return false;
             }
@@ -602,6 +604,36 @@ namespace Unity.MP_FPS
                 GhostGameObject.WriteGhostComponentData(projectileData);
             }
             return true;
+        }
+
+        private static bool IsOnLayerInHierarchy(Collider collider,
+            string layerName)
+        {
+            int targetLayer = LayerMask.NameToLayer(layerName);
+            for (Transform current = collider != null ? collider.transform : null;
+                 current != null; current = current.parent)
+            {
+                if (current.gameObject.layer == targetLayer)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool HasTagInHierarchy(Collider collider, string tagName)
+        {
+            for (Transform current = collider != null ? collider.transform : null;
+                 current != null; current = current.parent)
+            {
+                if (current.gameObject.CompareTag(tagName))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool TryBounce(Collider hitCollider, Vector3 impactPosition,

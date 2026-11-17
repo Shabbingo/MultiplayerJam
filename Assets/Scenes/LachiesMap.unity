@@ -1379,7 +1379,7 @@ GameObject:
   - component: {fileID: 123947391}
   - component: {fileID: 123947390}
   - component: {fileID: 123947389}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: OuterWall (3)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4921,7 +4921,7 @@ GameObject:
   - component: {fileID: 776866623}
   - component: {fileID: 776866622}
   - component: {fileID: 776866621}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Floor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6247,7 +6247,7 @@ GameObject:
   - component: {fileID: 952684121}
   - component: {fileID: 952684120}
   - component: {fileID: 952684119}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Roof
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -8850,7 +8850,7 @@ GameObject:
   - component: {fileID: 1238948122}
   - component: {fileID: 1238948121}
   - component: {fileID: 1238948120}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: OuterWall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9074,7 +9074,7 @@ GameObject:
   - component: {fileID: 1256505577}
   - component: {fileID: 1256505576}
   - component: {fileID: 1256505575}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: OuterWall (2)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9646,7 +9646,7 @@ GameObject:
   - component: {fileID: 1343418796}
   - component: {fileID: 1343418795}
   - component: {fileID: 1343418794}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Roof (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11787,7 +11787,7 @@ GameObject:
   - component: {fileID: 1732575464}
   - component: {fileID: 1732575463}
   - component: {fileID: 1732575462}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: OuterWall (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -14163,7 +14163,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2102266148}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: OuterWalls&Floor&Roof
   m_TagString: Untagged
   m_Icon: {fileID: 0}

@@ -72,7 +72,9 @@ namespace Unity.MP_FPS
     public partial class ServerPlayerMovementSystem : SingletonSystem<ServerPlayerMovementSystem>
     {
         private const int k_NumHistoryTicks = 20;
-        private static readonly int s_ShootableLayerMask = LayerMask.GetMask("Ground", "Default");
+        private const string k_UnpenetrableTag = "Unpenetrable";
+        private static readonly int s_ShootableLayerMask = LayerMask.GetMask(
+            "Ground", "Default");
         private NativeList<ClientCommandInput> m_ProcessedClientInputCommands;
         private ComponentLookup<PredictedClientInput> m_PredictedClientInputComponentLookup;
         private ComponentLookup<PredictedPlayerGhost> m_PlayerGhostLookup;
@@ -1219,7 +1221,7 @@ namespace Unity.MP_FPS
 
             int geometryBeforeTarget = 0;
             bool hasNonPenetrableGeometry = false;
-            float nearestGroundDistance = float.MaxValue;
+            float nearestBlockingDistance = float.MaxValue;
             for (int i = 0; i < hitCount; i++)
             {
                 RaycastHit candidate = m_HitscanCastResults[i];
@@ -1230,11 +1232,10 @@ namespace Unity.MP_FPS
                     continue;
                 }
                 geometryBeforeTarget++;
-                if (candidate.collider.gameObject.layer ==
-                    LayerMask.NameToLayer("Ground"))
+                if (IsNonPenetrableGeometry(candidate.collider))
                 {
                     hasNonPenetrableGeometry = true;
-                    nearestGroundDistance = Mathf.Min(nearestGroundDistance,
+                    nearestBlockingDistance = Mathf.Min(nearestBlockingDistance,
                         candidate.distance);
                 }
             }
@@ -1255,9 +1256,8 @@ namespace Unity.MP_FPS
                     RaycastHit candidate = m_HitscanCastResults[i];
                     if (candidate.collider != null &&
                         candidate.collider.GetComponentInParent<PlayerGhost>() == null &&
-                        candidate.collider.gameObject.layer !=
-                            LayerMask.NameToLayer("Ground") &&
-                        candidate.distance < nearestGroundDistance)
+                        !IsNonPenetrableGeometry(candidate.collider) &&
+                        candidate.distance < nearestBlockingDistance)
                     {
                         penetrableBeforeGround++;
                     }
@@ -1306,6 +1306,28 @@ namespace Unity.MP_FPS
                     geometryBeforeTarget)
             };
             return true;
+        }
+
+        private static bool IsNonPenetrableGeometry(Collider collider)
+        {
+            if (collider == null)
+            {
+                return false;
+            }
+
+            int groundLayer = LayerMask.NameToLayer("Ground");
+            for (Transform current = collider.transform; current != null;
+                 current = current.parent)
+            {
+                int layer = current.gameObject.layer;
+                if (layer == groundLayer ||
+                    current.gameObject.CompareTag(k_UnpenetrableTag))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void UpdateHitscanBloom(float deltaTime)
