@@ -246,6 +246,17 @@ ProgressBar .unity-progress-bar__progress {
     margin-bottom: 20px;
 }
 
+.disconnect-message {
+    min-height: 52px;
+    margin-bottom: 20px;
+    padding: 10px;
+    -unity-font-style: bold;
+    color: rgb(255, 215, 90);
+    background-color: rgba(80, 30, 20, 0.9);
+    border-width: 2px;
+    border-color: rgb(255, 130, 90);
+}
+
 .lobby-panel {
     display: none;
     width: 640px;

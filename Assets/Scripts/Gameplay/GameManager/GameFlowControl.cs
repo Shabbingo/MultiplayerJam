@@ -103,6 +103,12 @@ namespace Unity.MP_FPS
         void OnSessionLeft()
         {
             GameConnection = null;
+            // Preserve a more specific notice (kick, full server, duplicate name,
+            // etc.) if the gameplay connection supplied one before the session event.
+            if (string.IsNullOrWhiteSpace(ConnectionSettings.Instance.DisconnectMessage))
+            {
+                ConnectionSettings.Instance.ShowDisconnectMessage("Server Closed");
+            }
             ReturnToMainMenuAsync();
         }
         

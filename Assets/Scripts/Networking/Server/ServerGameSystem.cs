@@ -82,6 +82,8 @@ namespace Unity.MP_FPS
             // queued earlier in this same tick. Reserve every chosen point locally.
             _reservedSpawnPositions.Clear();
             HandleJoinRequests(ref state, gameplayMapsEntity, playerEntityPrefabs, ecb);
+            HandleKickRequests(ref state, ecb);
+            HandlePendingDisconnects(ref state, ecb);
             HandlePlayerDeathAndRespawn(ref state, ecb);
         }
 
@@ -106,7 +108,17 @@ namespace Unity.MP_FPS
                 if (evt.State == ConnectionState.State.Disconnected)
                 {
                     var networkId = evt.Id.Value;
-                    Debug.Log($"[Server] Client with NetworkId {networkId} has disconnected.");
+                    string disconnectedPlayer = $"Client {networkId}";
+                    if (_joinedClientLookup.HasComponent(evt.ConnectionEntity))
+                    {
+                        string joinedName = _joinedClientLookup[evt.ConnectionEntity].PlayerName.ToString();
+                        if (!string.IsNullOrWhiteSpace(joinedName))
+                        {
+                            disconnectedPlayer = joinedName;
+                        }
+                    }
+
+                    Debug.Log($"[Server] {disconnectedPlayer} Disconnected");
 
                     // Find and destroy the player character entity by querying for its GhostOwner.
                     foreach (var (ghostOwner, entity) in SystemAPI.Query<RefRO<GhostOwner>>().WithEntityAccess())
@@ -133,7 +145,12 @@ namespace Unity.MP_FPS
                     RemovePlayerFromLeaderboard(networkId);
                     state.World.GetExistingSystemManaged<PlayerRunModifierStoreSystem>()
                         ?.Remove(networkId);
-                    clientsMap.ElementAt(networkId) = default;
+                    // A connection can fail before its map entry has completed setup.
+                    // Treat that as a normal disconnect instead of throwing while cleaning up.
+                    if ((uint)networkId < (uint)clientsMap.Length)
+                    {
+                        clientsMap.ElementAt(networkId) = default;
+                    }
                 }
             }
 
@@ -397,19 +414,112 @@ namespace Unity.MP_FPS
 
         void HandleJoinRequests(ref SystemState state, Entity gameplayMapsEntity, PlayerEntityPrefabs playerEntityPrefabs, EntityCommandBuffer ecb)
         {
+            int joinedPlayerCount = 0;
+            var activeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var joinedClient in SystemAPI.Query<RefRO<JoinedClient>>())
+            {
+                joinedPlayerCount++;
+                string activeName = joinedClient.ValueRO.PlayerName.ToString().Trim();
+                if (!string.IsNullOrWhiteSpace(activeName))
+                    activeNames.Add(activeName);
+            }
+
             foreach (var (request, rpcReceive, entity) in
                      SystemAPI.Query<RefRO<ClientJoinRequestRpc>, RefRW<ReceiveRpcCommandRequest>>().WithEntityAccess())
             {
-                if (SystemAPI.HasComponent<NetworkId>(rpcReceive.ValueRW.SourceConnection) &&
-                    !SystemAPI.HasComponent<NetworkStreamInGame>(rpcReceive.ValueRW.SourceConnection))
+                Entity connection = rpcReceive.ValueRW.SourceConnection;
+                string requestedName = request.ValueRO.PlayerName.ToString().Trim();
+                string clientBuildVersion = request.ValueRO.BuildVersion.ToString();
+
+                if (request.ValueRO.GameProtocolVersion != NetworkCompatibility.GameProtocolVersion ||
+                    !string.Equals(clientBuildVersion, Application.version, StringComparison.Ordinal))
                 {
-                    SpawnPlayerCharacter(ref state, ecb, rpcReceive.ValueRW.SourceConnection, request.ValueRO.PlayerName, request.ValueRO.CharacterIndex);
+                    RejectConnection(ref state, ecb, connection,
+                        $"Client/server version mismatch (client {clientBuildVersion}, server {Application.version})");
+                }
+                else if (joinedPlayerCount >= GameManager.MaxPlayer)
+                {
+                    RejectConnection(ref state, ecb, connection, "Server Full");
+                }
+                else if (string.IsNullOrWhiteSpace(requestedName))
+                {
+                    RejectConnection(ref state, ecb, connection, "Player name cannot be empty");
+                }
+                else if (activeNames.Contains(requestedName))
+                {
+                    RejectConnection(ref state, ecb, connection,
+                        $"Player name '{requestedName}' is already in use");
+                }
+                else if (SystemAPI.HasComponent<NetworkId>(connection) &&
+                         !SystemAPI.HasComponent<NetworkStreamInGame>(connection))
+                {
+                    var acceptedName = new FixedString64Bytes();
+                    acceptedName.CopyFromTruncated(requestedName);
+                    SpawnPlayerCharacter(ref state, ecb, connection, acceptedName,
+                        request.ValueRO.CharacterIndex);
                     
-                    var ownerNetworkId = SystemAPI.GetComponent<NetworkId>(rpcReceive.ValueRW.SourceConnection);
-                    AddPlayerToLeaderboard(ownerNetworkId.Value, request.ValueRO.PlayerName);
+                    var ownerNetworkId = SystemAPI.GetComponent<NetworkId>(connection);
+                    AddPlayerToLeaderboard(ownerNetworkId.Value, acceptedName);
+                    activeNames.Add(requestedName);
+                    joinedPlayerCount++;
                 }
 
                 ecb.DestroyEntity(entity);
+            }
+        }
+
+        static void RejectConnection(ref SystemState state, EntityCommandBuffer ecb,
+            Entity connection,
+            string reason)
+        {
+            var rpcEntity = ecb.CreateEntity();
+            var notice = new ServerDisconnectNoticeRpc();
+            notice.Reason.CopyFromTruncated(reason);
+            ecb.AddComponent(rpcEntity, notice);
+            ecb.AddComponent(rpcEntity, new SendRpcCommandRequest
+            {
+                TargetConnection = connection
+            });
+            var pendingDisconnect = new PendingServerDisconnect
+            {
+                SecondsRemaining = 0.5f
+            };
+            if (state.EntityManager.HasComponent<PendingServerDisconnect>(connection))
+                ecb.SetComponent(connection, pendingDisconnect);
+            else
+                ecb.AddComponent(connection, pendingDisconnect);
+            Debug.LogWarning($"[Server] Rejected connection: {reason}");
+        }
+
+        void HandleKickRequests(ref SystemState state, EntityCommandBuffer ecb)
+        {
+            foreach (var (request, entity) in
+                     SystemAPI.Query<RefRO<ServerKickRequest>>().WithEntityAccess())
+            {
+                string reason = request.ValueRO.Reason.ToString();
+                if (string.IsNullOrWhiteSpace(reason))
+                    reason = "Kicked by server";
+
+                RejectConnection(ref state, ecb, entity, reason);
+                ecb.RemoveComponent<ServerKickRequest>(entity);
+            }
+        }
+
+        void HandlePendingDisconnects(ref SystemState state, EntityCommandBuffer ecb)
+        {
+            foreach (var (pending, entity) in
+                     SystemAPI.Query<RefRW<PendingServerDisconnect>>().WithEntityAccess())
+            {
+                pending.ValueRW.SecondsRemaining -= SystemAPI.Time.DeltaTime;
+                if (pending.ValueRO.SecondsRemaining <= 0f &&
+                    !SystemAPI.HasComponent<NetworkStreamRequestDisconnect>(entity))
+                {
+                    ecb.AddComponent(entity, new NetworkStreamRequestDisconnect
+                    {
+                        Reason = NetworkStreamDisconnectReason.ConnectionClose
+                    });
+                    ecb.RemoveComponent<PendingServerDisconnect>(entity);
+                }
             }
         }
 

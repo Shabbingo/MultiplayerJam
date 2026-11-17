@@ -392,6 +392,7 @@ MonoBehaviour:
   m_CameraRotation: {x: 0, y: 0, z: 0}
   m_OwnerVisuals: {fileID: 5736986264473589180}
   m_OtherPlayerVisuals: {fileID: 2363139590035842310}
+  m_ThirdPersonVisualGroundOffset: -0.25
   m_SpawnSFX: {fileID: 11400000, guid: bfec68d58a412fa4fb63e149caa5b3e5, type: 2}
   m_MinimumPlayerScale: 0.2
   m_SmallAoeScale: 1.25

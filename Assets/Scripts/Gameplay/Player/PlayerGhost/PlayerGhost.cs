@@ -18,6 +18,8 @@ namespace Unity.MP_FPS
         [SerializeField] private Vector3 m_CameraRotation;
         [SerializeField] private GameObject m_OwnerVisuals;
         [SerializeField] private GameObject m_OtherPlayerVisuals;
+        [SerializeField, Tooltip("Vertical offset that aligns the third-person model's feet with the bottom of the character capsule.")]
+        private float m_ThirdPersonVisualGroundOffset = -0.25f;
         [SerializeField] private SoundDef m_SpawnSFX;
         [SerializeField, Range(0.1f, 1f)] private float m_MinimumPlayerScale = 0.5f;
         public float MinimumPlayerScale => m_MinimumPlayerScale;
@@ -284,8 +286,7 @@ namespace Unity.MP_FPS
             // rotate or offset the whole remote character for the rendered frame.
             if (m_OtherPlayerVisuals != null)
             {
-                m_OtherPlayerVisuals.transform.localPosition = Vector3.zero;
-                m_OtherPlayerVisuals.transform.localRotation = Quaternion.identity;
+                ResetThirdPersonVisualRoot();
             }
         }
 
@@ -788,7 +789,18 @@ namespace Unity.MP_FPS
             ReticlePoint.localPosition = rot * m_ReticleVector;
 
             //TODO: The following is a temporary fix for animation root moves (Robot Jump for example)
-            m_OtherPlayerVisuals.transform.localPosition = Vector3.zero;
+            ResetThirdPersonVisualRoot();
+        }
+
+        private void ResetThirdPersonVisualRoot()
+        {
+            if (m_OtherPlayerVisuals == null)
+            {
+                return;
+            }
+
+            m_OtherPlayerVisuals.transform.localPosition =
+                Vector3.up * m_ThirdPersonVisualGroundOffset;
             m_OtherPlayerVisuals.transform.localRotation = Quaternion.identity;
         }
 

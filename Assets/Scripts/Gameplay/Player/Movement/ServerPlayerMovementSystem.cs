@@ -581,78 +581,31 @@ namespace Unity.MP_FPS
 
                     predictedPlayer.ValueRW.ControllerState.Shoot = false;
 
-                    bool growthInputRequested = commandInput.PlayerInput.GrowShot ||
-                                                commandInput.PlayerInput.TossGrenade;
+                    bool secondaryFireHeld = commandInput.PlayerInput.GrowShot ||
+                                             commandInput.PlayerInput.TossGrenade;
                     if (commandInput.PlayerInput.Reload &&
                         playerGhost.Controller.TryReloadBothWeapons(
                             ref predictedPlayer.ValueRW, in modifiers.ValueRO))
                     {
                         predictedPlayer.ValueRW.LastReloadTick = serverTick;
                     }
-                    var secondaryWeaponProfile = WeaponManager.Instance.ResolveRuntimeProfile(
-                        WeaponManager.SecondaryWeaponId, in modifiers.ValueRO);
-                    var secondaryWeaponData = secondaryWeaponProfile.SourceProfile;
-                    if (growthInputRequested &&
-                        !predictedPlayer.ValueRO.GrowShotPending &&
-                        playerGhost.Controller.CanUseWeapon(
-                            in predictedPlayer.ValueRO,
-                            WeaponManager.SecondaryWeaponId) &&
-                        !predictedPlayer.ValueRO.SecondaryIsReloading &&
-                        predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo > 0 &&
-                        secondaryWeaponData != null &&
-                        predictedPlayer.ValueRO.SecondaryWeaponCooldown >=
-                            Mathf.Max(0f, secondaryWeaponProfile.FireInterval -
-                                      secondaryWeaponProfile.ProjectileReleaseDelay))
-                    {
-                        predictedPlayer.ValueRW.GrowShotPending = true;
-                        predictedPlayer.ValueRW.GrowShotReleaseTimer =
-                            secondaryWeaponProfile.ProjectileReleaseDelay;
-                        playerGhost.Controller.StartCrossWeaponCooldown(
-                            ref predictedPlayer.ValueRW,
-                            WeaponManager.SecondaryWeaponId);
-                        predictedPlayer.ValueRW.LastGrenadeShotTick = serverTick;
-                    }
-
-                    if (growthInputRequested &&
-                        !predictedPlayer.ValueRO.GrowShotPending &&
-                        predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo <= 0 &&
-                        !predictedPlayer.ValueRO.SecondaryIsReloading &&
-                        secondaryWeaponData != null)
-                    {
-                        if (playerGhost.Controller.TryReloadBothWeapons(
-                                ref predictedPlayer.ValueRW, in modifiers.ValueRO))
-                        {
-                            predictedPlayer.ValueRW.LastReloadTick = serverTick;
-                        }
-                    }
-
-                    bool useGrowthProjectile = false;
-                    if (predictedPlayer.ValueRO.GrowShotPending)
-                    {
-                        float releaseTimer = predictedPlayer.ValueRO.GrowShotReleaseTimer - deltaTime;
-                        predictedPlayer.ValueRW.GrowShotReleaseTimer = releaseTimer;
-                        useGrowthProjectile = releaseTimer <= 0f;
-                    }
-
-                    if (useGrowthProjectile)
-                    {
-                        predictedPlayer.ValueRW.GrowShotPending = false;
-                        predictedPlayer.ValueRW.GrowShotReleaseTimer = 0f;
-                    }
+                    // Clear pending state left by the older delayed right-click path.
+                    predictedPlayer.ValueRW.GrowShotPending = false;
+                    predictedPlayer.ValueRW.GrowShotReleaseTimer = 0f;
 
                     predictedPlayer.ValueRW.ShrinkCastHeld = commandInput.PlayerInput.Shoot &&
-                        !growthInputRequested &&
+                        !secondaryFireHeld &&
                         playerGhost.Controller.CanUseWeapon(
                             in predictedPlayer.ValueRO,
                             WeaponManager.PrimaryWeaponId) &&
                         predictedPlayer.ValueRO.CurrentAmmo > 0 &&
                         !predictedPlayer.ValueRO.ControllerState.IsReloadingState;
                     var weaponBeforeAbility = default(WeaponManager.TemporaryWeaponState);
-                    uint abilityWeaponId = useGrowthProjectile
+                    uint abilityWeaponId = secondaryFireHeld
                         ? WeaponManager.SecondaryWeaponId
                         : WeaponManager.PrimaryWeaponId;
-                    bool restoreWeaponAfterAbility =
-                        (commandInput.PlayerInput.Shoot || useGrowthProjectile) &&
+                    bool wantsToShoot = commandInput.PlayerInput.Shoot || secondaryFireHeld;
+                    bool restoreWeaponAfterAbility = wantsToShoot &&
                         WeaponManager.Instance.TryBeginTemporaryWeapon(
                             ref predictedPlayer.ValueRW,
                             abilityWeaponId,
@@ -667,7 +620,6 @@ namespace Unity.MP_FPS
                     var weaponData = runtimeProfile.SourceProfile;
                     if (weaponData != null)
                     {
-                        bool wantsToShoot = commandInput.PlayerInput.Shoot || useGrowthProjectile;
                         bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
                         if (mustReload &&
@@ -682,8 +634,7 @@ namespace Unity.MP_FPS
                                 in predictedPlayer.ValueRO, abilityWeaponId) &&
                             !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
                             predictedPlayer.ValueRO.CurrentAmmo > 0 &&
-                            (useGrowthProjectile ||
-                             predictedPlayer.ValueRO.WeaponCooldown >= runtimeProfile.FireInterval))
+                            predictedPlayer.ValueRO.WeaponCooldown >= runtimeProfile.FireInterval)
                         {
                             bool isFinalMagazineRound =
                                 predictedPlayer.ValueRO.CurrentAmmo == 1;
@@ -700,11 +651,15 @@ namespace Unity.MP_FPS
                                     : 1f);
                             predictedPlayer.ValueRW.WeaponCooldown = 0f;
                             predictedPlayer.ValueRW.CurrentAmmo--;
-                            if (!useGrowthProjectile)
+                            playerGhost.Controller.StartCrossWeaponCooldown(
+                                ref predictedPlayer.ValueRW,
+                                abilityWeaponId);
+                            if (secondaryFireHeld)
                             {
-                                playerGhost.Controller.StartCrossWeaponCooldown(
-                                    ref predictedPlayer.ValueRW,
-                                    WeaponManager.PrimaryWeaponId);
+                                predictedPlayer.ValueRW.LastGrenadeShotTick = serverTick;
+                            }
+                            else
+                            {
                                 predictedPlayer.ValueRW.LastShotTick = serverTick;
                             }
 

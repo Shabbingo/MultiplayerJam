@@ -247,79 +247,30 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     {
                         predictedPlayer.ValueRW.LocalLookYawPitchDegrees = input.LookYawPitchDegrees;
 
-                        bool growthInputRequested = input.GrowShot || input.TossGrenade;
+                        bool secondaryFireHeld = input.GrowShot || input.TossGrenade;
                         if (input.Reload && controllerLink.Controller.TryReloadBothWeapons(
                                 ref predictedPlayer.ValueRW, in modifiers.ValueRO))
                         {
                             predictedPlayer.ValueRW.LastReloadTick =
                                 commandInput.Tick.TickIndexForValidTick;
                         }
-                        var secondaryWeaponProfile = WeaponManager.Instance.ResolveRuntimeProfile(
-                            WeaponManager.SecondaryWeaponId, in modifiers.ValueRO);
-                        var secondaryWeaponData = secondaryWeaponProfile.SourceProfile;
-                        if (growthInputRequested &&
-                            !predictedPlayer.ValueRO.GrowShotPending &&
-                            controllerLink.Controller.CanUseWeapon(
-                                in predictedPlayer.ValueRO,
-                                WeaponManager.SecondaryWeaponId) &&
-                            !predictedPlayer.ValueRO.SecondaryIsReloading &&
-                            predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo > 0 &&
-                            secondaryWeaponData != null &&
-                            predictedPlayer.ValueRO.SecondaryWeaponCooldown >=
-                            Mathf.Max(0f, secondaryWeaponProfile.FireInterval -
-                                           secondaryWeaponProfile.ProjectileReleaseDelay))
-                        {
-                            predictedPlayer.ValueRW.GrowShotPending = true;
-                            predictedPlayer.ValueRW.GrowShotReleaseTimer =
-                                secondaryWeaponProfile.ProjectileReleaseDelay;
-                            controllerLink.Controller.StartCrossWeaponCooldown(
-                                ref predictedPlayer.ValueRW,
-                                WeaponManager.SecondaryWeaponId);
-                            predictedPlayer.ValueRW.LastGrenadeShotTick =
-                                commandInput.Tick.TickIndexForValidTick;
-                        }
-
-                        if (growthInputRequested &&
-                            !predictedPlayer.ValueRO.GrowShotPending &&
-                            predictedPlayer.ValueRO.ControllerState.SecondaryWeaponAmmo <= 0 &&
-                            !predictedPlayer.ValueRO.SecondaryIsReloading &&
-                            secondaryWeaponData != null)
-                        {
-                            if (controllerLink.Controller.TryReloadBothWeapons(
-                                    ref predictedPlayer.ValueRW, in modifiers.ValueRO))
-                            {
-                                predictedPlayer.ValueRW.LastReloadTick =
-                                    commandInput.Tick.TickIndexForValidTick;
-                            }
-                        }
-
-                        bool useGrowthProjectile = false;
-                        if (predictedPlayer.ValueRO.GrowShotPending)
-                        {
-                            float releaseTimer = predictedPlayer.ValueRO.GrowShotReleaseTimer -
-                                                 accumulateDT;
-                            predictedPlayer.ValueRW.GrowShotReleaseTimer = releaseTimer;
-                            useGrowthProjectile = releaseTimer <= 0f;
-                        }
-
-                        if (useGrowthProjectile)
-                        {
-                            predictedPlayer.ValueRW.GrowShotPending = false;
-                            predictedPlayer.ValueRW.GrowShotReleaseTimer = 0f;
-                        }
+                        // Clear pending state left by the older delayed right-click path.
+                        predictedPlayer.ValueRW.GrowShotPending = false;
+                        predictedPlayer.ValueRW.GrowShotReleaseTimer = 0f;
 
                         predictedPlayer.ValueRW.ShrinkCastHeld = input.Shoot &&
-                            !growthInputRequested &&
+                            !secondaryFireHeld &&
                             controllerLink.Controller.CanUseWeapon(
                                 in predictedPlayer.ValueRO,
                                 WeaponManager.PrimaryWeaponId) &&
                             predictedPlayer.ValueRO.CurrentAmmo > 0 &&
                             !predictedPlayer.ValueRO.ControllerState.IsReloadingState;
                         var weaponBeforeAbility = default(WeaponManager.TemporaryWeaponState);
-                        uint abilityWeaponId = useGrowthProjectile
+                        uint abilityWeaponId = secondaryFireHeld
                             ? WeaponManager.SecondaryWeaponId
                             : WeaponManager.PrimaryWeaponId;
-                        bool restoreWeaponAfterAbility = (input.Shoot || useGrowthProjectile) &&
+                        bool wantsToShoot = input.Shoot || secondaryFireHeld;
+                        bool restoreWeaponAfterAbility = wantsToShoot &&
                             WeaponManager.Instance.TryBeginTemporaryWeapon(
                                 ref predictedPlayer.ValueRW,
                                 abilityWeaponId,
@@ -333,7 +284,6 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         var weaponData = runtimeProfile.SourceProfile;
                         if (weaponData != null)
                         {
-                            bool wantsToShoot = input.Shoot || useGrowthProjectile;
                             bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
                             if (mustReload &&
@@ -348,16 +298,20 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                     in predictedPlayer.ValueRO, abilityWeaponId) &&
                                 !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
                                 predictedPlayer.ValueRO.CurrentAmmo > 0 &&
-                                (useGrowthProjectile ||
-                                 predictedPlayer.ValueRO.WeaponCooldown >= runtimeProfile.FireInterval))
+                                predictedPlayer.ValueRO.WeaponCooldown >= runtimeProfile.FireInterval)
                             {
                                 predictedPlayer.ValueRW.WeaponCooldown = 0f;
                                 predictedPlayer.ValueRW.CurrentAmmo--;
-                                if (!useGrowthProjectile)
+                                controllerLink.Controller.StartCrossWeaponCooldown(
+                                    ref predictedPlayer.ValueRW,
+                                    abilityWeaponId);
+                                if (secondaryFireHeld)
                                 {
-                                    controllerLink.Controller.StartCrossWeaponCooldown(
-                                        ref predictedPlayer.ValueRW,
-                                        WeaponManager.PrimaryWeaponId);
+                                    predictedPlayer.ValueRW.LastGrenadeShotTick =
+                                        commandInput.Tick.TickIndexForValidTick;
+                                }
+                                else
+                                {
                                     predictedPlayer.ValueRW.LastShotTick =
                                         commandInput.Tick.TickIndexForValidTick;
                                 }

@@ -180,14 +180,19 @@ public partial class ClientInputReaderSystem : SystemBase
                 InputSystemManager.ReflectActionName).WasPressedThisFrame();
 
         playerInput.SetFlag(PlayerInput.InputFlag.Jump, controls.Player.Jump.triggered);
-        playerInput.SetFlag(PlayerInput.InputFlag.Shoot, controls.FPS.ShootSingle.IsPressed());
+        bool primaryFireHeld = gameplayKeysEnabled &&
+                               controls.FPS.ShootSingle.IsPressed();
+        bool secondaryFireHeld = gameplayKeysEnabled && !reflectPressed &&
+            (controls.UI.RightClick.IsPressed() ||
+             controls.FPS.ShootGrenade.IsPressed());
+
+        playerInput.SetFlag(PlayerInput.InputFlag.Shoot, primaryFireHeld);
         playerInput.SetFlag(PlayerInput.InputFlag.Reload, controls.FPS.Reload.triggered);
-        playerInput.SetFlag(PlayerInput.InputFlag.TossGrenade,
-            controls.FPS.ShootGrenade.triggered && !reflectPressed);
-        // Right click fires the secondary weapon. Size is controlled only by the
-        // dedicated held Shift/Ctrl stance inputs.
-        playerInput.SetFlag(PlayerInput.InputFlag.GrowShot,
-            controls.UI.RightClick.IsPressed());
+        // TossGrenade is retained in the network input layout for compatibility,
+        // but both right mouse and its alternate binding now use the same held
+        // secondary-fire path as left mouse.
+        playerInput.SetFlag(PlayerInput.InputFlag.TossGrenade, false);
+        playerInput.SetFlag(PlayerInput.InputFlag.GrowShot, secondaryFireHeld);
 
         playerInput.SetFlag(PlayerInput.InputFlag.ReflectPressed,
             reflectPressed);

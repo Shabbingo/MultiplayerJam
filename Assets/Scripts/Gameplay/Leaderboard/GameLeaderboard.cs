@@ -30,7 +30,17 @@ namespace Gameplay.Leaderboard
 
         private readonly HashSet<int> _eliminatedThisRound = new();
         private readonly List<int> _finishingOrder = new();
-        private readonly List<int> _draftOrder = new();
+        private struct DraftTurnEntry
+        {
+            public int NetworkId;
+            public bool IsLateJoinCatchUp;
+            public int CatchUpPickNumber;
+            public int CatchUpPickTotal;
+            public FixedString64Bytes ReferenceLoserName;
+        }
+
+        private readonly List<DraftTurnEntry> _draftOrder = new();
+        private readonly HashSet<int> _lateJoinersAwaitingCatchUp = new();
         private readonly List<CardModifierDefinition> _currentOffers = new();
         private int _draftIndex;
         private int _activeDraftNetworkId = -1;
@@ -48,6 +58,10 @@ namespace Gameplay.Leaderboard
         private int _localNetworkId = -1;
         private readonly int[] _offeredCardIds = { -1, -1, -1 };
         private FixedString64Bytes _activeDraftPlayerName;
+        private bool _activeDraftIsLateJoinCatchUp;
+        private int _activeCatchUpPickNumber;
+        private int _activeCatchUpPickTotal;
+        private FixedString64Bytes _activeCatchUpReferenceLoserName;
         private FixedString128Bytes _lastPickMessage;
         private DraftPickRequestRpc? _pendingClientPick;
         private bool _pendingLobbyStartRequest;
@@ -62,6 +76,11 @@ namespace Gameplay.Leaderboard
         public int RoundWinsToWin => GetRules().RoundWinsToWin;
         public int ActiveDraftNetworkId => _activeDraftNetworkId;
         public string ActiveDraftPlayerName => _activeDraftPlayerName.ToString();
+        public bool IsLateJoinCatchUpDraft => _activeDraftIsLateJoinCatchUp;
+        public int CatchUpPickNumber => _activeCatchUpPickNumber;
+        public int CatchUpPickTotal => _activeCatchUpPickTotal;
+        public string CatchUpReferenceLoserName =>
+            _activeCatchUpReferenceLoserName.ToString();
         public string LastPickMessage => _lastPickMessage.ToString();
         public float DraftSecondsRemaining => _draftSecondsRemaining;
         public float RoundStartTimeRemaining => _roundStartTimer;
@@ -198,7 +217,8 @@ namespace Gameplay.Leaderboard
 
             _eliminatedThisRound.Remove(networkId);
             _finishingOrder.Remove(networkId);
-            _draftOrder.Remove(networkId);
+            _draftOrder.RemoveAll(entry => entry.NetworkId == networkId);
+            _lateJoinersAwaitingCatchUp.Remove(networkId);
         }
 
         public void AddKill(int killer, int victim)
@@ -325,6 +345,11 @@ namespace Gameplay.Leaderboard
                 _currentRound = draftRpc.RoundNumber;
                 _activeDraftNetworkId = draftRpc.ActiveNetworkId;
                 _activeDraftPlayerName = draftRpc.ActivePlayerName;
+                _activeDraftIsLateJoinCatchUp = draftRpc.IsLateJoinCatchUp != 0;
+                _activeCatchUpPickNumber = draftRpc.CatchUpPickNumber;
+                _activeCatchUpPickTotal = draftRpc.CatchUpPickTotal;
+                _activeCatchUpReferenceLoserName =
+                    draftRpc.ReferenceLoserName;
                 _draftSecondsRemaining = draftRpc.SecondsRemaining;
                 _offeredCardIds[0] = draftRpc.CardId0;
                 _offeredCardIds[1] = draftRpc.CardId1;
@@ -403,10 +428,20 @@ namespace Gameplay.Leaderboard
                     NetworkId = networkId,
                     PlayerName = playerName
                 });
-                if (_phase is RoundPhase.Drafting or RoundPhase.MatchEnded)
+                if (_phase == RoundPhase.Combat ||
+                    _phase == RoundPhase.PreparingRound)
+                {
+                    _lateJoinersAwaitingCatchUp.Add(networkId);
+                    Debug.Log($"[Server] Player {networkId} ({playerName}) joined " +
+                              "in progress and will receive catch-up card picks after the round.");
+                }
+                else if (_phase == RoundPhase.Drafting)
                 {
                     // A late joiner observes the in-progress draft and enters with
-                    // everyone else when the following round starts.
+                    // everyone else when the following round starts. Append their
+                    // catch-up event to the end of this draft.
+                    _lateJoinersAwaitingCatchUp.Add(networkId);
+                    QueueLateJoinCatchUpTurns(buffer);
                     _preparePlayersPending = true;
                 }
                 AnnouncePlayerJoined(playerName);
@@ -429,6 +464,7 @@ namespace Gameplay.Leaderboard
             _eliminatedThisRound.Clear();
             _finishingOrder.Clear();
             _draftOrder.Clear();
+            _lateJoinersAwaitingCatchUp.Clear();
             _currentOffers.Clear();
             _activeDraftNetworkId = -1;
             _phase = RoundPhase.PreparingRound;
@@ -538,6 +574,7 @@ namespace Gameplay.Leaderboard
                 _matchEnded = true;
                 _matchRestartTimeRemaining = FinalMatchRestartDelay;
                 _finalAnnouncementPending = true;
+                _lateJoinersAwaitingCatchUp.Clear();
                 return;
             }
 
@@ -547,9 +584,16 @@ namespace Gameplay.Leaderboard
             {
                 // Only the winner of this round sits out. Overall score and kills
                 // never influence draft eligibility.
-                if (networkId != winnerId) _draftOrder.Add(networkId);
+                if (networkId != winnerId)
+                {
+                    _draftOrder.Add(new DraftTurnEntry
+                    {
+                        NetworkId = networkId
+                    });
+                }
             }
             _draftIndex = 0;
+            QueueLateJoinCatchUpTurns(buffer);
             _beginDraftPending = true;
         }
 
@@ -616,7 +660,7 @@ namespace Gameplay.Leaderboard
         private void BeginNextDraftTurn(DynamicBuffer<PlayerScoreEntry> buffer)
         {
             while (_draftIndex < _draftOrder.Count &&
-                   !ContainsPlayer(buffer, _draftOrder[_draftIndex]))
+                   !ContainsPlayer(buffer, _draftOrder[_draftIndex].NetworkId))
             {
                 _draftIndex++;
             }
@@ -627,7 +671,12 @@ namespace Gameplay.Leaderboard
                 return;
             }
 
-            _activeDraftNetworkId = _draftOrder[_draftIndex];
+            DraftTurnEntry turn = _draftOrder[_draftIndex];
+            _activeDraftNetworkId = turn.NetworkId;
+            _activeDraftIsLateJoinCatchUp = turn.IsLateJoinCatchUp;
+            _activeCatchUpPickNumber = turn.CatchUpPickNumber;
+            _activeCatchUpPickTotal = turn.CatchUpPickTotal;
+            _activeCatchUpReferenceLoserName = turn.ReferenceLoserName;
             var store = World.GetExistingSystemManaged<PlayerRunModifierStoreSystem>();
             PlayerModifierStacks owned = store != null
                 ? store.GetOrCreate(_activeDraftNetworkId)
@@ -639,7 +688,8 @@ namespace Gameplay.Leaderboard
             var generated = CardOfferGenerator.Generate(catalog, in owned,
                 finishingPosition, Mathf.Max(1, _finishingOrder.Count),
                 rules.CardsPerOffer,
-                (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663),
+                (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663) ^
+                (_activeCatchUpPickNumber * 83492791),
                 _currentRound, rules.FoundationalBoostRounds,
                 rules.FoundationalStartingWeightMultiplier);
 
@@ -665,6 +715,10 @@ namespace Gameplay.Leaderboard
                 RoundNumber = _currentRound,
                 ActiveNetworkId = _activeDraftNetworkId,
                 ActivePlayerName = FindPlayerName(buffer, _activeDraftNetworkId, "Player"),
+                IsLateJoinCatchUp = _activeDraftIsLateJoinCatchUp ? (byte)1 : (byte)0,
+                CatchUpPickNumber = _activeCatchUpPickNumber,
+                CatchUpPickTotal = _activeCatchUpPickTotal,
+                ReferenceLoserName = _activeCatchUpReferenceLoserName,
                 SecondsRemaining = Mathf.Max(0f, _draftSecondsRemaining),
                 CardId0 = GetServerOfferId(0),
                 CardId1 = GetServerOfferId(1),
@@ -794,6 +848,7 @@ namespace Gameplay.Leaderboard
             }
 
             World.GetExistingSystemManaged<PlayerRunModifierStoreSystem>()?.ClearMatch();
+            _lateJoinersAwaitingCatchUp.Clear();
             _currentRound = 0;
             _matchEnded = false;
             _winnerName = default;
@@ -852,6 +907,10 @@ namespace Gameplay.Leaderboard
         {
             _activeDraftNetworkId = -1;
             _activeDraftPlayerName = default;
+            _activeDraftIsLateJoinCatchUp = false;
+            _activeCatchUpPickNumber = 0;
+            _activeCatchUpPickTotal = 0;
+            _activeCatchUpReferenceLoserName = default;
             _draftSecondsRemaining = 0f;
             _lastPickMessage = default;
             for (int i = 0; i < _offeredCardIds.Length; i++) _offeredCardIds[i] = -1;
@@ -902,6 +961,69 @@ namespace Gameplay.Leaderboard
             for (int i = 0; i < buffer.Length; i++)
                 if (buffer[i].NetworkId == networkId) return true;
             return false;
+        }
+
+        private void QueueLateJoinCatchUpTurns(
+            DynamicBuffer<PlayerScoreEntry> buffer)
+        {
+            if (_lateJoinersAwaitingCatchUp.Count == 0 ||
+                _finishingOrder.Count == 0)
+            {
+                return;
+            }
+
+            int loserNetworkId = _finishingOrder[0];
+            FixedString64Bytes loserName = FindPlayerName(buffer,
+                loserNetworkId, "the loser");
+            var store = World.GetExistingSystemManaged<PlayerRunModifierStoreSystem>();
+            if (store == null) return;
+
+            int loserProjectedCardCount = store.GetCardPickCount(loserNetworkId);
+            for (int i = _draftIndex; i < _draftOrder.Count; i++)
+            {
+                DraftTurnEntry pendingTurn = _draftOrder[i];
+                if (pendingTurn.NetworkId == loserNetworkId &&
+                    !pendingTurn.IsLateJoinCatchUp)
+                {
+                    loserProjectedCardCount++;
+                }
+            }
+
+            foreach (int lateJoinerNetworkId in _lateJoinersAwaitingCatchUp)
+            {
+                if (!ContainsPlayer(buffer, lateJoinerNetworkId)) continue;
+
+                int projectedJoinerCardCount =
+                    store.GetCardPickCount(lateJoinerNetworkId);
+                for (int i = _draftIndex; i < _draftOrder.Count; i++)
+                {
+                    if (_draftOrder[i].NetworkId == lateJoinerNetworkId)
+                        projectedJoinerCardCount++;
+                }
+
+                int catchUpPickTotal = Mathf.Max(0,
+                    loserProjectedCardCount - projectedJoinerCardCount);
+                for (int pick = 1; pick <= catchUpPickTotal; pick++)
+                {
+                    _draftOrder.Add(new DraftTurnEntry
+                    {
+                        NetworkId = lateJoinerNetworkId,
+                        IsLateJoinCatchUp = true,
+                        CatchUpPickNumber = pick,
+                        CatchUpPickTotal = catchUpPickTotal,
+                        ReferenceLoserName = loserName
+                    });
+                }
+
+                if (catchUpPickTotal > 0)
+                {
+                    Debug.Log($"[Server] Queued {catchUpPickTotal} private " +
+                              $"catch-up picks for late joiner {lateJoinerNetworkId} " +
+                              $"to match {loserName}'s {loserProjectedCardCount} cards.");
+                }
+            }
+
+            _lateJoinersAwaitingCatchUp.Clear();
         }
 
         private int GetLobbyPlayerCount()
@@ -978,6 +1100,10 @@ namespace Gameplay.Leaderboard
         public int RoundNumber;
         public int ActiveNetworkId;
         public FixedString64Bytes ActivePlayerName;
+        public byte IsLateJoinCatchUp;
+        public int CatchUpPickNumber;
+        public int CatchUpPickTotal;
+        public FixedString64Bytes ReferenceLoserName;
         public float SecondsRemaining;
         public int CardId0;
         public int CardId1;

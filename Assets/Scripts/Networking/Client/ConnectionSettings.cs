@@ -85,6 +85,34 @@ namespace Unity.MP_FPS
                  ? DisplayStyle.Flex
                  : DisplayStyle.None;
 
+         string m_DisconnectMessage = string.Empty;
+         [CreateProperty]
+         public string DisconnectMessage
+         {
+             get => m_DisconnectMessage;
+             private set
+             {
+                 if (m_DisconnectMessage == value)
+                     return;
+
+                 m_DisconnectMessage = value;
+                 Notify();
+                 Notify(DisconnectMessageStylePropertyName);
+             }
+         }
+
+         public static readonly string DisconnectMessageStylePropertyName = nameof(DisconnectMessageStyle);
+         [CreateProperty]
+         DisplayStyle DisconnectMessageStyle =>
+             string.IsNullOrWhiteSpace(m_DisconnectMessage)
+                 ? DisplayStyle.None
+                 : DisplayStyle.Flex;
+
+         public void ShowDisconnectMessage(string message) =>
+             DisconnectMessage = message ?? string.Empty;
+
+         public void ClearDisconnectMessage() => DisconnectMessage = string.Empty;
+
          bool m_IsNetworkEndpointFormatValid;
          [CreateProperty]
          public bool IsNetworkEndpointValid

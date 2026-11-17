@@ -5,7 +5,7 @@ using Unity.NetCode;
 
 public struct PlayerInput
 {
-    private const uint HeldStateMask = (uint)InputFlag.GrowShot;
+    private const uint HeldStateMask = (uint)(InputFlag.Shoot | InputFlag.GrowShot);
 
     public enum InputFlag
     {

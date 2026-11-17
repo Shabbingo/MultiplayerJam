@@ -206,7 +206,9 @@ namespace Unity.MP_FPS.UI
             _rootElement.style.display = DisplayStyle.Flex;
             _scoreTable.style.display = DisplayStyle.None;
             _draftPanel.style.display = DisplayStyle.Flex;
-            _draftTitleLabel.text = $"ROUND {manager.CurrentRound} COMPLETE — CARD DRAFT";
+            _draftTitleLabel.text = manager.IsLateJoinCatchUpDraft
+                ? $"LATE-JOIN CATCH-UP — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
+                : $"ROUND {manager.CurrentRound} COMPLETE — CARD DRAFT";
 
             int offerHash = manager.GetOfferedCardId(0) * 397 ^
                             manager.GetOfferedCardId(1) * 31 ^
@@ -223,13 +225,21 @@ namespace Unity.MP_FPS.UI
             if (activeTurn)
             {
                 _draftPlayerLabel.text = manager.IsLocalDraftTurn
-                    ? "YOUR PICK"
-                    : $"{manager.ActiveDraftPlayerName.ToUpperInvariant()} IS CHOOSING";
+                    ? manager.IsLateJoinCatchUpDraft
+                        ? "YOUR PRIVATE CATCH-UP PICK"
+                        : "YOUR PICK"
+                    : manager.IsLateJoinCatchUpDraft
+                        ? $"CATCH-UP FOR {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
+                        : $"{manager.ActiveDraftPlayerName.ToUpperInvariant()} IS CHOOSING";
                 _draftTimerLabel.text =
                     $"{Mathf.CeilToInt(manager.DraftSecondsRemaining)} SECONDS";
                 _draftHelpLabel.text = manager.IsLocalDraftTurn
-                    ? "CHOOSE A CARD, THEN CHOOSE WHERE TO APPLY IT"
-                    : "EVERYONE CAN SEE THIS OFFER";
+                    ? manager.IsLateJoinCatchUpDraft
+                        ? $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} — MATCHING {manager.CatchUpReferenceLoserName.ToUpperInvariant()}'S CARD TOTAL"
+                        : "CHOOSE A CARD, THEN CHOOSE WHERE TO APPLY IT"
+                    : manager.IsLateJoinCatchUpDraft
+                        ? $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — CATCHING UP TO {manager.CatchUpReferenceLoserName.ToUpperInvariant()}"
+                        : "EVERYONE CAN SEE THIS OFFER";
             }
             else
             {

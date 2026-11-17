@@ -5,6 +5,7 @@
         <ui:VisualElement name="Container" picking-mode="Ignore" class="container" style="background-image: url(&quot;project://database/Assets/Art/Textures/Grid_01_Emissive.png?fileID=2800000&amp;guid=d4d6919451fe3e24388816386a6d15a4&amp;type=3#Grid_01_Emissive&quot;); height: auto;">
             <ui:VisualElement name="UIWrapper" picking-mode="Ignore">
                 <ui:VisualElement name="ConnectionPanel" picking-mode="Ignore">
+                    <ui:Label text="" name="DisconnectMessage" class="disconnect-message" style="display: none;" />
                     <ui:VisualElement name="InputPlayerName" picking-mode="Ignore" class="section-separator">
                         <ui:Label text="Player Name" name="PlayerName" picking-mode="Ignore" />
                         <ui:TextField name="PlayerNameField" value="_" tabindex="1" />

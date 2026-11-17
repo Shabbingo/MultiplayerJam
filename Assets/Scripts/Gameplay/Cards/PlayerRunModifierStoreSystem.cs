@@ -14,6 +14,7 @@ namespace Unity.MP_FPS.Cards
     public partial class PlayerRunModifierStoreSystem : SystemBase
     {
         private readonly Dictionary<int, PlayerModifierStacks> m_ByNetworkId = new();
+        private readonly Dictionary<int, int> m_CardPickCounts = new();
 
         protected override void OnUpdate()
         {
@@ -46,18 +47,29 @@ namespace Unity.MP_FPS.Cards
             }
 
             m_ByNetworkId[networkId] = updated;
+            m_CardPickCounts.TryGetValue(networkId, out int pickedCards);
+            m_CardPickCounts[networkId] = pickedCards + 1;
             ApplyToLivingPlayer(networkId, in previous, in updated);
             return true;
+        }
+
+        public int GetCardPickCount(int networkId)
+        {
+            return m_CardPickCounts.TryGetValue(networkId, out int count)
+                ? count
+                : 0;
         }
 
         public void Remove(int networkId)
         {
             m_ByNetworkId.Remove(networkId);
+            m_CardPickCounts.Remove(networkId);
         }
 
         public void ClearMatch()
         {
             m_ByNetworkId.Clear();
+            m_CardPickCounts.Clear();
         }
 
         private void ApplyToLivingPlayer(int networkId,

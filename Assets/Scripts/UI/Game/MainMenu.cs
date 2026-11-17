@@ -11,6 +11,7 @@ namespace Unity.MP_FPS.Client
         static class UIElementNames
         {
             public const string HidingBackground = "HidingBackground";
+            public const string DisconnectMessage = "DisconnectMessage";
             public const string NameInputField = "PlayerNameField";
             public const string ChooseCharacterOption = "ChooseCharacterOption";
             public const string ConnectionModeOption = "ConnetionModeOption";
@@ -58,6 +59,20 @@ namespace Unity.MP_FPS.Client
             {
                 dataSource = GameSettings.Instance,
                 dataSourcePath = new PropertyPath(GameSettings.MainMenuStylePropertyName),
+                bindingMode = BindingMode.ToTarget,
+            });
+
+            var disconnectMessage = m_MainMenu.Q<Label>(UIElementNames.DisconnectMessage);
+            disconnectMessage.SetBinding("text", new DataBinding
+            {
+                dataSource = ConnectionSettings.Instance,
+                dataSourcePath = new PropertyPath(nameof(ConnectionSettings.DisconnectMessage)),
+                bindingMode = BindingMode.ToTarget,
+            });
+            disconnectMessage.SetBinding("style.display", new DataBinding
+            {
+                dataSource = ConnectionSettings.Instance,
+                dataSourcePath = new PropertyPath(ConnectionSettings.DisconnectMessageStylePropertyName),
                 bindingMode = BindingMode.ToTarget,
             });
 
@@ -187,11 +202,23 @@ namespace Unity.MP_FPS.Client
 
         }
 
-        static void OnCreateGamePressed() => GameManager.Instance.StartGameAsync(CreationType.CreateOrJoin);
+        static void OnCreateGamePressed()
+        {
+            ConnectionSettings.Instance.ClearDisconnectMessage();
+            GameManager.Instance.StartGameAsync(CreationType.CreateOrJoin);
+        }
 
-        static void OnStartHostPressed() => GameManager.Instance.StartGameAsync(CreationType.Host);
+        static void OnStartHostPressed()
+        {
+            ConnectionSettings.Instance.ClearDisconnectMessage();
+            GameManager.Instance.StartGameAsync(CreationType.Host);
+        }
 
-        static void OnConnectToServerPressed() => GameManager.Instance.StartGameAsync(CreationType.ConnectAndJoin);
+        static void OnConnectToServerPressed()
+        {
+            ConnectionSettings.Instance.ClearDisconnectMessage();
+            GameManager.Instance.StartGameAsync(CreationType.ConnectAndJoin);
+        }
 
         void OnOptionsPressed()
         {
