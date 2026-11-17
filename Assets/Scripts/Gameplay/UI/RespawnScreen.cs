@@ -194,7 +194,7 @@ namespace Unity.MP_FPS.UI
                     SpectatorTarget target = m_SpectatorTargets[m_SpectatorIndex];
                     string prefix = ClientRespawnState.IsRespawning
                         ? $"RESPAWNING IN {Mathf.CeilToInt(m_RespawnCountdown)}\n"
-                        : string.Empty;
+                        : "WAITING FOR NEXT ROUND\n";
                     m_RespawnTimerLabel.text = prefix +
                         $"SPECTATING {target.Name}\nLMB NEXT  •  RMB PREVIOUS";
                 }

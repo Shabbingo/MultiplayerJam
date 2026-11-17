@@ -42,6 +42,10 @@ namespace Gameplay.Leaderboard
 
         private readonly List<DraftTurnEntry> _draftOrder = new();
         private readonly HashSet<int> _lateJoinersAwaitingCatchUp = new();
+        // Connected players who were not contestants when the current round began.
+        // They may spectate and receive catch-up picks, but never participate in
+        // survivor counting or winner selection until BeginNextRound clears this set.
+        private readonly HashSet<int> _waitingForNextRound = new();
         private readonly List<CardModifierDefinition> _currentOffers = new();
         private int _draftIndex;
         private int _activeDraftNetworkId = -1;
@@ -165,7 +169,8 @@ namespace Gameplay.Leaderboard
             return ServerInstance == null ||
                    ServerInstance._phase == RoundPhase.WaitingForPlayers ||
                    ServerInstance._phase == RoundPhase.Combat &&
-                   !ServerInstance._eliminatedThisRound.Contains(networkId);
+                   !ServerInstance._eliminatedThisRound.Contains(networkId) &&
+                   !ServerInstance._waitingForNextRound.Contains(networkId);
         }
 
         public int GetOfferedCardId(int index)
@@ -240,6 +245,7 @@ namespace Gameplay.Leaderboard
             _finishingOrder.Remove(networkId);
             _draftOrder.RemoveAll(entry => entry.NetworkId == networkId);
             _lateJoinersAwaitingCatchUp.Remove(networkId);
+            _waitingForNextRound.Remove(networkId);
         }
 
         public void AddKill(int killer, int victim)
@@ -451,21 +457,33 @@ namespace Gameplay.Leaderboard
                     NetworkId = networkId,
                     PlayerName = playerName
                 });
-                if (_phase == RoundPhase.Combat ||
-                    _phase == RoundPhase.PreparingRound)
+                if (_phase == RoundPhase.Combat)
                 {
+                    _waitingForNextRound.Add(networkId);
                     _lateJoinersAwaitingCatchUp.Add(networkId);
                     Debug.Log($"[Server] Player {networkId} ({playerName}) joined " +
-                              "in progress and will receive catch-up card picks after the round.");
+                              "in progress, is waiting for the next round, and will " +
+                              "receive catch-up card picks after this round.");
+                }
+                else if (_phase == RoundPhase.PreparingRound)
+                {
+                    // The combat round has not started yet, so this player may enter
+                    // it normally. They still need catch-up cards after the round.
+                    _lateJoinersAwaitingCatchUp.Add(networkId);
                 }
                 else if (_phase == RoundPhase.Drafting)
                 {
                     // A late joiner observes the in-progress draft and enters with
                     // everyone else when the following round starts. Append their
                     // catch-up event to the end of this draft.
+                    _waitingForNextRound.Add(networkId);
                     _lateJoinersAwaitingCatchUp.Add(networkId);
                     QueueLateJoinCatchUpTurns(buffer);
                     _preparePlayersPending = true;
+                }
+                else if (_phase == RoundPhase.MatchEnded)
+                {
+                    _waitingForNextRound.Add(networkId);
                 }
                 AnnouncePlayerJoined(playerName);
                 Debug.Log($"[Server] Added player {networkId} ({playerName}) to the round match.");
@@ -488,6 +506,7 @@ namespace Gameplay.Leaderboard
             _finishingOrder.Clear();
             _draftOrder.Clear();
             _lateJoinersAwaitingCatchUp.Clear();
+            _waitingForNextRound.Clear();
             _currentOffers.Clear();
             _activeDraftNetworkId = -1;
             _phase = RoundPhase.PreparingRound;
@@ -552,15 +571,26 @@ namespace Gameplay.Leaderboard
         private void RecordElimination(int victim, int preferredWinner,
             DynamicBuffer<PlayerScoreEntry> buffer)
         {
+            // A join-in-progress spectator was never a contestant in this round.
+            if (_waitingForNextRound.Contains(victim)) return;
+
             // Keep solo development/testing usable; last-man-standing only begins
-            // once at least two joined players are on the scoreboard.
-            if (buffer.Length < 2) return;
+            // once at least two current-round contestants are present. Spectators
+            // waiting for the next round do not count toward this threshold.
+            int contestantCount = 0;
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                if (!_waitingForNextRound.Contains(buffer[i].NetworkId))
+                    contestantCount++;
+            }
+            if (contestantCount < 2) return;
             if (!_eliminatedThisRound.Add(victim)) return;
             _finishingOrder.Add(victim);
             int aliveCount = 0;
             int survivorId = -1;
             for (int i = 0; i < buffer.Length; i++)
             {
+                if (_waitingForNextRound.Contains(buffer[i].NetworkId)) continue;
                 if (_eliminatedThisRound.Contains(buffer[i].NetworkId)) continue;
                 aliveCount++;
                 survivorId = buffer[i].NetworkId;
@@ -833,6 +863,7 @@ namespace Gameplay.Leaderboard
             _eliminatedThisRound.Clear();
             _finishingOrder.Clear();
             _draftOrder.Clear();
+            _waitingForNextRound.Clear();
             _roundStartTimer = GetRules().RoundStartDelay;
             QueueAllPlayersForRespawn(_roundStartTimer);
             BroadcastRPC(new RoundPreparingRpc
