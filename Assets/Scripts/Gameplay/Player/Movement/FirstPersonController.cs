@@ -54,6 +54,31 @@ public class FirstPersonController : MonoBehaviour
     public float LargeIncomingDamageReduction =>
         Mathf.Clamp01(m_LargeIncomingDamageReduction);
 
+    /// <summary>
+    /// Returns the player's actual world-scale multiplier for damage, projectile
+    /// dimensions and other physical outputs created at this moment.
+    /// </summary>
+    public float GetSizeOutputMultiplier(in PredictedPlayerGhost predictedPlayer)
+    {
+        if (m_PlayerGhost == null)
+        {
+            TryGetComponent(out m_PlayerGhost);
+        }
+
+        if (m_PlayerGhost != null)
+        {
+            return Mathf.Max(0.01f,
+                m_PlayerGhost.GetTargetScaleMultiplier(in predictedPlayer));
+        }
+
+        return predictedPlayer.SizeState switch
+        {
+            SmallSizeState => 0.2f,
+            LargeSizeState => 2f,
+            _ => 1f
+        };
+    }
+
     [Header("Self Resize Camera Pulse")]
     [SerializeField, Range(0f, 1f), Tooltip("Peak lens distortion used by a self-resize pulse. Grow and shrink use opposite distortion directions.")]
     private float m_SelfResizeLensDistortion = 0.35f;
@@ -1225,7 +1250,8 @@ public class FirstPersonController : MonoBehaviour
         // Shooting
         if (ghostState.LastShotTick > _lastAnimatedShotTick)
         {
-            if (!ghostState.ControllerState.IsReloadingState && !animator.GetBool(AnimationParameters.IsShooting))
+            if (!ghostState.ControllerState.IsReloadingState &&
+                !animator.GetBool(AnimationParameters.IsShooting))
             {
                 if (m_EnableAnimationLogging)
                 {
@@ -1245,6 +1271,7 @@ public class FirstPersonController : MonoBehaviour
             if (!ghostState.SecondaryIsReloading)
             {
                 animator.SetTrigger(AnimationParameters.ShootGrenade);
+
             }
 
             _lastAnimatedGrenadeShotTick = ghostState.LastGrenadeShotTick;

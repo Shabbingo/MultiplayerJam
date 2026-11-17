@@ -85,6 +85,7 @@ namespace Unity.MP_FPS
         private readonly Dictionary<int, HitscanBloomState> m_HitscanBloomByPlayer = new();
         private readonly List<int> m_HitscanBloomPlayersScratch = new();
         private readonly Dictionary<int, float> m_ReflectActiveTimers = new();
+        private readonly Dictionary<int, float> m_ReflectSizeMultipliers = new();
         private readonly List<int> m_ReflectPlayersScratch = new();
         private readonly Dictionary<int, int> m_SecondChanceUsesConsumed = new();
         private readonly Dictionary<int, float> m_SecondChanceInvulnerabilityTimers = new();
@@ -228,6 +229,7 @@ namespace Unity.MP_FPS
             m_HitscanBloomByPlayer.Clear();
             m_HitscanBloomPlayersScratch.Clear();
             m_ReflectActiveTimers.Clear();
+            m_ReflectSizeMultipliers.Clear();
             m_ReflectPlayersScratch.Clear();
             m_SecondChanceUsesConsumed.Clear();
             m_SecondChanceInvulnerabilityTimers.Clear();
@@ -269,6 +271,7 @@ namespace Unity.MP_FPS
             UpdateHitscanBloom(deltaTime);
             UpdateSecondChanceRoundState();
             UpdateReflectTimerDictionary(m_ReflectActiveTimers, deltaTime);
+            RemoveInactiveReflectSizeSnapshots();
             UpdateReflectTimerDictionary(m_SecondChanceInvulnerabilityTimers,
                 deltaTime);
             UpdateReflectTimerDictionary(m_ConservationCooldownTimers, deltaTime);
@@ -684,7 +687,11 @@ namespace Unity.MP_FPS
                         {
                             bool isFinalMagazineRound =
                                 predictedPlayer.ValueRO.CurrentAmmo == 1;
-                            float shotSignedSizeDelta = runtimeProfile.SignedSizeDelta *
+                            float sizeOutputMultiplier = playerGhost.Controller
+                                .GetSizeOutputMultiplier(in predictedPlayer.ValueRO);
+                            Cards.SizeScaledWeaponOutput shotOutput = runtimeProfile
+                                .CreateSizeScaledOutput(sizeOutputMultiplier);
+                            float shotSignedSizeDelta = shotOutput.SignedSizeDelta *
                                 (isFinalMagazineRound
                                     ? runtimeProfile.LastWordDamageMultiplier
                                     : 1f);
@@ -760,19 +767,19 @@ namespace Unity.MP_FPS
                                         if (runtimeProfile.HasExplosion)
                                         {
                                             ApplyRuntimeAreaDamage(hit.Point,
-                                                runtimeProfile.ExplosionRadius,
+                                                shotOutput.ExplosionRadius,
                                                 shooterNetworkId,
                                                 distanceScaledDelta,
-                                                Mathf.Abs(runtimeProfile.BleedDamagePerSecond) > 0f
+                                                Mathf.Abs(shotOutput.BleedDamagePerSecond) > 0f
                                                     ? PlayerResizeEffect.None
                                                     : weaponData.ResizeEffect,
                                                 weaponData.ResizeEffectDuration,
                                                 runtimeProfile.SlowPercent,
                                                 runtimeProfile.SlowDuration,
-                                                runtimeProfile.BleedDamagePerSecond,
+                                                shotOutput.BleedDamagePerSecond,
                                                 runtimeProfile.BleedDuration,
                                                 runtimeProfile.LifeStealPercent,
-                                                runtimeProfile.GravityWellPullStrength,
+                                                shotOutput.GravityWellPullStrength,
                                                 serverTick,
                                                 playerGhostLookup,
                                                 ghostOwnerLookup);
@@ -787,13 +794,13 @@ namespace Unity.MP_FPS
                                                 ApplyIncomingWeaponDamage(hit.PlayerEntity,
                                                     shooterNetworkId,
                                                     distanceScaledDelta,
-                                                    Mathf.Abs(runtimeProfile.BleedDamagePerSecond) > 0f
+                                                    Mathf.Abs(shotOutput.BleedDamagePerSecond) > 0f
                                                         ? PlayerResizeEffect.None
                                                         : weaponData.ResizeEffect,
                                                     weaponData.ResizeEffectDuration,
                                                     runtimeProfile.SlowPercent,
                                                     runtimeProfile.SlowDuration,
-                                                    runtimeProfile.BleedDamagePerSecond,
+                                                    shotOutput.BleedDamagePerSecond,
                                                     runtimeProfile.BleedDuration,
                                                     runtimeProfile.LifeStealPercent,
                                                     serverTick,
@@ -861,22 +868,22 @@ namespace Unity.MP_FPS
                                             TracksAim = runtimeProfile.TracksAim ? (byte)1 : (byte)0,
                                             HomingTurnSpeed = runtimeProfile.HomingTurnSpeed,
                                             HasExplosion = runtimeProfile.HasExplosion ? (byte)1 : (byte)0,
-                                            ExplosionRadius = runtimeProfile.ExplosionRadius,
+                                            ExplosionRadius = shotOutput.ExplosionRadius,
                                             AppliesSlow = runtimeProfile.AppliesSlow ? (byte)1 : (byte)0,
                                             SlowPercent = runtimeProfile.SlowPercent,
                                             SlowDuration = runtimeProfile.SlowDuration,
                                             ProjectileSpeed = runtimeProfile.ProjectileSpeed,
                                             MaxBounces = runtimeProfile.MaxBounces,
-                                            ProjectileScale = runtimeProfile.ProjectileScale,
+                                            ProjectileScale = shotOutput.ProjectileScale,
                                             GrowsOverDistance = runtimeProfile.GrowsOverDistance ? (byte)1 : (byte)0,
-                                            BleedDamagePerSecond = runtimeProfile.BleedDamagePerSecond,
+                                            BleedDamagePerSecond = shotOutput.BleedDamagePerSecond,
                                             BleedDuration = runtimeProfile.BleedDuration,
                                             LifeStealPercent = runtimeProfile.LifeStealPercent,
                                             GrowthPerMetre = runtimeProfile.GrowthPerMetre,
                                             BounceVelocityRetention = runtimeProfile.BounceVelocityRetention,
                                             WallPenetrations = runtimeProfile.WallPenetrations,
                                             WallDamageRetention = runtimeProfile.WallDamageRetention,
-                                            GravityWellPullStrength = runtimeProfile.GravityWellPullStrength,
+                                            GravityWellPullStrength = shotOutput.GravityWellPullStrength,
                                             IsLobbedProjectile = runtimeProfile.IsLobbedProjectile ? (byte)1 : (byte)0,
                                             LobUpwardSpeed = runtimeProfile.LobUpwardSpeed,
                                             ProjectileGravity = runtimeProfile.ProjectileGravity
@@ -1501,10 +1508,13 @@ namespace Unity.MP_FPS
 
             var card = WeaponManager.Instance?.CardModifierCatalog?
                 .FindByKind(Cards.CardModifierKind.ConservationOfMass);
-            float radius = Mathf.Max(0f, card?.EffectRadiusMetres ?? 4f);
-            float force = Mathf.Max(0f, card?.ValuePerStack ?? 8f) * stacks;
+            float sizeOutputMultiplier = GetSizeOutputMultiplier(sourceEntity);
+            float radius = Mathf.Max(0f, card?.EffectRadiusMetres ?? 4f) *
+                           sizeOutputMultiplier;
+            float force = Mathf.Max(0f, card?.ValuePerStack ?? 8f) * stacks *
+                          sizeOutputMultiplier;
             float damage = Mathf.Max(0f,
-                card?.AreaDamagePerStack ?? 10f) * stacks;
+                card?.AreaDamagePerStack ?? 10f) * stacks * sizeOutputMultiplier;
             float cooldown = Mathf.Max(0.01f,
                 card?.EffectDurationSeconds ?? 10f);
             m_ConservationCooldownTimers[sourceNetworkId] = cooldown;
@@ -1523,11 +1533,14 @@ namespace Unity.MP_FPS
 
             var card = WeaponManager.Instance?.CardModifierCatalog?
                 .FindByKind(Cards.CardModifierKind.HeavyFooted);
-            float radius = Mathf.Max(0f, card?.EffectRadiusMetres ?? 4f);
+            float sizeOutputMultiplier = GetSizeOutputMultiplier(sourceEntity);
+            float radius = Mathf.Max(0f, card?.EffectRadiusMetres ?? 4f) *
+                           sizeOutputMultiplier;
             float damageRadius = Mathf.Max(0f,
-                card?.SecondaryEffectRadiusMetres ?? 1f);
-            float damage = Mathf.Max(0f, card?.ValuePerStack ?? 50f) * stacks;
-            float force = 8f * stacks;
+                card?.SecondaryEffectRadiusMetres ?? 1f) * sizeOutputMultiplier;
+            float damage = Mathf.Max(0f, card?.ValuePerStack ?? 50f) * stacks *
+                           sizeOutputMultiplier;
+            float force = 8f * stacks * sizeOutputMultiplier;
             ApplyRadialCardImpulse(sourceEntity, sourceNetworkId,
                 m_PlayerGhostLookup[sourceEntity].ControllerState.CurrentPosition,
                 radius, force, damageRadius, damage, hitTick);
@@ -1631,6 +1644,33 @@ namespace Unity.MP_FPS
             }
 
             return stompTarget != Entity.Null;
+        }
+
+        private float GetSizeOutputMultiplier(Entity sourceEntity)
+        {
+            if (!m_PlayerGhostLookup.HasComponent(sourceEntity))
+            {
+                return 1f;
+            }
+
+            PredictedPlayerGhost sourcePlayer = m_PlayerGhostLookup[sourceEntity];
+            if (EntityManager.HasComponent<PlayerControllerLink>(sourceEntity))
+            {
+                var controllerLink = EntityManager
+                    .GetComponentObject<PlayerControllerLink>(sourceEntity);
+                if (controllerLink?.Controller != null)
+                {
+                    return controllerLink.Controller.GetSizeOutputMultiplier(
+                        in sourcePlayer);
+                }
+            }
+
+            return sourcePlayer.SizeState switch
+            {
+                FirstPersonController.SmallSizeState => 0.2f,
+                FirstPersonController.LargeSizeState => 2f,
+                _ => 1f
+            };
         }
 
         private void ApplyRadialCardImpulse(Entity sourceEntity, int sourceNetworkId,
@@ -1781,6 +1821,8 @@ namespace Unity.MP_FPS
             }
 
             m_ReflectActiveTimers[playerNetworkId] = reflectDuration;
+            m_ReflectSizeMultipliers[playerNetworkId] =
+                GetSizeOutputMultiplier(playerEntity);
             predictedPlayer.ReflectCharges = Mathf.Max(0,
                 predictedPlayer.ReflectCharges - 1);
             if (predictedPlayer.ReflectCharges < predictedPlayer.MaxReflectCharges &&
@@ -1857,15 +1899,32 @@ namespace Unity.MP_FPS
             }
         }
 
+        private void RemoveInactiveReflectSizeSnapshots()
+        {
+            m_ReflectPlayersScratch.Clear();
+            foreach (var pair in m_ReflectSizeMultipliers)
+            {
+                if (!m_ReflectActiveTimers.ContainsKey(pair.Key))
+                {
+                    m_ReflectPlayersScratch.Add(pair.Key);
+                }
+            }
+
+            foreach (int playerNetworkId in m_ReflectPlayersScratch)
+            {
+                m_ReflectSizeMultipliers.Remove(playerNetworkId);
+            }
+        }
+
         public bool TryAbsorbProjectile(Vector3 segmentStart, Vector3 segmentEnd,
             int projectileOwnerNetworkId, out Vector3 absorptionPosition)
         {
             absorptionPosition = segmentEnd;
             var nullFieldCard = WeaponManager.Instance?.CardModifierCatalog?
                 .FindByKind(Cards.CardModifierKind.NullField);
-            float fieldRadius = Mathf.Max(0f,
+            float baseFieldRadius = Mathf.Max(0f,
                 nullFieldCard?.EffectRadiusMetres ?? 0f);
-            if (fieldRadius <= 0f || m_ReflectActiveTimers.Count == 0)
+            if (baseFieldRadius <= 0f || m_ReflectActiveTimers.Count == 0)
             {
                 return false;
             }
@@ -1896,8 +1955,13 @@ namespace Unity.MP_FPS
                     continue;
                 }
 
+                float sizeOutputMultiplier = m_ReflectSizeMultipliers.TryGetValue(
+                    playerNetworkId, out float snapshotMultiplier)
+                    ? snapshotMultiplier
+                    : GetSizeOutputMultiplier(playerEntity);
+                float fieldRadius = baseFieldRadius * sizeOutputMultiplier;
                 Vector3 fieldCentre = (Vector3)player.ControllerState.CurrentPosition +
-                                      Vector3.up;
+                                      Vector3.up * sizeOutputMultiplier;
                 Vector3 closestPoint = ClosestPointOnSegment(segmentStart,
                     segmentEnd, fieldCentre);
                 float distanceSq = (closestPoint - fieldCentre).sqrMagnitude;
@@ -2134,6 +2198,13 @@ namespace Unity.MP_FPS
                 in damagedPlayer.ValueRO, damageSourceNetworkId,
                 damageFullyAbsorbed);
             damagedPlayer.ValueRW.LastHitTick = hitTick;
+
+            if (damageSourceNetworkId != damagedPlayerNetworkId &&
+                VisualEffectManager.ServerInstance != null)
+            {
+                VisualEffectManager.ServerInstance.Server_RequestHitConfirmation(
+                    damageSourceNetworkId, hitTick);
+            }
 
             if (Mathf.Abs(bleedDamagePerSecond) > 0f && bleedDuration > 0f &&
                 damagedPlayer.ValueRO.CurrentHealth > 0f)

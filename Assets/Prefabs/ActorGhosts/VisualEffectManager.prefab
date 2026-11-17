@@ -48,6 +48,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.VisualEffectManager
   m_PlayerExplosionPrefab: {fileID: 6482109374650192837, guid: 4d3e503be2b2419f8ce7856c64a3e976, type: 3}
+  m_HitMarkerSound: {fileID: 11400000, guid: a33731067c5cbe348b2c7a9de06b59ca, type: 2}
+  m_SmallProjectileImpactSound: {fileID: 11400000, guid: 3a0ed19e27a94aa89ed39c0acfcbbba8, type: 2}
+  m_MediumProjectileImpactSound: {fileID: 11400000, guid: 8bf0a979c6a64db194f6888b180bf2d3, type: 2}
+  m_LargeProjectileImpactSound: {fileID: 11400000, guid: d5cc91f1e5d848d1974cc36b1e94b2ec, type: 2}
   m_MuzzleFlashScale: 0.1
 --- !u!114 &2887222517406463671
 MonoBehaviour:

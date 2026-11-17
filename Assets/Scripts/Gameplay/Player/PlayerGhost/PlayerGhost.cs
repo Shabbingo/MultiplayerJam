@@ -270,6 +270,15 @@ namespace Unity.MP_FPS
             float normalizedPitch = controllerState.PitchDegrees / 85f;
             
             m_Animator3P.SetFloat(AimPitchHash, normalizedPitch);
+
+            // Animator root curves are evaluated after the GhostBridge client
+            // update. Correct the visual root here so shoot/jump clips cannot
+            // rotate or offset the whole remote character for the rendered frame.
+            if (m_OtherPlayerVisuals != null)
+            {
+                m_OtherPlayerVisuals.transform.localPosition = Vector3.zero;
+                m_OtherPlayerVisuals.transform.localRotation = Quaternion.identity;
+            }
         }
 
         public override void OnGhostLinked()

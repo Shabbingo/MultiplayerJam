@@ -92,6 +92,26 @@ namespace Unity.MP_FPS.Cards
     /// A resolved snapshot. Base ScriptableObjects remain immutable and can be shared
     /// by every player; gameplay consumes this per-player result instead.
     /// </summary>
+    public readonly struct SizeScaledWeaponOutput
+    {
+        public readonly float SignedSizeDelta;
+        public readonly float ExplosionRadius;
+        public readonly float BleedDamagePerSecond;
+        public readonly float ProjectileScale;
+        public readonly float GravityWellPullStrength;
+
+        public SizeScaledWeaponOutput(float signedSizeDelta,
+            float explosionRadius, float bleedDamagePerSecond,
+            float projectileScale, float gravityWellPullStrength)
+        {
+            SignedSizeDelta = signedSizeDelta;
+            ExplosionRadius = explosionRadius;
+            BleedDamagePerSecond = bleedDamagePerSecond;
+            ProjectileScale = projectileScale;
+            GravityWellPullStrength = gravityWellPullStrength;
+        }
+    }
+
     public readonly struct RuntimeWeaponProfile
     {
         public readonly WeaponData SourceProfile;
@@ -133,6 +153,25 @@ namespace Unity.MP_FPS.Cards
         public float SignedSizeDelta => Hand == WeaponHand.Right
             ? Mathf.Abs(Damage)
             : -Mathf.Abs(Damage);
+
+        /// <summary>
+        /// Snapshots the physical output of a shot at the shooter's current size.
+        /// Card modifiers are already resolved into this profile, so size is the
+        /// final baseline multiplier and later resizing cannot alter the shot.
+        /// Timing values such as speed, fire interval, reload and duration are not
+        /// physical output and intentionally remain unchanged.
+        /// </summary>
+        public SizeScaledWeaponOutput CreateSizeScaledOutput(
+            float playerSizeMultiplier)
+        {
+            float sizeMultiplier = Mathf.Max(0.01f, playerSizeMultiplier);
+            return new SizeScaledWeaponOutput(
+                SignedSizeDelta * sizeMultiplier,
+                ExplosionRadius * sizeMultiplier,
+                BleedDamagePerSecond * sizeMultiplier,
+                ProjectileScale * sizeMultiplier,
+                GravityWellPullStrength * sizeMultiplier);
+        }
 
         public RuntimeWeaponProfile(WeaponData sourceProfile, WeaponHand hand,
             WeaponFireMode fireMode, float damage, float fireInterval,

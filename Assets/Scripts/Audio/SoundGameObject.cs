@@ -144,6 +144,16 @@ public class SoundGameObject
     {
         m_Active = true;
         m_Emitter = soundEmitter;
+        // A pooled source may previously have been parented beneath an inactive
+        // remote-player visual. Always restore the Unity component before reuse.
+        if (!m_AudioSource.gameObject.activeSelf)
+        {
+            m_AudioSource.gameObject.SetActive(true);
+        }
+        if (!m_AudioSource.enabled)
+        {
+            m_AudioSource.enabled = true;
+        }
         m_AudioSource.transform.position = Vector3.zero;
     }
 
@@ -377,6 +387,9 @@ public class SoundGameObject
     /// <param name="position">World position coordinates</param>
     public void SetPosition(Vector3 position)
     {
+        // World-position sounds must be detached from any transform used by a
+        // previous playback. That transform may now be inactive or destroyed.
+        m_AudioSource.transform.SetParent(m_SoundGameObjectPool.transform, true);
         m_AudioSource.transform.position = position;
         m_PositionType = PositionType.Position;
         m_Parent = m_SoundGameObjectPool;

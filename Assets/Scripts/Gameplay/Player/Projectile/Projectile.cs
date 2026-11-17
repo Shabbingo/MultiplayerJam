@@ -120,6 +120,14 @@ namespace Unity.MP_FPS
         private float _runtimeLobUpwardSpeed;
         private float _runtimeProjectileGravity;
 
+        private float CurrentProjectileScale => Mathf.Max(0.1f,
+            _runtimeProjectileScale * (_growsOverDistance
+                ? 1f + _distanceTravelled * _growthPerMetre
+                : 1f));
+
+        private float CurrentCollisionRadius =>
+            ProjectileRadius * CurrentProjectileScale;
+
         public void SetGuidedTarget(Vector3 targetPosition, bool isActive = true)
         {
             _guidedTarget = targetPosition;
@@ -244,8 +252,10 @@ namespace Unity.MP_FPS
                         : -transform.forward;
                     SpawnImpactEffect(weaponData, absorptionPosition,
                         effectDirection, 0f,
-                        GetSignedSizeDelta(weaponData, projectileData));
+                        GetSignedSizeDelta(weaponData, projectileData),
+                        CurrentProjectileScale);
                 }
+                RequestImpactSound(absorptionPosition, weaponData, projectileData);
                 HandleGeometryImpact(absorptionPosition);
                 return;
             }
@@ -408,7 +418,7 @@ namespace Unity.MP_FPS
                 displacement.sqrMagnitude > 0.000001f &&
                 UnityEngine.Physics.SphereCast(
                     transform.position,
-                    ProjectileRadius,
+                    CurrentCollisionRadius,
                     displacement.normalized,
                     out RaycastHit hit,
                     displacement.magnitude,
@@ -420,13 +430,13 @@ namespace Unity.MP_FPS
                 {
                     return;
                 }
-                if (TryBounce(hit.point, hit.normal, weaponData))
+                if (TryBounce(hit.collider, hit.point, hit.normal, weaponData))
                 {
                     return;
                 }
 
                 transform.position = hit.point + hit.normal *
-                    (ProjectileRadius + BounceSurfaceOffset);
+                    (CurrentCollisionRadius + BounceSurfaceOffset);
                 _velocity = Vector3.zero;
                 return;
             }
@@ -458,7 +468,7 @@ namespace Unity.MP_FPS
             // Check initial overlaps first, skipping the shooter's own controller.
             int overlapCount = UnityEngine.Physics.OverlapSphereNonAlloc(
                 transform.position,
-                ProjectileRadius,
+                CurrentCollisionRadius,
                 _overlapResults,
                 _hitLayerMask,
                 QueryTriggerInteraction.Ignore);
@@ -474,7 +484,7 @@ namespace Unity.MP_FPS
 
                 // When the projectile overlaps both the floor and a nearby player, prefer the
                 // player. This avoids a small player's low muzzle clipping the floor first.
-                if (hitCollider.gameObject.layer == LayerMask.NameToLayer("ServerPlayer"))
+                if (IsPlayerCollider(hitCollider))
                 {
                     var impactPosition = hitCollider.ClosestPoint(transform.position);
                     HandleCollision(hitCollider, impactPosition, -travelDirection, weaponData,
@@ -494,7 +504,8 @@ namespace Unity.MP_FPS
                 {
                     return true;
                 }
-                if (TryBounce(impactPosition, impactNormal, weaponData))
+                if (TryBounce(overlappingGeometry, impactPosition, impactNormal,
+                        weaponData))
                 {
                     return true;
                 }
@@ -506,7 +517,7 @@ namespace Unity.MP_FPS
 
             int castCount = UnityEngine.Physics.SphereCastNonAlloc(
                 transform.position,
-                ProjectileRadius,
+                CurrentCollisionRadius,
                 travelDirection,
                 _castResults,
                 distanceThisFrame,
@@ -536,15 +547,15 @@ namespace Unity.MP_FPS
                 return false;
             }
 
-            if (closestHit.collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") &&
+            if (!IsPlayerCollider(closestHit.collider) &&
                 TryPenetrateGeometry(closestHit.collider, closestHit.point,
                     travelDirection))
             {
                 return true;
             }
 
-            if (closestHit.collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") &&
-                TryBounce(closestHit.point, closestHit.normal, weaponData))
+            if (TryBounce(closestHit.collider, closestHit.point, closestHit.normal,
+                    weaponData))
             {
                 return true;
             }
@@ -571,8 +582,9 @@ namespace Unity.MP_FPS
                 (Mathf.Abs(direction.x) * extents.x +
                  Mathf.Abs(direction.y) * extents.y +
                  Mathf.Abs(direction.z) * extents.z);
-            float clearance = Mathf.Max(ProjectileRadius * 2f,
-                projectedThickness + ProjectileRadius + BounceSurfaceOffset);
+            float collisionRadius = CurrentCollisionRadius;
+            float clearance = Mathf.Max(collisionRadius * 2f,
+                projectedThickness + collisionRadius + BounceSurfaceOffset);
             transform.position = impactPosition + direction * clearance;
             _remainingWallPenetrations--;
             _collisionGraceTimer = BounceCollisionGrace;
@@ -592,9 +604,13 @@ namespace Unity.MP_FPS
             return true;
         }
 
-        private bool TryBounce(Vector3 impactPosition, Vector3 impactNormal, WeaponData weaponData)
+        private bool TryBounce(Collider hitCollider, Vector3 impactPosition,
+            Vector3 impactNormal, WeaponData weaponData)
         {
-            if (_runtimeMaxBounces <= 0 || _bounceCount >= _runtimeMaxBounces)
+            // Bounce counts apply only to world geometry. Player colliders can live
+            // on child objects, so enforce the rule here as well as at call sites.
+            if (IsPlayerCollider(hitCollider) || _runtimeMaxBounces <= 0 ||
+                _bounceCount >= _runtimeMaxBounces)
             {
                 return false;
             }
@@ -602,7 +618,8 @@ namespace Unity.MP_FPS
             Vector3 normal = impactNormal.sqrMagnitude > 0.0001f
                 ? impactNormal.normalized
                 : -_velocity.normalized;
-            transform.position = impactPosition + normal * (ProjectileRadius + BounceSurfaceOffset);
+            transform.position = impactPosition + normal *
+                (CurrentCollisionRadius + BounceSurfaceOffset);
             _velocity = Vector3.Reflect(_velocity, normal) *
                         _bounceVelocityRetention;
             _bounceCount++;
@@ -697,6 +714,7 @@ namespace Unity.MP_FPS
             var playerGhostLookup = movementSystem.GetComponentLookup<PredictedPlayerGhost>();
             var ghostOwnerLookup = movementSystem.GetComponentLookup<GhostOwner>();
             Vector3 detonationPosition = transform.position;
+            RequestImpactSound(detonationPosition, weaponData, projectileData);
 
             if (HasExplosion(weaponData, projectileData))
             {
@@ -716,14 +734,15 @@ namespace Unity.MP_FPS
                     : Vector3.up;
                 SpawnImpactEffect(weaponData, detonationPosition, effectDirection,
                     GetExplosionRadius(weaponData, projectileData),
-                    GetSignedSizeDelta(weaponData, projectileData));
+                    GetSignedSizeDelta(weaponData, projectileData),
+                    CurrentProjectileScale);
             }
         }
 
         private static bool IsOwnerCollider(Collider collider, in ProjectileData projectileData,
             ComponentLookup<GhostOwner> ghostOwnerLookup)
         {
-            if (collider.gameObject.layer != LayerMask.NameToLayer("ServerPlayer") ||
+            if (!IsPlayerCollider(collider) ||
                 !GhostGameObject.TryFindGhostGameObject(collider.gameObject, out var hitGhostObject) ||
                 !ghostOwnerLookup.HasComponent(hitGhostObject.LinkedEntity))
             {
@@ -733,18 +752,39 @@ namespace Unity.MP_FPS
             return ghostOwnerLookup[hitGhostObject.LinkedEntity].NetworkId == projectileData.OwnerNetworkId;
         }
 
+        private static bool IsPlayerCollider(Collider collider)
+        {
+            if (collider == null)
+            {
+                return false;
+            }
+
+            int serverPlayerLayer = LayerMask.NameToLayer("ServerPlayer");
+            for (Transform current = collider.transform; current != null;
+                 current = current.parent)
+            {
+                if (current.gameObject.layer == serverPlayerLayer)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void HandleCollision(Collider hitCollider, Vector3 impactPosition, Vector3 impactNormal,
             WeaponData weaponData, in ProjectileData projectileData, World world,
             ComponentLookup<PredictedPlayerGhost> playerGhostLookup,
             ComponentLookup<GhostOwner> ghostOwnerLookup)
         {
             var hitObject = hitCollider.gameObject;
+            RequestImpactSound(impactPosition, weaponData, projectileData);
             if (HasExplosion(weaponData, projectileData))
             {
                 HandleAreaOfEffectImpact(impactPosition, weaponData, projectileData, world,
                     playerGhostLookup, ghostOwnerLookup);
             }
-            else if (hitObject.layer == LayerMask.NameToLayer("ServerPlayer"))
+            else if (IsPlayerCollider(hitCollider))
             {
                 HandlePlayerImpact(hitObject, impactPosition, world, projectileData, playerGhostLookup,
                     ghostOwnerLookup);
@@ -759,16 +799,18 @@ namespace Unity.MP_FPS
                 var normal = impactNormal.sqrMagnitude > 0.0001f ? impactNormal : -transform.forward;
                 SpawnImpactEffect(weaponData, impactPosition, normal,
                     GetExplosionRadius(weaponData, projectileData),
-                    GetSignedSizeDelta(weaponData, projectileData));
+                    GetSignedSizeDelta(weaponData, projectileData),
+                    CurrentProjectileScale);
             }
         }
 
         private static void SpawnImpactEffect(WeaponData weaponData, Vector3 position,
-            Vector3 effectDirection, float explosionRadius, float signedSizeDelta)
+            Vector3 effectDirection, float explosionRadius, float signedSizeDelta,
+            float projectileScale)
         {
             float effectScale = explosionRadius > 0f
                 ? Mathf.Max(0.01f, explosionRadius)
-                : 1f;
+                : Mathf.Max(0.01f, projectileScale);
             GhostSpawner.GhostReference effectPrefab = weaponData.ProjectileHitVfxPrefab;
             if (explosionRadius > 0f && WeaponManager.Instance != null)
             {
@@ -820,6 +862,35 @@ namespace Unity.MP_FPS
         {
             DrawGizmoAtPosition(impactPosition);
             GhostGameObject.DestroyEntity();
+        }
+
+        private void RequestImpactSound(Vector3 impactPosition,
+            WeaponData weaponData, in ProjectileData projectileData)
+        {
+            if (VisualEffectManager.ServerInstance != null)
+            {
+                VisualEffectManager.ServerInstance.Server_RequestProjectileImpactSound(
+                    impactPosition, GetImpactSizeTier(weaponData, projectileData));
+            }
+        }
+
+        private byte GetImpactSizeTier(WeaponData weaponData,
+            in ProjectileData projectileData)
+        {
+            float effectiveScale = CurrentProjectileScale;
+            float explosionRadius = GetExplosionRadius(weaponData, projectileData);
+            if (explosionRadius > 0f && weaponData.AoeRadius > 0.01f)
+            {
+                effectiveScale = Mathf.Max(effectiveScale,
+                    explosionRadius / weaponData.AoeRadius);
+            }
+
+            if (effectiveScale < 0.8f)
+            {
+                return 0;
+            }
+
+            return effectiveScale > 1.35f ? (byte)2 : (byte)1;
         }
 
         private void HandlePlayerImpact(GameObject hitObject, Vector3 impactPosition, World world,
