@@ -583,6 +583,12 @@ namespace Unity.MP_FPS
 
                     bool growthInputRequested = commandInput.PlayerInput.GrowShot ||
                                                 commandInput.PlayerInput.TossGrenade;
+                    if (commandInput.PlayerInput.Reload &&
+                        playerGhost.Controller.TryReloadBothWeapons(
+                            ref predictedPlayer.ValueRW, in modifiers.ValueRO))
+                    {
+                        predictedPlayer.ValueRW.LastReloadTick = serverTick;
+                    }
                     var secondaryWeaponProfile = WeaponManager.Instance.ResolveRuntimeProfile(
                         WeaponManager.SecondaryWeaponId, in modifiers.ValueRO);
                     var secondaryWeaponData = secondaryWeaponProfile.SourceProfile;
@@ -613,20 +619,11 @@ namespace Unity.MP_FPS
                         !predictedPlayer.ValueRO.SecondaryIsReloading &&
                         secondaryWeaponData != null)
                     {
-                        if (!playerGhost.Controller.TryApplyBloodReload(
-                                ref predictedPlayer.ValueRW,
-                                WeaponManager.SecondaryWeaponId,
-                                secondaryWeaponProfile.MagazineSize,
-                                in modifiers.ValueRO))
+                        if (playerGhost.Controller.TryReloadBothWeapons(
+                                ref predictedPlayer.ValueRW, in modifiers.ValueRO))
                         {
-                            predictedPlayer.ValueRW.SecondaryIsReloading = true;
-                            predictedPlayer.ValueRW.SecondaryReloadTimer =
-                                playerGhost.Controller.GetModifiedReloadTime(
-                                    secondaryWeaponProfile.ReloadTime,
-                                    in predictedPlayer.ValueRO,
-                                    in modifiers.ValueRO);
+                            predictedPlayer.ValueRW.LastReloadTick = serverTick;
                         }
-                        predictedPlayer.ValueRW.LastReloadTick = serverTick;
                     }
 
                     bool useGrowthProjectile = false;
@@ -670,27 +667,13 @@ namespace Unity.MP_FPS
                     var weaponData = runtimeProfile.SourceProfile;
                     if (weaponData != null)
                     {
-                        bool wantsToReload = commandInput.PlayerInput.Reload;
                         bool wantsToShoot = commandInput.PlayerInput.Shoot || useGrowthProjectile;
                         bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
-                        if ((wantsToReload || mustReload) &&
-                            !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
-                            predictedPlayer.ValueRO.CurrentAmmo < runtimeProfile.MagazineSize)
+                        if (mustReload &&
+                            playerGhost.Controller.TryReloadBothWeapons(
+                                ref predictedPlayer.ValueRW, in modifiers.ValueRO))
                         {
-                            if (!playerGhost.Controller.TryApplyBloodReload(
-                                    ref predictedPlayer.ValueRW,
-                                    abilityWeaponId,
-                                    runtimeProfile.MagazineSize,
-                                    in modifiers.ValueRO))
-                            {
-                                predictedPlayer.ValueRW.ControllerState.IsReloadingState = true;
-                                predictedPlayer.ValueRW.ReloadTimer =
-                                    playerGhost.Controller.GetModifiedReloadTime(
-                                        runtimeProfile.ReloadTime,
-                                        in predictedPlayer.ValueRO,
-                                        in modifiers.ValueRO);
-                            }
                             predictedPlayer.ValueRW.LastReloadTick = serverTick;
                         }
 

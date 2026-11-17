@@ -248,6 +248,12 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         predictedPlayer.ValueRW.LocalLookYawPitchDegrees = input.LookYawPitchDegrees;
 
                         bool growthInputRequested = input.GrowShot || input.TossGrenade;
+                        if (input.Reload && controllerLink.Controller.TryReloadBothWeapons(
+                                ref predictedPlayer.ValueRW, in modifiers.ValueRO))
+                        {
+                            predictedPlayer.ValueRW.LastReloadTick =
+                                commandInput.Tick.TickIndexForValidTick;
+                        }
                         var secondaryWeaponProfile = WeaponManager.Instance.ResolveRuntimeProfile(
                             WeaponManager.SecondaryWeaponId, in modifiers.ValueRO);
                         var secondaryWeaponData = secondaryWeaponProfile.SourceProfile;
@@ -279,21 +285,12 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             !predictedPlayer.ValueRO.SecondaryIsReloading &&
                             secondaryWeaponData != null)
                         {
-                            if (!controllerLink.Controller.TryApplyBloodReload(
-                                    ref predictedPlayer.ValueRW,
-                                    WeaponManager.SecondaryWeaponId,
-                                    secondaryWeaponProfile.MagazineSize,
-                                    in modifiers.ValueRO))
+                            if (controllerLink.Controller.TryReloadBothWeapons(
+                                    ref predictedPlayer.ValueRW, in modifiers.ValueRO))
                             {
-                                predictedPlayer.ValueRW.SecondaryIsReloading = true;
-                                predictedPlayer.ValueRW.SecondaryReloadTimer =
-                                    controllerLink.Controller.GetModifiedReloadTime(
-                                        secondaryWeaponProfile.ReloadTime,
-                                        in predictedPlayer.ValueRO,
-                                        in modifiers.ValueRO);
+                                predictedPlayer.ValueRW.LastReloadTick =
+                                    commandInput.Tick.TickIndexForValidTick;
                             }
-                            predictedPlayer.ValueRW.LastReloadTick =
-                                commandInput.Tick.TickIndexForValidTick;
                         }
 
                         bool useGrowthProjectile = false;
@@ -336,27 +333,13 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         var weaponData = runtimeProfile.SourceProfile;
                         if (weaponData != null)
                         {
-                            bool wantsToReload = input.Reload;
                             bool wantsToShoot = input.Shoot || useGrowthProjectile;
                             bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
-                            if ((wantsToReload || mustReload) &&
-                                !predictedPlayer.ValueRO.ControllerState.IsReloadingState &&
-                                predictedPlayer.ValueRO.CurrentAmmo < runtimeProfile.MagazineSize)
+                            if (mustReload &&
+                                controllerLink.Controller.TryReloadBothWeapons(
+                                    ref predictedPlayer.ValueRW, in modifiers.ValueRO))
                             {
-                                if (!controllerLink.Controller.TryApplyBloodReload(
-                                        ref predictedPlayer.ValueRW,
-                                        abilityWeaponId,
-                                        runtimeProfile.MagazineSize,
-                                        in modifiers.ValueRO))
-                                {
-                                    predictedPlayer.ValueRW.ControllerState.IsReloadingState = true;
-                                    predictedPlayer.ValueRW.ReloadTimer =
-                                        controllerLink.Controller.GetModifiedReloadTime(
-                                            runtimeProfile.ReloadTime,
-                                            in predictedPlayer.ValueRO,
-                                            in modifiers.ValueRO);
-                                }
                                 predictedPlayer.ValueRW.LastReloadTick = commandInput.Tick.TickIndexForValidTick;
                             }
                             

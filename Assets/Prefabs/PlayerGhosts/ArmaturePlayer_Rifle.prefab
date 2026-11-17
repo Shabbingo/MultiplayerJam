@@ -280,7 +280,7 @@ MonoBehaviour:
   m_LargeIncomingDamageReduction: 0.25
   m_SmallMovementSpeedMultiplier: 1
   m_LargeMovementSpeedMultiplier: 1
-  m_SharedWeaponCooldown: 0.5
+  m_SharedWeaponCooldown: 1
   m_AirShrinkPushSpeed: 7
   m_ResizeBounceInputWindow: 0.3
   m_ResizeBounceSpeed: 10

@@ -974,9 +974,10 @@ public class FirstPersonController : MonoBehaviour
                            (baseCostPercent / stacks);
         predictedPlayer.CurrentHealth = Mathf.Max(1f,
             predictedPlayer.CurrentHealth - healthCost);
-        predictedPlayer.CurrentAmmo = Mathf.Max(1, magazineSize);
-        predictedPlayer.ControllerState.IsReloadingState = false;
-        predictedPlayer.ReloadTimer = 0f;
+        if (predictedPlayer.EquippedWeaponID == weaponId)
+        {
+            predictedPlayer.CurrentAmmo = Mathf.Max(1, magazineSize);
+        }
         if (weaponId == WeaponManager.SecondaryWeaponId)
         {
             predictedPlayer.ControllerState.SecondaryWeaponAmmo =
@@ -988,8 +989,64 @@ public class FirstPersonController : MonoBehaviour
         {
             predictedPlayer.ControllerState.PrimaryWeaponAmmo =
                 Mathf.Max(1, magazineSize);
+            predictedPlayer.ControllerState.IsReloadingState = false;
+            predictedPlayer.ReloadTimer = 0f;
         }
         return true;
+    }
+
+    public bool TryReloadBothWeapons(ref PredictedPlayerGhost predictedPlayer,
+        in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers)
+    {
+        if (WeaponManager.Instance == null)
+        {
+            return false;
+        }
+
+        bool reloadStarted = false;
+        var primaryProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+            WeaponManager.PrimaryWeaponId, in modifiers);
+        int primaryAmmo = predictedPlayer.EquippedWeaponID ==
+                          WeaponManager.PrimaryWeaponId
+            ? predictedPlayer.CurrentAmmo
+            : predictedPlayer.ControllerState.PrimaryWeaponAmmo;
+        if (primaryProfile.SourceProfile != null &&
+            primaryAmmo < primaryProfile.MagazineSize &&
+            !predictedPlayer.ControllerState.IsReloadingState)
+        {
+            if (!TryApplyBloodReload(ref predictedPlayer,
+                    WeaponManager.PrimaryWeaponId, primaryProfile.MagazineSize,
+                    in modifiers))
+            {
+                predictedPlayer.ControllerState.IsReloadingState = true;
+                predictedPlayer.ReloadTimer = GetModifiedReloadTime(
+                    primaryProfile.ReloadTime, in predictedPlayer, in modifiers);
+            }
+            reloadStarted = true;
+        }
+
+        var secondaryProfile = WeaponManager.Instance.ResolveRuntimeProfile(
+            WeaponManager.SecondaryWeaponId, in modifiers);
+        int secondaryAmmo = predictedPlayer.EquippedWeaponID ==
+                            WeaponManager.SecondaryWeaponId
+            ? predictedPlayer.CurrentAmmo
+            : predictedPlayer.ControllerState.SecondaryWeaponAmmo;
+        if (secondaryProfile.SourceProfile != null &&
+            secondaryAmmo < secondaryProfile.MagazineSize &&
+            !predictedPlayer.SecondaryIsReloading)
+        {
+            if (!TryApplyBloodReload(ref predictedPlayer,
+                    WeaponManager.SecondaryWeaponId,
+                    secondaryProfile.MagazineSize, in modifiers))
+            {
+                predictedPlayer.SecondaryIsReloading = true;
+                predictedPlayer.SecondaryReloadTimer = GetModifiedReloadTime(
+                    secondaryProfile.ReloadTime, in predictedPlayer, in modifiers);
+            }
+            reloadStarted = true;
+        }
+
+        return reloadStarted;
     }
 
     public void ApplyAirborneShotThrust(ref PredictedPlayerGhost predictedPlayer,
@@ -1294,14 +1351,16 @@ public class FirstPersonController : MonoBehaviour
         // Shooting
         if (ghostState.LastShotTick > _lastAnimatedShotTick)
         {
-            if (!ghostState.ControllerState.IsReloadingState &&
-                !animator.GetBool(AnimationParameters.IsShooting))
+            if (!ghostState.ControllerState.IsReloadingState)
             {
                 if (m_EnableAnimationLogging)
                 {
                     Debug.Log($"[ANIMATION] Firing SHOOT trigger at Tick: {ghostState.LastShotTick.ToString()}");
                 }
 
+                // Accepted shots are replicated by tick. Restart the cast for each
+                // tick so remote Rapid Fire animations stay aligned with projectiles.
+                animator.ResetTrigger(AnimationParameters.Shoot);
                 animator.SetTrigger(AnimationParameters.Shoot);
             }
 

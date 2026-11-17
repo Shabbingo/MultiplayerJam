@@ -22,16 +22,25 @@ MonoBehaviour:
   m_Category: 2
   m_Kind: 11
   m_AllowedTargets: 3
-  m_ValuePerStack: 20
+  m_ValuePerStack: 10
   m_EffectDurationSeconds: 3
+  m_EffectRadiusMetres: 0
+  m_SecondaryEffectRadiusMetres: 0
   m_DamagePercentPerStack: 0
+  m_AreaDamagePerStack: 0
   m_BaseDamageMultiplier: 1
+  m_FireIntervalMultiplierPerStack: 1
+  m_MovementSpeedMultiplierPerStack: 1
+  m_IncomingDamageMultiplierPerStack: 1
   m_ReloadTimeMultiplierPerStack: 1
   m_MinimumReloadMultiplier: 0.25
   m_MagazineDeltaPerStack: 0
   m_ProjectileScalePerStack: 0
   m_ProjectileSpeedMultiplierPerStack: 1
+  m_LobUpwardSpeedPerStack: 0
+  m_ProjectileGravityPerStack: 0
   m_ProjectileScaleMultiplierPerStack: 1
+  m_AoeRadiusAdjustmentPerStack: 0
   m_ExplosionRadiusMultiplierPerStack: 1
   m_ScatterHalfAngleDegrees: 7.5
   m_BounceVelocityRetention: 1

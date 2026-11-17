@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 26
   m_DisplayName: Rapid Fire
-  m_Description: Reduces firing interval by 65% per stack, but each stack also reduces
-    damage by 70%.
+  m_Description: 'Reduces firing interval by 65% per stack, but each stack also reduces
+    damage by 20%. '
   m_Icon: {fileID: 0}
   m_StrengthScore: 3
   m_BaseOfferWeight: 1
@@ -44,5 +44,5 @@ MonoBehaviour:
   m_ExplosionRadiusMultiplierPerStack: 1
   m_ScatterHalfAngleDegrees: 7.5
   m_BounceVelocityRetention: 1
-  m_DamageReductionPercent: 0
+  m_DamageReductionPercent: 0.2
   m_TeleportFreezeSeconds: 0.1
