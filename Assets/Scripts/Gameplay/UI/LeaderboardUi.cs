@@ -207,8 +207,10 @@ namespace Unity.MP_FPS.UI
             _scoreTable.style.display = DisplayStyle.None;
             _draftPanel.style.display = DisplayStyle.Flex;
             _draftTitleLabel.text = manager.IsLateJoinCatchUpDraft
-                ? $"LATE-JOIN CATCH-UP — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
-                : $"ROUND {manager.CurrentRound} COMPLETE — CARD DRAFT";
+                ? manager.IsCatchUpAdaptationPick
+                    ? $"CATCH-UP ADAPTATION — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
+                    : $"LATE-JOIN CATCH-UP — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
+                : $"ROUND {manager.CurrentRound} COMPLETE — {manager.CurrentRoundHandName} HAND DRAFT";
 
             int offerHash = manager.GetOfferedCardId(0) * 397 ^
                             manager.GetOfferedCardId(1) * 31 ^
@@ -235,11 +237,15 @@ namespace Unity.MP_FPS.UI
                     $"{Mathf.CeilToInt(manager.DraftSecondsRemaining)} SECONDS";
                 _draftHelpLabel.text = manager.IsLocalDraftTurn
                     ? manager.IsLateJoinCatchUpDraft
-                        ? $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} — MATCHING {manager.CatchUpReferenceLoserName.ToUpperInvariant()}'S CARD TOTAL"
-                        : "CHOOSE A CARD, THEN CHOOSE WHERE TO APPLY IT"
+                        ? manager.IsCatchUpAdaptationPick
+                            ? $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} — ADAPTATION PICK: EITHER HAND OR SELF"
+                            : $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} — {manager.CurrentRoundHandName} HAND OR SELF"
+                        : $"WEAPON CARDS APPLY TO {manager.CurrentRoundHandName} HAND THIS ROUND — SELF CARDS APPLY TO YOU"
                     : manager.IsLateJoinCatchUpDraft
-                        ? $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — CATCHING UP TO {manager.CatchUpReferenceLoserName.ToUpperInvariant()}"
-                        : "EVERYONE CAN SEE THIS OFFER";
+                        ? manager.IsCatchUpAdaptationPick
+                            ? $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — EITHER HAND IS OPEN"
+                            : $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — {manager.CurrentRoundHandName} HAND ROUND"
+                        : $"{manager.CurrentRoundHandName} HAND WEAPON CARDS • SELF CARDS ARE ALWAYS ALLOWED";
             }
             else
             {
@@ -326,7 +332,7 @@ namespace Unity.MP_FPS.UI
             if (manager == null || !manager.IsLocalDraftTurn || _selectedCardId <= 0)
                 return;
             var card = manager.GetCardDefinition(_selectedCardId);
-            if (card == null || !card.Allows(target)) return;
+            if (!manager.CanApplyDraftCardToTarget(card, target)) return;
             manager.RequestDraftPick(_selectedCardId, target);
             _draftHelpLabel.text = "SUBMITTING PICK...";
             _leftTargetButton.SetEnabled(false);
@@ -339,10 +345,14 @@ namespace Unity.MP_FPS.UI
         {
             var card = manager.GetCardDefinition(_selectedCardId);
             bool canChoose = manager.IsLocalDraftTurn && card != null;
-            _leftTargetButton.SetEnabled(canChoose && card.Allows(ModifierTarget.LeftHand));
-            _selfTargetButton.SetEnabled(canChoose && card.Allows(ModifierTarget.Self));
-            _rightTargetButton.SetEnabled(canChoose && card.Allows(ModifierTarget.RightHand));
-            _bothTargetButton.SetEnabled(canChoose && card.Allows(ModifierTarget.BothHands));
+            _leftTargetButton.SetEnabled(canChoose &&
+                manager.CanApplyDraftCardToTarget(card, ModifierTarget.LeftHand));
+            _selfTargetButton.SetEnabled(canChoose &&
+                manager.CanApplyDraftCardToTarget(card, ModifierTarget.Self));
+            _rightTargetButton.SetEnabled(canChoose &&
+                manager.CanApplyDraftCardToTarget(card, ModifierTarget.RightHand));
+            _bothTargetButton.SetEnabled(canChoose &&
+                manager.CanApplyDraftCardToTarget(card, ModifierTarget.BothHands));
         }
 
         private void UpdateLeaderboardUI()

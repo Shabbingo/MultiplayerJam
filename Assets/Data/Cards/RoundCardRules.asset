@@ -18,3 +18,9 @@ MonoBehaviour:
   m_RoundStartDelay: 2
   m_FoundationalBoostRounds: 3
   m_FoundationalStartingWeightMultiplier: 3
+  m_SelfCardRampStartRound: 3
+  m_SelfCardFullWeightRound: 10
+  m_SelfCardStartingWeightMultiplier: 0
+  m_SelfCardLateWeightMultiplier: 3
+  m_HandCardLateWeightMultiplier: 0.5
+  m_CatchUpAdaptationPickInterval: 3

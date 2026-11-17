@@ -24,7 +24,12 @@ namespace Unity.MP_FPS.Cards
             int seed,
             int roundNumber = 1,
             int foundationalBoostRounds = 0,
-            float foundationalStartingWeightMultiplier = 1f)
+            float foundationalStartingWeightMultiplier = 1f,
+            int selfCardRampStartRound = 3,
+            int selfCardFullWeightRound = 10,
+            float selfCardStartingWeightMultiplier = 0f,
+            float selfCardLateWeightMultiplier = 3f,
+            float handCardLateWeightMultiplier = 0.5f)
         {
             var result = new List<CardModifierDefinition>(Mathf.Max(0, offerCount));
             if (catalog == null || offerCount <= 0)
@@ -47,7 +52,11 @@ namespace Unity.MP_FPS.Cards
             {
                 int selectedIndex = DrawWeightedIndex(candidates, finishingPosition,
                     playerCount, roundNumber, foundationalBoostRounds,
-                    foundationalStartingWeightMultiplier, random);
+                    foundationalStartingWeightMultiplier,
+                    selfCardRampStartRound, selfCardFullWeightRound,
+                    selfCardStartingWeightMultiplier,
+                    selfCardLateWeightMultiplier,
+                    handCardLateWeightMultiplier, random);
                 result.Add(candidates[selectedIndex]);
                 candidates.RemoveAt(selectedIndex);
             }
@@ -77,6 +86,11 @@ namespace Unity.MP_FPS.Cards
             int roundNumber,
             int foundationalBoostRounds,
             float foundationalStartingWeightMultiplier,
+            int selfCardRampStartRound,
+            int selfCardFullWeightRound,
+            float selfCardStartingWeightMultiplier,
+            float selfCardLateWeightMultiplier,
+            float handCardLateWeightMultiplier,
             System.Random random)
         {
             float placement01 = playerCount <= 1
@@ -89,7 +103,11 @@ namespace Unity.MP_FPS.Cards
             {
                 totalWeight += GetWeight(candidates[i], comebackBias,
                     roundNumber, foundationalBoostRounds,
-                    foundationalStartingWeightMultiplier);
+                    foundationalStartingWeightMultiplier,
+                    selfCardRampStartRound, selfCardFullWeightRound,
+                    selfCardStartingWeightMultiplier,
+                    selfCardLateWeightMultiplier,
+                    handCardLateWeightMultiplier);
             }
 
             double roll = random.NextDouble() * totalWeight;
@@ -97,7 +115,11 @@ namespace Unity.MP_FPS.Cards
             {
                 roll -= GetWeight(candidates[i], comebackBias, roundNumber,
                     foundationalBoostRounds,
-                    foundationalStartingWeightMultiplier);
+                    foundationalStartingWeightMultiplier,
+                    selfCardRampStartRound, selfCardFullWeightRound,
+                    selfCardStartingWeightMultiplier,
+                    selfCardLateWeightMultiplier,
+                    handCardLateWeightMultiplier);
                 if (roll <= 0d)
                 {
                     return i;
@@ -111,7 +133,12 @@ namespace Unity.MP_FPS.Cards
             float comebackBias,
             int roundNumber,
             int foundationalBoostRounds,
-            float foundationalStartingWeightMultiplier)
+            float foundationalStartingWeightMultiplier,
+            int selfCardRampStartRound,
+            int selfCardFullWeightRound,
+            float selfCardStartingWeightMultiplier,
+            float selfCardLateWeightMultiplier,
+            float handCardLateWeightMultiplier)
         {
             int centeredStrength = card.StrengthScore - 3;
             double rarityWeight = Math.Pow(GlobalRarityBase, -centeredStrength);
@@ -120,8 +147,13 @@ namespace Unity.MP_FPS.Cards
             double categoryWeight = GetCategoryWeight(card, roundNumber,
                 foundationalBoostRounds,
                 foundationalStartingWeightMultiplier);
+            double targetWeight = GetDraftTargetWeight(card, roundNumber,
+                selfCardRampStartRound, selfCardFullWeightRound,
+                selfCardStartingWeightMultiplier,
+                selfCardLateWeightMultiplier,
+                handCardLateWeightMultiplier);
             return card.BaseOfferWeight * rarityWeight * placementWeight *
-                   categoryWeight;
+                   categoryWeight * targetWeight;
         }
 
         private static double GetCategoryWeight(CardModifierDefinition card,
@@ -140,6 +172,33 @@ namespace Unity.MP_FPS.Cards
                 (Mathf.Max(1, roundNumber) - 1f) / foundationalBoostRounds);
             return Mathf.Lerp(foundationalStartingWeightMultiplier, 1f,
                 earlyGameProgress);
+        }
+
+        private static double GetDraftTargetWeight(CardModifierDefinition card,
+            int roundNumber, int selfCardRampStartRound,
+            int selfCardFullWeightRound,
+            float selfCardStartingWeightMultiplier,
+            float selfCardLateWeightMultiplier,
+            float handCardLateWeightMultiplier)
+        {
+            int safeStartRound = Mathf.Max(1, selfCardRampStartRound);
+            int safeFullRound = Mathf.Max(safeStartRound + 1,
+                selfCardFullWeightRound);
+            // Use the round before the configured start as zero so the start round
+            // itself receives the first small step of self-card weighting.
+            float progress = Mathf.InverseLerp(safeStartRound - 1,
+                safeFullRound, Mathf.Max(1, roundNumber));
+
+            bool isSelfCard = card.Allows(ModifierTarget.Self);
+            if (isSelfCard)
+            {
+                return Mathf.Lerp(
+                    Mathf.Max(0f, selfCardStartingWeightMultiplier),
+                    Mathf.Max(0f, selfCardLateWeightMultiplier), progress);
+            }
+
+            return Mathf.Lerp(1f,
+                Mathf.Max(0f, handCardLateWeightMultiplier), progress);
         }
     }
 }
