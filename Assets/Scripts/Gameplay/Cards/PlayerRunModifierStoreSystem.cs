@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.NetCode;
+using UnityEngine;
 
 namespace Unity.MP_FPS.Cards
 {
@@ -38,13 +39,14 @@ namespace Unity.MP_FPS.Cards
             ModifierTarget target, out PlayerModifierStacks updated)
         {
             updated = GetOrCreate(networkId);
+            PlayerModifierStacks previous = updated;
             if (!updated.TryAdd(card, target))
             {
                 return false;
             }
 
             m_ByNetworkId[networkId] = updated;
-            ApplyToLivingPlayer(networkId, in updated);
+            ApplyToLivingPlayer(networkId, in previous, in updated);
             return true;
         }
 
@@ -59,19 +61,77 @@ namespace Unity.MP_FPS.Cards
         }
 
         private void ApplyToLivingPlayer(int networkId,
+            in PlayerModifierStacks previousModifiers,
             in PlayerModifierStacks modifiers)
         {
             using var query = EntityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<GhostOwner>(),
-                ComponentType.ReadWrite<PlayerModifierStacks>());
+                ComponentType.ReadWrite<PlayerModifierStacks>(),
+                ComponentType.ReadWrite<PredictedPlayerGhost>());
             using var entities = query.ToEntityArray(Allocator.Temp);
             foreach (var entity in entities)
             {
                 if (EntityManager.GetComponentData<GhostOwner>(entity).NetworkId == networkId)
                 {
+                    var player = EntityManager.GetComponentData<PredictedPlayerGhost>(
+                        entity);
+                    ReconcileMagazineCapacity(ref player, in previousModifiers,
+                        in modifiers);
+                    EntityManager.SetComponentData(entity, player);
                     EntityManager.SetComponentData(entity, modifiers);
                     return;
                 }
+            }
+        }
+
+        private static void ReconcileMagazineCapacity(
+            ref PredictedPlayerGhost player,
+            in PlayerModifierStacks previousModifiers,
+            in PlayerModifierStacks currentModifiers)
+        {
+            if (WeaponManager.Instance == null)
+            {
+                return;
+            }
+
+            ReconcileWeaponMagazine(ref player, WeaponManager.PrimaryWeaponId,
+                in previousModifiers, in currentModifiers);
+            ReconcileWeaponMagazine(ref player, WeaponManager.SecondaryWeaponId,
+                in previousModifiers, in currentModifiers);
+        }
+
+        private static void ReconcileWeaponMagazine(
+            ref PredictedPlayerGhost player, uint weaponId,
+            in PlayerModifierStacks previousModifiers,
+            in PlayerModifierStacks currentModifiers)
+        {
+            int previousCapacity = WeaponManager.Instance.ResolveRuntimeProfile(
+                weaponId, in previousModifiers).MagazineSize;
+            int currentCapacity = WeaponManager.Instance.ResolveRuntimeProfile(
+                weaponId, in currentModifiers).MagazineSize;
+            int capacityDelta = currentCapacity - previousCapacity;
+            if (capacityDelta == 0)
+            {
+                return;
+            }
+
+            if (weaponId == WeaponManager.SecondaryWeaponId)
+            {
+                player.ControllerState.SecondaryWeaponAmmo = Mathf.Clamp(
+                    player.ControllerState.SecondaryWeaponAmmo + capacityDelta,
+                    0, currentCapacity);
+            }
+            else
+            {
+                player.ControllerState.PrimaryWeaponAmmo = Mathf.Clamp(
+                    player.ControllerState.PrimaryWeaponAmmo + capacityDelta,
+                    0, currentCapacity);
+            }
+
+            if (player.EquippedWeaponID == weaponId)
+            {
+                player.CurrentAmmo = Mathf.Clamp(player.CurrentAmmo + capacityDelta,
+                    0, currentCapacity);
             }
         }
     }

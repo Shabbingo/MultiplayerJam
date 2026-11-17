@@ -168,6 +168,7 @@ namespace Unity.MP_FPS
                 tuning.RapidFireDamageMultiplier = rapidFire.BaseDamageMultiplier;
                 tuning.RapidFireIntervalMultiplier =
                     rapidFire.FireIntervalMultiplierPerStack;
+                tuning.RapidFireMagazineDelta = rapidFire.MagazineDeltaPerStack;
             }
             if (gravityWell != null)
                 tuning.GravityWellPullPerStack = gravityWell.ValuePerStack;

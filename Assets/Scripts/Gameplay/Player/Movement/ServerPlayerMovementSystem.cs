@@ -691,8 +691,11 @@ namespace Unity.MP_FPS
                                 predictedPlayer.ValueRO.CurrentAmmo == 1;
                             float sizeOutputMultiplier = playerGhost.Controller
                                 .GetSizeOutputMultiplier(in predictedPlayer.ValueRO);
+                            float explosionOutputMultiplier = playerGhost.Controller
+                                .GetExplosionOutputMultiplier(in predictedPlayer.ValueRO);
                             Cards.SizeScaledWeaponOutput shotOutput = runtimeProfile
-                                .CreateSizeScaledOutput(sizeOutputMultiplier);
+                                .CreateSizeScaledOutput(sizeOutputMultiplier,
+                                    explosionOutputMultiplier);
                             float shotSignedSizeDelta = shotOutput.SignedSizeDelta *
                                 (isFinalMagazineRound
                                     ? runtimeProfile.LastWordDamageMultiplier

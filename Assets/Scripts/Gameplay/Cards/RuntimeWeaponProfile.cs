@@ -41,6 +41,7 @@ namespace Unity.MP_FPS.Cards
         [Range(0f, 1f)] public float WallDamageRetention;
         [Min(0f)] public float RapidFireDamageMultiplier;
         [Min(0f)] public float RapidFireIntervalMultiplier;
+        public int RapidFireMagazineDelta;
         [Min(0f)] public float GravityWellPullPerStack;
         [Min(0f)] public float LastWordDamagePerStack;
         [Min(0f)] public float GrenadeSpeedMultiplier;
@@ -79,6 +80,7 @@ namespace Unity.MP_FPS.Cards
             WallDamageRetention = 0.4f,
             RapidFireDamageMultiplier = 0.3f,
             RapidFireIntervalMultiplier = 0.35f,
+            RapidFireMagazineDelta = 0,
             GravityWellPullPerStack = 8f,
             LastWordDamagePerStack = 0.2f,
             GrenadeSpeedMultiplier = 0.45f,
@@ -162,12 +164,13 @@ namespace Unity.MP_FPS.Cards
         /// physical output and intentionally remain unchanged.
         /// </summary>
         public SizeScaledWeaponOutput CreateSizeScaledOutput(
-            float playerSizeMultiplier)
+            float playerSizeMultiplier, float explosionSizeMultiplier)
         {
             float sizeMultiplier = Mathf.Max(0.01f, playerSizeMultiplier);
+            float aoeMultiplier = Mathf.Max(0.01f, explosionSizeMultiplier);
             return new SizeScaledWeaponOutput(
                 SignedSizeDelta * sizeMultiplier,
-                ExplosionRadius * sizeMultiplier,
+                ExplosionRadius * aoeMultiplier,
                 BleedDamagePerSecond * sizeMultiplier,
                 ProjectileScale * sizeMultiplier,
                 GravityWellPullStrength * sizeMultiplier);
@@ -327,6 +330,8 @@ namespace Unity.MP_FPS.Cards
                 ammoStacks * Mathf.Max(0, tuning.AmmoPerStack));
             if (scatter) magazineSize = Mathf.Max(1,
                 magazineSize + scatterStacks * tuning.ScatterMagazineDelta);
+            magazineSize = Mathf.Max(1, magazineSize +
+                rapidFireStacks * tuning.RapidFireMagazineDelta);
             int pelletCount = scatter
                 ? 1 + scatterStacks * Mathf.Max(0, tuning.ScatterPelletCount - 1)
                 : 1;

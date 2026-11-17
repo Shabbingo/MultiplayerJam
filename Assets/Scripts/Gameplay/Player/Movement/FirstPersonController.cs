@@ -79,6 +79,31 @@ public class FirstPersonController : MonoBehaviour
         };
     }
 
+    public float GetExplosionOutputMultiplier(
+        in PredictedPlayerGhost predictedPlayer)
+    {
+        float sizeMultiplier = GetSizeOutputMultiplier(in predictedPlayer);
+        if (predictedPlayer.SizeState == NormalSizeState)
+        {
+            return sizeMultiplier;
+        }
+
+        if (m_PlayerGhost == null)
+        {
+            TryGetComponent(out m_PlayerGhost);
+        }
+
+        if (m_PlayerGhost == null)
+        {
+            return sizeMultiplier;
+        }
+
+        float formAoeScale = predictedPlayer.SizeState == SmallSizeState
+            ? m_PlayerGhost.SmallAoeScale
+            : m_PlayerGhost.EnlargedAoeScale;
+        return sizeMultiplier * formAoeScale;
+    }
+
     [Header("Self Resize Camera Pulse")]
     [SerializeField, Range(0f, 1f), Tooltip("Peak lens distortion used by a self-resize pulse. Grow and shrink use opposite distortion directions.")]
     private float m_SelfResizeLensDistortion = 0.35f;

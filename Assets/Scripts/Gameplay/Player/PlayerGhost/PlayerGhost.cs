@@ -21,8 +21,16 @@ namespace Unity.MP_FPS
         [SerializeField] private SoundDef m_SpawnSFX;
         [SerializeField, Range(0.1f, 1f)] private float m_MinimumPlayerScale = 0.5f;
         public float MinimumPlayerScale => m_MinimumPlayerScale;
+        [SerializeField, Range(0.1f, 2f),
+         Tooltip("Multiplier applied only to projectile AOE radius while this player is small. 1 keeps normal small-size scaling.")]
+        private float m_SmallAoeScale = 1f;
+        public float SmallAoeScale => m_SmallAoeScale;
         [SerializeField, Min(1f)] private float m_MaximumPlayerScale = 2f;
         public float MaximumPlayerScale => m_MaximumPlayerScale;
+        [SerializeField, Range(0.1f, 1f),
+         Tooltip("Multiplier applied only to projectile AOE radius while this player is enlarged. 1 keeps full size scaling; lower values reduce the enlarged AOE.")]
+        private float m_EnlargedAoeScale = 0.85f;
+        public float EnlargedAoeScale => m_EnlargedAoeScale;
 
         [Header("Reflect Shield Glow")]
         [SerializeField] private Color m_ReflectGlowColour = new(0.2f, 0.75f, 1f, 1f);
