@@ -13,7 +13,7 @@ namespace Unity.MP_FPS.Cards
         // Strength score serves two purposes: high-score cards are globally rarer,
         // but the first players eliminated receive a strong-card comeback bias.
         private const float GlobalRarityBase = 1.6f;
-        private const float PlacementBiasBase = 1.5f;
+        private const float PlacementBiasBase = 2f;
 
         public static List<CardModifierDefinition> Generate(
             CardModifierCatalog catalog,
@@ -23,13 +23,9 @@ namespace Unity.MP_FPS.Cards
             int offerCount,
             int seed,
             int roundNumber = 1,
-            int foundationalBoostRounds = 0,
-            float foundationalStartingWeightMultiplier = 1f,
-            int selfCardRampStartRound = 3,
-            int selfCardFullWeightRound = 10,
-            float selfCardStartingWeightMultiplier = 0f,
-            float selfCardLateWeightMultiplier = 3f,
-            float handCardLateWeightMultiplier = 0.5f)
+            int openingHandBiasRounds = 2,
+            float openingHandWeightMultiplier = 3f,
+            float openingSelfWeightMultiplier = 0.5f)
         {
             var result = new List<CardModifierDefinition>(Mathf.Max(0, offerCount));
             if (catalog == null || offerCount <= 0)
@@ -51,12 +47,9 @@ namespace Unity.MP_FPS.Cards
             for (int draw = 0; draw < drawCount; draw++)
             {
                 int selectedIndex = DrawWeightedIndex(candidates, finishingPosition,
-                    playerCount, roundNumber, foundationalBoostRounds,
-                    foundationalStartingWeightMultiplier,
-                    selfCardRampStartRound, selfCardFullWeightRound,
-                    selfCardStartingWeightMultiplier,
-                    selfCardLateWeightMultiplier,
-                    handCardLateWeightMultiplier, random);
+                    playerCount, roundNumber, openingHandBiasRounds,
+                    openingHandWeightMultiplier,
+                    openingSelfWeightMultiplier, random);
                 result.Add(candidates[selectedIndex]);
                 candidates.RemoveAt(selectedIndex);
             }
@@ -83,13 +76,9 @@ namespace Unity.MP_FPS.Cards
             int finishingPosition,
             int playerCount,
             int roundNumber,
-            int foundationalBoostRounds,
-            float foundationalStartingWeightMultiplier,
-            int selfCardRampStartRound,
-            int selfCardFullWeightRound,
-            float selfCardStartingWeightMultiplier,
-            float selfCardLateWeightMultiplier,
-            float handCardLateWeightMultiplier,
+            int openingHandBiasRounds,
+            float openingHandWeightMultiplier,
+            float openingSelfWeightMultiplier,
             System.Random random)
         {
             float placement01 = playerCount <= 1
@@ -101,24 +90,17 @@ namespace Unity.MP_FPS.Cards
             for (int i = 0; i < candidates.Count; i++)
             {
                 totalWeight += GetWeight(candidates[i], comebackBias,
-                    roundNumber, foundationalBoostRounds,
-                    foundationalStartingWeightMultiplier,
-                    selfCardRampStartRound, selfCardFullWeightRound,
-                    selfCardStartingWeightMultiplier,
-                    selfCardLateWeightMultiplier,
-                    handCardLateWeightMultiplier);
+                    roundNumber, openingHandBiasRounds,
+                    openingHandWeightMultiplier,
+                    openingSelfWeightMultiplier);
             }
 
             double roll = random.NextDouble() * totalWeight;
             for (int i = 0; i < candidates.Count; i++)
             {
                 roll -= GetWeight(candidates[i], comebackBias, roundNumber,
-                    foundationalBoostRounds,
-                    foundationalStartingWeightMultiplier,
-                    selfCardRampStartRound, selfCardFullWeightRound,
-                    selfCardStartingWeightMultiplier,
-                    selfCardLateWeightMultiplier,
-                    handCardLateWeightMultiplier);
+                    openingHandBiasRounds, openingHandWeightMultiplier,
+                    openingSelfWeightMultiplier);
                 if (roll <= 0d)
                 {
                     return i;
@@ -131,72 +113,36 @@ namespace Unity.MP_FPS.Cards
         private static double GetWeight(CardModifierDefinition card,
             float comebackBias,
             int roundNumber,
-            int foundationalBoostRounds,
-            float foundationalStartingWeightMultiplier,
-            int selfCardRampStartRound,
-            int selfCardFullWeightRound,
-            float selfCardStartingWeightMultiplier,
-            float selfCardLateWeightMultiplier,
-            float handCardLateWeightMultiplier)
+            int openingHandBiasRounds,
+            float openingHandWeightMultiplier,
+            float openingSelfWeightMultiplier)
         {
             int centeredStrength = card.StrengthScore - 3;
             double rarityWeight = Math.Pow(GlobalRarityBase, -centeredStrength);
             double placementWeight = Math.Pow(
                 PlacementBiasBase, comebackBias * centeredStrength);
-            double categoryWeight = GetCategoryWeight(card, roundNumber,
-                foundationalBoostRounds,
-                foundationalStartingWeightMultiplier);
-            double targetWeight = GetDraftTargetWeight(card, roundNumber,
-                selfCardRampStartRound, selfCardFullWeightRound,
-                selfCardStartingWeightMultiplier,
-                selfCardLateWeightMultiplier,
-                handCardLateWeightMultiplier);
+            double openingTargetWeight = GetOpeningTargetWeight(card, roundNumber,
+                openingHandBiasRounds, openingHandWeightMultiplier,
+                openingSelfWeightMultiplier);
             return card.BaseOfferWeight * rarityWeight * placementWeight *
-                   categoryWeight * targetWeight;
+                   openingTargetWeight;
         }
 
-        private static double GetCategoryWeight(CardModifierDefinition card,
-            int roundNumber,
-            int foundationalBoostRounds,
-            float foundationalStartingWeightMultiplier)
+        private static double GetOpeningTargetWeight(
+            CardModifierDefinition card, int roundNumber,
+            int openingHandBiasRounds, float openingHandWeightMultiplier,
+            float openingSelfWeightMultiplier)
         {
-            if (card.Category != CardCategory.Foundational ||
-                foundationalBoostRounds <= 0 ||
-                foundationalStartingWeightMultiplier <= 1f)
+            if (roundNumber > Mathf.Max(0, openingHandBiasRounds))
             {
                 return 1d;
             }
 
-            float earlyGameProgress = Mathf.Clamp01(
-                (Mathf.Max(1, roundNumber) - 1f) / foundationalBoostRounds);
-            return Mathf.Lerp(foundationalStartingWeightMultiplier, 1f,
-                earlyGameProgress);
-        }
-
-        private static double GetDraftTargetWeight(CardModifierDefinition card,
-            int roundNumber, int selfCardRampStartRound,
-            int selfCardFullWeightRound,
-            float selfCardStartingWeightMultiplier,
-            float selfCardLateWeightMultiplier,
-            float handCardLateWeightMultiplier)
-        {
-            int safeStartRound = Mathf.Max(1, selfCardRampStartRound);
-            int safeFullRound = Mathf.Max(safeStartRound + 1,
-                selfCardFullWeightRound);
-            // Use the round before the configured start as zero so the start round
-            // itself receives the first small step of self-card weighting.
-            float progress = Mathf.InverseLerp(safeStartRound - 1,
-                safeFullRound, Mathf.Max(1, roundNumber));
-
-            if (card.Allows(ModifierTarget.Self))
-            {
-                return Mathf.Lerp(
-                    Mathf.Max(0f, selfCardStartingWeightMultiplier),
-                    Mathf.Max(0f, selfCardLateWeightMultiplier), progress);
-            }
-
-            return Mathf.Lerp(1f,
-                Mathf.Max(0f, handCardLateWeightMultiplier), progress);
+            bool canTargetAHand = card.Allows(ModifierTarget.LeftHand) ||
+                                  card.Allows(ModifierTarget.RightHand);
+            return canTargetAHand
+                ? Mathf.Max(0f, openingHandWeightMultiplier)
+                : Mathf.Max(0f, openingSelfWeightMultiplier);
         }
     }
 }

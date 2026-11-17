@@ -282,16 +282,15 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         var runtimeProfile = WeaponManager.Instance.ResolveRuntimeProfile(
                             abilityWeaponId, in modifiers.ValueRO);
                         var weaponData = runtimeProfile.SourceProfile;
+                        bool autoReloadRequested = false;
                         if (weaponData != null)
                         {
-                            bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
-
-                            if (mustReload &&
-                                controllerLink.Controller.TryReloadBothWeapons(
-                                    ref predictedPlayer.ValueRW, in modifiers.ValueRO))
-                            {
-                                predictedPlayer.ValueRW.LastReloadTick = commandInput.Tick.TickIndexForValidTick;
-                            }
+                            // Defer automatic reload until the temporary right-hand
+                            // weapon has been restored. Starting it while the secondary
+                            // weapon is temporarily equipped causes EndTemporaryWeapon
+                            // to restore the old reload state and cancel the reload.
+                            autoReloadRequested = wantsToShoot &&
+                                predictedPlayer.ValueRO.CurrentAmmo <= 0;
                             
                             if (wantsToShoot &&
                                 controllerLink.Controller.CanUseWeapon(
@@ -302,6 +301,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                             {
                                 predictedPlayer.ValueRW.WeaponCooldown = 0f;
                                 predictedPlayer.ValueRW.CurrentAmmo--;
+                                autoReloadRequested =
+                                    predictedPlayer.ValueRO.CurrentAmmo <= 0;
                                 controllerLink.Controller.StartCrossWeaponCooldown(
                                     ref predictedPlayer.ValueRW,
                                     abilityWeaponId);
@@ -431,6 +432,14 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 WeaponManager.Instance.EndTemporaryWeapon(
                                     ref predictedPlayer.ValueRW,
                                     in weaponBeforeAbility);
+                            }
+
+                            if (autoReloadRequested &&
+                                controllerLink.Controller.TryReloadBothWeapons(
+                                    ref predictedPlayer.ValueRW, in modifiers.ValueRO))
+                            {
+                                predictedPlayer.ValueRW.LastReloadTick =
+                                    commandInput.Tick.TickIndexForValidTick;
                             }
 
                             FirstPersonController.ProcessInputs(ref predictedPlayer.ValueRW.ControllerState, input, accumulateDT);

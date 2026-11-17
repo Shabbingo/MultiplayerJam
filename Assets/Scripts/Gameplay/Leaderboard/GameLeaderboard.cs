@@ -715,13 +715,9 @@ namespace Gameplay.Leaderboard
                 rules.CardsPerOffer,
                 (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663) ^
                 (_activeCatchUpPickNumber * 83492791),
-                _currentRound, rules.FoundationalBoostRounds,
-                rules.FoundationalStartingWeightMultiplier,
-                rules.SelfCardRampStartRound,
-                rules.SelfCardFullWeightRound,
-                rules.SelfCardStartingWeightMultiplier,
-                rules.SelfCardLateWeightMultiplier,
-                rules.HandCardLateWeightMultiplier);
+                _currentRound, rules.OpeningHandBiasRounds,
+                rules.OpeningHandWeightMultiplier,
+                rules.OpeningSelfWeightMultiplier);
 
             _currentOffers.Clear();
             _currentOffers.AddRange(generated);

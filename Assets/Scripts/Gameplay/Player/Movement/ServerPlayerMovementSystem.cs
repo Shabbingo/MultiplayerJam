@@ -618,16 +618,14 @@ namespace Unity.MP_FPS
                     var runtimeProfile = WeaponManager.Instance.ResolveRuntimeProfile(
                         abilityWeaponId, in modifiers.ValueRO);
                     var weaponData = runtimeProfile.SourceProfile;
+                    bool autoReloadRequested = false;
                     if (weaponData != null)
                     {
-                        bool mustReload = wantsToShoot && predictedPlayer.ValueRO.CurrentAmmo <= 0;
-
-                        if (mustReload &&
-                            playerGhost.Controller.TryReloadBothWeapons(
-                                ref predictedPlayer.ValueRW, in modifiers.ValueRO))
-                        {
-                            predictedPlayer.ValueRW.LastReloadTick = serverTick;
-                        }
+                        // Reload from the canonical weapon state after the temporary
+                        // right-hand swap is restored. Otherwise the restore step can
+                        // overwrite SecondaryIsReloading and cancel the reload.
+                        autoReloadRequested = wantsToShoot &&
+                            predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
                         if (wantsToShoot &&
                             playerGhost.Controller.CanUseWeapon(
@@ -651,6 +649,8 @@ namespace Unity.MP_FPS
                                     : 1f);
                             predictedPlayer.ValueRW.WeaponCooldown = 0f;
                             predictedPlayer.ValueRW.CurrentAmmo--;
+                            autoReloadRequested =
+                                predictedPlayer.ValueRO.CurrentAmmo <= 0;
                             playerGhost.Controller.StartCrossWeaponCooldown(
                                 ref predictedPlayer.ValueRW,
                                 abilityWeaponId);
@@ -866,6 +866,13 @@ namespace Unity.MP_FPS
                         WeaponManager.Instance.EndTemporaryWeapon(
                             ref predictedPlayer.ValueRW,
                             in weaponBeforeAbility);
+                    }
+
+                    if (autoReloadRequested &&
+                        playerGhost.Controller.TryReloadBothWeapons(
+                            ref predictedPlayer.ValueRW, in modifiers.ValueRO))
+                    {
+                        predictedPlayer.ValueRW.LastReloadTick = serverTick;
                     }
                 }
             }

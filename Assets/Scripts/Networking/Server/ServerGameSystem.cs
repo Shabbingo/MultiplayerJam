@@ -300,17 +300,52 @@ namespace Unity.MP_FPS
             var clientsMap = SystemAPI.GetSingletonBuffer<ClientsMap>();
             clientsMap.ElementAt(ownerNetworkId.Value).PlayerEntity = playerEntity;
 
-            if (!SystemAPI.HasComponent<JoinedClient>(connectionEntity))
+            var joinedClient = new JoinedClient
             {
-                // Update the connection's JoinedClient component with the new player entity
-                ecb.AddComponent(connectionEntity, new JoinedClient
-                {
-                    PlayerEntity = playerEntity, PlayerName = playerName, CharacterIndex = characterIndex
-                });
+                PlayerEntity = playerEntity,
+                PlayerName = playerName,
+                CharacterIndex = characterIndex
+            };
+            if (SystemAPI.HasComponent<JoinedClient>(connectionEntity))
+            {
+                // This also replaces the null PlayerEntity stored while a late
+                // joiner was spectating the previous round.
+                ecb.SetComponent(connectionEntity, joinedClient);
+            }
+            else
+            {
+                ecb.AddComponent(connectionEntity, joinedClient);
             }
 
             ecb.AppendToBuffer(connectionEntity, new LinkedEntityGroup { Value = playerEntity });
+            if (!SystemAPI.HasComponent<NetworkStreamInGame>(connectionEntity))
+                ecb.AddComponent(connectionEntity, new NetworkStreamInGame());
+        }
+
+        private void RegisterSpectatingClient(EntityCommandBuffer ecb,
+            Entity connectionEntity, FixedString64Bytes playerName,
+            int characterIndex)
+        {
+            // A player joining after combat has started belongs to the match, but
+            // must not create a combatant part-way through the current round. The
+            // round director will include this connection when it queues everyone
+            // for the next round's respawn.
+            ecb.AddComponent(connectionEntity, new JoinedClient
+            {
+                PlayerEntity = Entity.Null,
+                PlayerName = playerName,
+                CharacterIndex = characterIndex
+            });
             ecb.AddComponent(connectionEntity, new NetworkStreamInGame());
+        }
+
+        [BurstDiscard]
+        private static bool MustSpectateUntilNextRound()
+        {
+            RoundPhase phase = LeaderboardManager.ServerInstance?.Phase ??
+                               RoundPhase.WaitingForPlayers;
+            return phase is RoundPhase.Combat or RoundPhase.Drafting or
+                RoundPhase.MatchEnded;
         }
 
         void HandlePlayerDeathAndRespawn(ref SystemState state, EntityCommandBuffer ecb)
@@ -455,10 +490,20 @@ namespace Unity.MP_FPS
                 {
                     var acceptedName = new FixedString64Bytes();
                     acceptedName.CopyFromTruncated(requestedName);
-                    SpawnPlayerCharacter(ref state, ecb, connection, acceptedName,
-                        request.ValueRO.CharacterIndex);
-                    
                     var ownerNetworkId = SystemAPI.GetComponent<NetworkId>(connection);
+                    if (MustSpectateUntilNextRound())
+                    {
+                        RegisterSpectatingClient(ecb, connection, acceptedName,
+                            request.ValueRO.CharacterIndex);
+                        Debug.Log($"[Server] {acceptedName} joined during an active " +
+                                  "round and will spectate until the next round.");
+                    }
+                    else
+                    {
+                        SpawnPlayerCharacter(ref state, ecb, connection, acceptedName,
+                            request.ValueRO.CharacterIndex);
+                    }
+
                     AddPlayerToLeaderboard(ownerNetworkId.Value, acceptedName);
                     activeNames.Add(requestedName);
                     joinedPlayerCount++;
