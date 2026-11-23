@@ -30,6 +30,21 @@ public class FirstPersonController : MonoBehaviour
     public float ReflectDuration => Mathf.Max(0.01f, m_ReflectDuration);
     public float ReflectCooldown => Mathf.Max(0.1f, m_ReflectCooldown);
 
+    [Header("Overshield")]
+    [SerializeField, Min(0f), Tooltip("Maximum rechargeable overshield capacity.")]
+    private float m_OvershieldMaximum = 80f;
+    [SerializeField, Min(0f), Tooltip("Seconds after taking damage before the overshield begins recharging.")]
+    private float m_OvershieldRechargeDelay = 3f;
+    [SerializeField, Min(0.01f), Tooltip("Seconds required to recharge the overshield from empty to full.")]
+    private float m_OvershieldRechargeDuration = 3f;
+
+    public float OvershieldMaximum => Mathf.Max(0f, m_OvershieldMaximum);
+    public float OvershieldRechargeDelay => Mathf.Max(0f, m_OvershieldRechargeDelay);
+    public float OvershieldRechargeDuration => Mathf.Max(0.01f,
+        m_OvershieldRechargeDuration);
+    public float OvershieldRechargePerSecond => OvershieldMaximum /
+        OvershieldRechargeDuration;
+
     [Header("Size Stances")]
     [SerializeField, Min(1f)] private float m_SmallMaxHealth = 30f;
     [SerializeField, Min(1f)] private float m_NormalMaxHealth = DefaultNormalMaxHealth;

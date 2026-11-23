@@ -274,6 +274,9 @@ MonoBehaviour:
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
   m_ReflectDuration: 2
   m_ReflectCooldown: 15
+  m_OvershieldMaximum: 40
+  m_OvershieldRechargeDelay: 3
+  m_OvershieldRechargeDuration: 5
   m_SmallMaxHealth: 100
   m_NormalMaxHealth: 100
   m_LargeMaxHealth: 100

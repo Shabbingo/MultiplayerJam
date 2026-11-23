@@ -479,7 +479,21 @@ namespace Unity.MP_FPS
                 {
                     GraceShieldState graceShield = EntityManager
                         .GetComponentData<GraceShieldState>(entity);
-                    graceShield.Maximum = Mathf.Max(0f, graceShield.Maximum);
+                    GetOvershieldTuning(entity, out float configuredMaximum,
+                        out _, out float rechargePerSecond);
+                    float previousMaximum = Mathf.Max(0f, graceShield.Maximum);
+                    if (!Mathf.Approximately(previousMaximum, configuredMaximum))
+                    {
+                        float fillFraction = previousMaximum > 0f
+                            ? Mathf.Clamp01(graceShield.Amount / previousMaximum)
+                            : 0f;
+                        graceShield.Maximum = configuredMaximum;
+                        graceShield.Amount = configuredMaximum * fillFraction;
+                    }
+                    else
+                    {
+                        graceShield.Maximum = configuredMaximum;
+                    }
                     graceShield.Amount = Mathf.Clamp(graceShield.Amount, 0f,
                         graceShield.Maximum);
                     graceShield.RechargeDelayRemaining = Mathf.Max(0f,
@@ -489,7 +503,7 @@ namespace Unity.MP_FPS
                     {
                         graceShield.Amount = Mathf.MoveTowards(
                             graceShield.Amount, graceShield.Maximum,
-                            GraceShieldState.DefaultRechargePerSecond * deltaTime);
+                            rechargePerSecond * deltaTime);
                     }
                     EntityManager.SetComponentData(entity, graceShield);
                     predictedPlayer.ValueRW.GraceShieldAmount =
@@ -2480,10 +2494,11 @@ namespace Unity.MP_FPS
 
             GraceShieldState graceShield = EntityManager
                 .GetComponentData<GraceShieldState>(targetEntity);
+            GetOvershieldTuning(targetEntity, out _,
+                out float rechargeDelay, out _);
             // Taking any damage keeps the shield out of recharge, including hits
             // received while the shield is already empty.
-            graceShield.RechargeDelayRemaining =
-                GraceShieldState.DefaultRechargeDelay;
+            graceShield.RechargeDelayRemaining = rechargeDelay;
             float absorbedDamage = Mathf.Min(
                 Mathf.Max(0f, graceShield.Amount), incomingDamage);
             if (absorbedDamage <= 0f)
@@ -2496,6 +2511,31 @@ namespace Unity.MP_FPS
                 graceShield.Amount - absorbedDamage);
             EntityManager.SetComponentData(targetEntity, graceShield);
             return incomingDamage - absorbedDamage;
+        }
+
+        private void GetOvershieldTuning(Entity playerEntity,
+            out float maximum, out float rechargeDelay,
+            out float rechargePerSecond)
+        {
+            maximum = GraceShieldState.DefaultMaximum;
+            rechargeDelay = GraceShieldState.DefaultRechargeDelay;
+            rechargePerSecond = GraceShieldState.DefaultRechargePerSecond;
+
+            if (!EntityManager.HasComponent<PlayerControllerLink>(playerEntity))
+            {
+                return;
+            }
+
+            var controllerLink = EntityManager
+                .GetComponentObject<PlayerControllerLink>(playerEntity);
+            if (controllerLink?.Controller == null)
+            {
+                return;
+            }
+
+            maximum = controllerLink.Controller.OvershieldMaximum;
+            rechargeDelay = controllerLink.Controller.OvershieldRechargeDelay;
+            rechargePerSecond = controllerLink.Controller.OvershieldRechargePerSecond;
         }
 
         private void UpdateBleedEffects(float deltaTime, uint hitTick)

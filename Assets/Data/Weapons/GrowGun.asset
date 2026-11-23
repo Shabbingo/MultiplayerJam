@@ -17,7 +17,7 @@ MonoBehaviour:
   ReticleType: 2
   CooldownInMs: 0.75
   ProjectileReleaseDelay: 0.25
-  Damage: 40
+  Damage: 0
   HitscanRange: 1
   HitscanBaseSpreadDegrees: 0.15
   HitscanSpreadPerShotDegrees: 0.2
