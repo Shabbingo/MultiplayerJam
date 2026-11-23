@@ -34,6 +34,75 @@ namespace Unity.MP_FPS
         private float m_EnlargedAoeScale = 0.85f;
         public float EnlargedAoeScale => m_EnlargedAoeScale;
 
+        [Header("Utility Ability")]
+        [SerializeField, Min(0.1f),
+         Tooltip("Seconds before the utility ability can be used again.")]
+        private float m_UtilityCooldown = 10f;
+        [SerializeField, Min(0.1f),
+         Tooltip("Seconds that Ping Scan reveals other players.")]
+        private float m_UtilityEffectDuration = 3f;
+        [SerializeField, Min(0.1f),
+         Tooltip("Seconds that Active Camo hides a small player from opponents.")]
+        private float m_ActiveCamoDuration = 4f;
+        [SerializeField, Min(0.1f),
+         Tooltip("Seconds that Forward Charge propels a large player.")]
+        private float m_ForwardChargeDuration = 1f;
+        [SerializeField, Min(0f),
+         Tooltip("Forward movement speed in metres per second while charging.")]
+        private float m_ForwardChargeSpeed = 18f;
+        [SerializeField, Min(0f),
+         Tooltip("Damage dealt once to each player struck by a charge.")]
+        private float m_ForwardChargeDamage = 50f;
+        [SerializeField, Min(0f),
+         Tooltip("Horizontal launch velocity applied to players struck by a charge.")]
+        private float m_ForwardChargePushForce = 12f;
+        [SerializeField, Min(0f),
+         Tooltip("Upward launch velocity applied to players struck by a charge.")]
+        private float m_ForwardChargeUpForce = 8f;
+        [SerializeField, Range(-1f, 1f),
+         Tooltip("Minimum forward-facing dot product for charge collisions.")]
+        private float m_ForwardChargeFrontDot = 0.35f;
+        [SerializeField, Min(1f),
+         Tooltip("Jump-height multiplier applied when a large player activates Mega Jump.")]
+        private float m_MegaJumpHeightMultiplier = 3f;
+        [SerializeField, Min(0.1f),
+         Tooltip("Seconds that Small Dash increases a small player's movement speed.")]
+        private float m_SmallDashDuration = 2f;
+        [SerializeField, Min(1f),
+         Tooltip("Movement-speed multiplier while Small Dash is active.")]
+        private float m_SmallDashSpeedMultiplier = 2f;
+        [SerializeField, ColorUsage(false, true),
+         Tooltip("Edge tint used by the Active Camo heat-mirage effect.")]
+        private Color m_ActiveCamoMirageTint = new(0.35f, 0.85f, 1f, 1f);
+        [SerializeField, Range(0f, 0.04f),
+         Tooltip("Screen-space refraction strength for Active Camo.")]
+        private float m_ActiveCamoDistortion = 0.012f;
+        [SerializeField, Range(0.05f, 1f),
+         Tooltip("Visibility of the refracted Active Camo silhouette.")]
+        private float m_ActiveCamoOpacity = 0.78f;
+        [SerializeField, Range(0f, 0.04f),
+         Tooltip("Animated surface wobble in metres for Active Camo.")]
+        private float m_ActiveCamoWobble = 0.009f;
+        [SerializeField] private UtilityAbility m_SmallUtilityAbility =
+            UtilityAbility.PingScan;
+        [SerializeField] private UtilityAbility m_NormalUtilityAbility =
+            UtilityAbility.PingScan;
+        [SerializeField] private UtilityAbility m_LargeUtilityAbility =
+            UtilityAbility.PingScan;
+        [SerializeField] private Color m_PingSilhouetteColour =
+            new(0.1f, 0.9f, 1f, 0.85f);
+        [SerializeField, Range(0.001f, 0.08f)]
+        private float m_PingSilhouetteThickness = 0.026f;
+
+        public float UtilityCooldown => Mathf.Max(0.1f, m_UtilityCooldown);
+        public float UtilityEffectDuration =>
+            Mathf.Max(0.1f, m_UtilityEffectDuration);
+        public float ForwardChargeDamage => Mathf.Max(0f, m_ForwardChargeDamage);
+        public float ForwardChargePushForce => Mathf.Max(0f, m_ForwardChargePushForce);
+        public float ForwardChargeUpForce => Mathf.Max(0f, m_ForwardChargeUpForce);
+        public float ForwardChargeFrontDot => Mathf.Clamp(m_ForwardChargeFrontDot,
+            -1f, 1f);
+
         [Header("Reflect Shield Glow")]
         [SerializeField] private Color m_ReflectGlowColour = new(0.2f, 0.75f, 1f, 1f);
         [SerializeField, Min(0f)] private float m_ReflectGlowIntensity = 4f;
@@ -99,10 +168,15 @@ namespace Unity.MP_FPS
         private MeshRenderer m_ReflectShieldRenderer;
         private Material m_ReflectShieldMaterial;
         private Material m_GraceShieldMaterial;
+        private Material m_PingSilhouetteMaterial;
+        private Material m_ActiveCamoMirageMaterial;
         private readonly List<OvershieldRendererPair> m_GraceShieldRenderers = new();
+        private readonly List<OvershieldRendererPair> m_PingSilhouetteRenderers = new();
+        private readonly List<OvershieldRendererPair> m_ActiveCamoRenderers = new();
         private readonly List<MirrorSnapshot> m_MirrorHistory = new();
         private readonly List<MirrorDecoy> m_MirrorDecoys = new();
         private bool m_WasReflectShieldActive;
+        private bool m_WasActiveCamoActive;
         private float m_LastMirrorSnapshotTime = float.MinValue;
 
         private struct MirrorSnapshot
@@ -124,6 +198,7 @@ namespace Unity.MP_FPS
         {
             public Renderer Source;
             public Renderer Shell;
+            public bool SourceEnabledBeforeCamo;
         }
 
         private CinemachineTargetGroup m_TargetGroup;
@@ -133,11 +208,13 @@ namespace Unity.MP_FPS
         private static readonly int s_BaseColorProperty = Shader.PropertyToID("_BaseColor");
         private static readonly int s_ColorProperty = Shader.PropertyToID("_Color");
         private const float GoldenRatioConjugate = 0.61803398875f;
+        private static bool s_LocalPingScanActive;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Init()
         {
             s_NextPredictionId = 1;
+            s_LocalPingScanActive = false;
         }
         
         private static uint s_NextPredictionId = 1;
@@ -145,6 +222,153 @@ namespace Unity.MP_FPS
         public static uint GetNextPredictionID()
         {
             return s_NextPredictionId++;
+        }
+
+        public UtilityAbility ResolveUtilityAbility(int sizeState,
+            in Cards.PlayerModifierStacks modifiers)
+        {
+            if (sizeState == FirstPersonController.SmallSizeState)
+            {
+                UtilityAbility selected =
+                    (UtilityAbility)modifiers.SmallUtilitySelection;
+                if (selected == UtilityAbility.SmallDash &&
+                    modifiers.SmallDashUtility > 0)
+                {
+                    return selected;
+                }
+                if (selected == UtilityAbility.ActiveCamo &&
+                    modifiers.ActiveCamoUtility > 0)
+                {
+                    return selected;
+                }
+
+                // Compatibility for runs started before explicit utility
+                // selection was stored.
+                if (modifiers.SmallDashUtility > 0)
+                {
+                    return UtilityAbility.SmallDash;
+                }
+                if (modifiers.ActiveCamoUtility > 0)
+                {
+                    return UtilityAbility.ActiveCamo;
+                }
+            }
+
+            if (sizeState == FirstPersonController.LargeSizeState)
+            {
+                UtilityAbility selected =
+                    (UtilityAbility)modifiers.LargeUtilitySelection;
+                if (selected == UtilityAbility.MegaJump &&
+                    modifiers.MegaJumpUtility > 0)
+                {
+                    return selected;
+                }
+                if (selected == UtilityAbility.ForwardCharge &&
+                    modifiers.ForwardChargeUtility > 0)
+                {
+                    return selected;
+                }
+
+                if (modifiers.MegaJumpUtility > 0)
+                {
+                    return UtilityAbility.MegaJump;
+                }
+                if (modifiers.ForwardChargeUtility > 0)
+                {
+                    return UtilityAbility.ForwardCharge;
+                }
+            }
+
+            return sizeState switch
+            {
+                FirstPersonController.SmallSizeState => m_SmallUtilityAbility,
+                FirstPersonController.LargeSizeState => m_LargeUtilityAbility,
+                _ => m_NormalUtilityAbility
+            };
+        }
+
+        public float ResolveUtilityEffectDuration(UtilityAbility ability)
+        {
+            return ability switch
+            {
+                UtilityAbility.PingScan => Mathf.Max(0.1f,
+                    m_UtilityEffectDuration),
+                UtilityAbility.ActiveCamo => Mathf.Max(0.1f,
+                    m_ActiveCamoDuration),
+                UtilityAbility.ForwardCharge => Mathf.Max(0.1f,
+                    m_ForwardChargeDuration),
+                UtilityAbility.SmallDash => Mathf.Max(0.1f,
+                    m_SmallDashDuration),
+                _ => 0f
+            };
+        }
+
+        public bool CanActivateUtility(UtilityAbility ability,
+            in PredictedPlayerGhost player)
+        {
+            return ability != UtilityAbility.MegaJump ||
+                   (player.SizeState == FirstPersonController.LargeSizeState &&
+                    player.ControllerState.MovementType ==
+                        FirstPersonController.MovementType.Standing &&
+                    player.ControllerState.JumpTimeoutDelta <= 0f);
+        }
+
+        public void ApplyUtilityActivation(ref PredictedPlayerGhost player,
+            UtilityAbility ability, in Cards.PlayerModifierStacks modifiers,
+            in ControllerConsts controllerConsts)
+        {
+            if (ability != UtilityAbility.MegaJump)
+            {
+                return;
+            }
+
+            m_Controller.GetSizeMovementMultipliers(in player, in modifiers,
+                out _, out float sizeJumpHeightMultiplier);
+            float jumpHeight = Mathf.Max(0f, controllerConsts.JumpHeight) *
+                Mathf.Max(0f, sizeJumpHeightMultiplier) *
+                Mathf.Max(1f, m_MegaJumpHeightMultiplier);
+            player.ControllerState.JumpFallSpeed = math.sqrt(
+                jumpHeight * Mathf.Max(0f, -2f * controllerConsts.Gravity));
+            player.ControllerState.PreviousMovementType =
+                player.ControllerState.MovementType;
+            player.ControllerState.MovementType =
+                FirstPersonController.MovementType.Jumping;
+            player.ControllerState.TimeInState = 0f;
+            player.ControllerState.Jump = true;
+            player.ControllerState.Fall = false;
+            player.ControllerState.JumpTriggered = true;
+            player.ControllerState.JumpTimeoutDelta =
+                Mathf.Max(0f, controllerConsts.JumpTimeout);
+        }
+
+        public float GetUtilityMovementSpeedMultiplier(
+            in PredictedPlayerGhost player)
+        {
+            return (UtilityAbility)player.ActiveUtilityAbility ==
+                       UtilityAbility.SmallDash &&
+                   player.UtilityEffectTimeRemaining > 0f &&
+                   player.SizeState == FirstPersonController.SmallSizeState
+                ? Mathf.Max(1f, m_SmallDashSpeedMultiplier)
+                : 1f;
+        }
+
+        public void AccumulateUtilityMovement(ref PredictedPlayerGhost player,
+            float deltaTime)
+        {
+            if ((UtilityAbility)player.ActiveUtilityAbility !=
+                    UtilityAbility.ForwardCharge ||
+                player.UtilityEffectTimeRemaining <= 0f ||
+                player.SizeState != FirstPersonController.LargeSizeState)
+            {
+                return;
+            }
+
+            float3 forward = math.mul(player.ControllerState.CurrentRotation,
+                new float3(0f, 0f, 1f));
+            forward.y = 0f;
+            forward = math.normalizesafe(forward, new float3(0f, 0f, 1f));
+            player.AccumulatedMovement += forward *
+                Mathf.Max(0f, m_ForwardChargeSpeed) * Mathf.Max(0f, deltaTime);
         }
 
         public Camera GetPlayerCamera()
@@ -301,6 +525,8 @@ namespace Unity.MP_FPS
                 ConfigureWizardVisuals();
                 CreateReflectGlow();
                 CreateGraceShieldSilhouette();
+                CreatePingSilhouette();
+                CreateActiveCamoMirage();
             }
 
             if (Role != MultiplayerRole.Server &&
@@ -579,6 +805,246 @@ namespace Unity.MP_FPS
             }
         }
 
+        private void CreatePingSilhouette()
+        {
+            Shader pingShader = Shader.Find("MultiplayerJam/Ping Silhouette");
+            if (pingShader == null)
+            {
+                Debug.LogWarning("Ping silhouette shader could not be found.");
+                return;
+            }
+
+            m_PingSilhouetteMaterial = new Material(pingShader)
+            {
+                name = "Runtime Ping Silhouette Material"
+            };
+            m_PingSilhouetteMaterial.SetColor("_PingColor",
+                m_PingSilhouetteColour);
+            m_PingSilhouetteMaterial.SetFloat("_ShellThickness",
+                m_PingSilhouetteThickness);
+
+            if (m_OtherPlayerVisuals == null)
+            {
+                return;
+            }
+
+            Renderer[] sourceRenderers =
+                m_OtherPlayerVisuals.GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer sourceRenderer in sourceRenderers)
+            {
+                if (IsGraceShieldShell(sourceRenderer))
+                {
+                    continue;
+                }
+
+                Renderer shellRenderer = sourceRenderer switch
+                {
+                    SkinnedMeshRenderer skinnedRenderer =>
+                        CreateSkinnedOvershieldShell(skinnedRenderer),
+                    MeshRenderer meshRenderer =>
+                        CreateMeshOvershieldShell(meshRenderer),
+                    _ => null
+                };
+
+                if (shellRenderer == null)
+                {
+                    continue;
+                }
+
+                shellRenderer.gameObject.name =
+                    $"{sourceRenderer.gameObject.name} Ping Silhouette";
+                ConfigurePingShell(sourceRenderer, shellRenderer);
+                m_PingSilhouetteRenderers.Add(new OvershieldRendererPair
+                {
+                    Source = sourceRenderer,
+                    Shell = shellRenderer
+                });
+            }
+        }
+
+        private void CreateActiveCamoMirage()
+        {
+            Shader camoShader = Shader.Find("MultiplayerJam/Active Camo Mirage");
+            if (camoShader == null)
+            {
+                Debug.LogWarning("Active Camo mirage shader could not be found.");
+                return;
+            }
+
+            m_ActiveCamoMirageMaterial = new Material(camoShader)
+            {
+                name = "Runtime Active Camo Mirage Material"
+            };
+            m_ActiveCamoMirageMaterial.SetColor("_MirageTint",
+                m_ActiveCamoMirageTint);
+            m_ActiveCamoMirageMaterial.SetFloat("_DistortionStrength",
+                m_ActiveCamoDistortion);
+            m_ActiveCamoMirageMaterial.SetFloat("_MirageOpacity",
+                m_ActiveCamoOpacity);
+            m_ActiveCamoMirageMaterial.SetFloat("_WobbleStrength",
+                m_ActiveCamoWobble);
+            var pipelineAsset = UnityEngine.Rendering.GraphicsSettings
+                .currentRenderPipeline as
+                UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            m_ActiveCamoMirageMaterial.SetFloat("_UseSceneColor",
+                pipelineAsset != null && pipelineAsset.supportsCameraOpaqueTexture
+                    ? 1f
+                    : 0f);
+
+            if (m_OtherPlayerVisuals == null)
+            {
+                return;
+            }
+
+            Renderer[] sourceRenderers =
+                m_OtherPlayerVisuals.GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer sourceRenderer in sourceRenderers)
+            {
+                if (IsGraceShieldShell(sourceRenderer) ||
+                    IsPingSilhouetteShell(sourceRenderer))
+                {
+                    continue;
+                }
+
+                Renderer shellRenderer = sourceRenderer switch
+                {
+                    SkinnedMeshRenderer skinnedRenderer =>
+                        CreateSkinnedOvershieldShell(skinnedRenderer),
+                    MeshRenderer meshRenderer =>
+                        CreateMeshOvershieldShell(meshRenderer),
+                    _ => null
+                };
+                if (shellRenderer == null)
+                {
+                    continue;
+                }
+
+                shellRenderer.gameObject.name =
+                    $"{sourceRenderer.gameObject.name} Active Camo Mirage";
+                int materialCount = Mathf.Max(1,
+                    sourceRenderer.sharedMaterials.Length);
+                var shellMaterials = new Material[materialCount];
+                for (int i = 0; i < materialCount; i++)
+                {
+                    shellMaterials[i] = m_ActiveCamoMirageMaterial;
+                }
+                shellRenderer.sharedMaterials = shellMaterials;
+                shellRenderer.shadowCastingMode =
+                    UnityEngine.Rendering.ShadowCastingMode.Off;
+                shellRenderer.receiveShadows = false;
+                shellRenderer.lightProbeUsage =
+                    UnityEngine.Rendering.LightProbeUsage.Off;
+                shellRenderer.reflectionProbeUsage =
+                    UnityEngine.Rendering.ReflectionProbeUsage.Off;
+                shellRenderer.allowOcclusionWhenDynamic = false;
+                shellRenderer.sortingLayerID = sourceRenderer.sortingLayerID;
+                shellRenderer.sortingOrder = sourceRenderer.sortingOrder + 3;
+                shellRenderer.enabled = false;
+                m_ActiveCamoRenderers.Add(new OvershieldRendererPair
+                {
+                    Source = sourceRenderer,
+                    Shell = shellRenderer
+                });
+            }
+        }
+
+        private void UpdateActiveCamoMirage(bool active)
+        {
+            bool stateChanged = active != m_WasActiveCamoActive;
+            foreach (OvershieldRendererPair pair in m_ActiveCamoRenderers)
+            {
+                if (pair.Source == null || pair.Shell == null)
+                {
+                    continue;
+                }
+
+                if (stateChanged && active)
+                {
+                    pair.SourceEnabledBeforeCamo = pair.Source.enabled;
+                }
+
+                if (active)
+                {
+                    pair.Source.enabled = false;
+                    pair.Shell.enabled = pair.SourceEnabledBeforeCamo &&
+                        pair.Source.gameObject.activeInHierarchy;
+                }
+                else
+                {
+                    pair.Shell.enabled = false;
+                    if (stateChanged)
+                    {
+                        pair.Source.enabled = pair.SourceEnabledBeforeCamo;
+                    }
+                }
+            }
+
+            m_WasActiveCamoActive = active;
+        }
+
+        private bool IsGraceShieldShell(Renderer candidate)
+        {
+            foreach (OvershieldRendererPair pair in m_GraceShieldRenderers)
+            {
+                if (pair.Shell == candidate)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsPingSilhouetteShell(Renderer candidate)
+        {
+            foreach (OvershieldRendererPair pair in m_PingSilhouetteRenderers)
+            {
+                if (pair.Shell == candidate)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void ConfigurePingShell(Renderer source, Renderer shell)
+        {
+            int materialCount = Mathf.Max(1, source.sharedMaterials.Length);
+            var shellMaterials = new Material[materialCount];
+            for (int i = 0; i < shellMaterials.Length; i++)
+            {
+                shellMaterials[i] = m_PingSilhouetteMaterial;
+            }
+
+            shell.sharedMaterials = shellMaterials;
+            shell.shadowCastingMode =
+                UnityEngine.Rendering.ShadowCastingMode.Off;
+            shell.receiveShadows = false;
+            shell.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+            shell.reflectionProbeUsage =
+                UnityEngine.Rendering.ReflectionProbeUsage.Off;
+            shell.allowOcclusionWhenDynamic = false;
+            shell.sortingLayerID = source.sortingLayerID;
+            shell.sortingOrder = source.sortingOrder + 2;
+            shell.enabled = false;
+        }
+
+        private void UpdatePingSilhouette(bool active)
+        {
+            foreach (OvershieldRendererPair pair in m_PingSilhouetteRenderers)
+            {
+                if (pair.Shell == null)
+                {
+                    continue;
+                }
+
+                pair.Shell.enabled = active && pair.Source != null &&
+                                     pair.Source.enabled &&
+                                     pair.Source.gameObject.activeInHierarchy;
+            }
+        }
+
         private static Transform FindDescendant(GameObject root, string childName)
         {
             if (root == null)
@@ -668,6 +1134,10 @@ namespace Unity.MP_FPS
         public override void OnGhostPreDestroy()
         {
             ClearMirrorDecoys();
+            if (Role == MultiplayerRole.ClientOwned)
+            {
+                s_LocalPingScanActive = false;
+            }
             if (m_ReflectShieldMaterial != null)
             {
                 Destroy(m_ReflectShieldMaterial);
@@ -675,6 +1145,14 @@ namespace Unity.MP_FPS
             if (m_GraceShieldMaterial != null)
             {
                 Destroy(m_GraceShieldMaterial);
+            }
+            if (m_PingSilhouetteMaterial != null)
+            {
+                Destroy(m_PingSilhouetteMaterial);
+            }
+            if (m_ActiveCamoMirageMaterial != null)
+            {
+                Destroy(m_ActiveCamoMirageMaterial);
             }
 
             if (PlayerGhostManager.TryGetInstanceByRole(Role, out var playerManager))
@@ -731,6 +1209,22 @@ namespace Unity.MP_FPS
             ApplyPlayerScale(deltaTime);
 
             var predictedPlayerGhost = ReadGhostComponentData<PredictedPlayerGhost>();
+            bool activeCamo = Role == MultiplayerRole.ClientProxy &&
+                predictedPlayerGhost.CurrentHealth > 0f &&
+                predictedPlayerGhost.UtilityEffectTimeRemaining > 0f &&
+                (UtilityAbility)predictedPlayerGhost.ActiveUtilityAbility ==
+                    UtilityAbility.ActiveCamo;
+            UpdateActiveCamoMirage(activeCamo);
+            if (Role == MultiplayerRole.ClientOwned)
+            {
+                s_LocalPingScanActive = predictedPlayerGhost.CurrentHealth > 0f &&
+                    predictedPlayerGhost.UtilityEffectTimeRemaining > 0f &&
+                    (UtilityAbility)predictedPlayerGhost.ActiveUtilityAbility ==
+                    UtilityAbility.PingScan;
+            }
+            UpdatePingSilhouette(Role == MultiplayerRole.ClientProxy &&
+                                 s_LocalPingScanActive &&
+                                 predictedPlayerGhost.CurrentHealth > 0f);
             bool reflectShieldActive = predictedPlayerGhost.ReflectShieldTimeRemaining > 0f;
             bool graceShieldActive = predictedPlayerGhost.GraceShieldAmount > 0f;
             bool secondChanceProtected = !graceShieldActive &&

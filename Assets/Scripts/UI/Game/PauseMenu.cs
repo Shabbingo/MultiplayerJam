@@ -20,7 +20,7 @@ namespace Unity.MP_FPS
             public const string SelfShrinkBindingButton = "SelfShrinkBindingButton";
             public const string SelfGrowBindingButton = "SelfGrowBindingButton";
             public const string ReflectBindingButton = "ReflectBindingButton";
-            public const string GrenadeBindingButton = "GrenadeBindingButton";
+            public const string UtilityBindingButton = "UtilityBindingButton";
         }
 
         Button m_ResumeButton;
@@ -32,7 +32,7 @@ namespace Unity.MP_FPS
         Button m_SelfShrinkBindingButton;
         Button m_SelfGrowBindingButton;
         Button m_ReflectBindingButton;
-        Button m_GrenadeBindingButton;
+        Button m_UtilityBindingButton;
         InputActionRebindingExtensions.RebindingOperation m_RebindOperation;
         int m_IgnorePauseToggleFrame = -1;
 
@@ -73,11 +73,11 @@ namespace Unity.MP_FPS
             m_SelfShrinkBindingButton = root.Q<Button>(UIElementNames.SelfShrinkBindingButton);
             m_SelfGrowBindingButton = root.Q<Button>(UIElementNames.SelfGrowBindingButton);
             m_ReflectBindingButton = root.Q<Button>(UIElementNames.ReflectBindingButton);
-            m_GrenadeBindingButton = root.Q<Button>(UIElementNames.GrenadeBindingButton);
+            m_UtilityBindingButton = root.Q<Button>(UIElementNames.UtilityBindingButton);
             m_SelfShrinkBindingButton.clicked += StartSelfShrinkRebind;
             m_SelfGrowBindingButton.clicked += StartSelfGrowRebind;
             m_ReflectBindingButton.clicked += StartReflectRebind;
-            m_GrenadeBindingButton.clicked += StartGrenadeRebind;
+            m_UtilityBindingButton.clicked += StartUtilityRebind;
             RefreshBindings();
         }
 
@@ -93,7 +93,7 @@ namespace Unity.MP_FPS
             m_SelfShrinkBindingButton.clicked -= StartSelfShrinkRebind;
             m_SelfGrowBindingButton.clicked -= StartSelfGrowRebind;
             m_ReflectBindingButton.clicked -= StartReflectRebind;
-            m_GrenadeBindingButton.clicked -= StartGrenadeRebind;
+            m_UtilityBindingButton.clicked -= StartUtilityRebind;
 
             if (m_RebindOperation != null)
             {
@@ -166,7 +166,8 @@ namespace Unity.MP_FPS
         void StartReflectRebind() => StartRebind(
             InputSystemManager.ReflectActionName, m_ReflectBindingButton);
 
-        void StartGrenadeRebind() => StartRebind("ShootGrenade", m_GrenadeBindingButton);
+        void StartUtilityRebind() => StartRebind(
+            InputSystemManager.UtilityActionName, m_UtilityBindingButton);
 
         void StartRebind(string actionName, Button bindingButton)
         {
@@ -212,17 +213,9 @@ namespace Unity.MP_FPS
             m_RebindOperation = null;
             action.Enable();
 
-            if (saveBinding && InputSystemManager.TryGetFirstInputUser(out var user))
+            if (saveBinding)
             {
-                var controls = (InputSystem_Actions)user.actions;
-                if (action == controls.FPS.ShootGrenade)
-                {
-                    InputSystemManager.SaveGrenadeBinding(controls);
-                }
-                else
-                {
-                    InputSystemManager.SaveGameplayBinding(action);
-                }
+                InputSystemManager.SaveGameplayBinding(action);
             }
 
             RefreshBindings();
@@ -235,7 +228,7 @@ namespace Unity.MP_FPS
                 m_SelfShrinkBindingButton.text = "Self Shrink Binding: Unavailable";
                 m_SelfGrowBindingButton.text = "Self Grow Binding: Unavailable";
                 m_ReflectBindingButton.text = "Reflect Shield Binding: Unavailable";
-                m_GrenadeBindingButton.text = "Growth Missile Alt Binding: Unavailable";
+                m_UtilityBindingButton.text = "Utility Ability Binding: Unavailable";
                 return;
             }
 
@@ -249,15 +242,14 @@ namespace Unity.MP_FPS
             SetBindingButtonText(m_ReflectBindingButton, "Reflect Shield Binding",
                 InputSystemManager.GetGameplayAction(controls,
                     InputSystemManager.ReflectActionName));
-            SetBindingButtonText(m_GrenadeBindingButton, "Growth Missile Alt Binding",
-                controls.FPS.ShootGrenade);
+            SetBindingButtonText(m_UtilityBindingButton, "Utility Ability Binding",
+                InputSystemManager.GetGameplayAction(controls,
+                    InputSystemManager.UtilityActionName));
         }
 
         static InputAction GetAction(InputSystem_Actions controls, string actionName)
         {
-            return actionName == "ShootGrenade"
-                ? controls.FPS.ShootGrenade
-                : InputSystemManager.GetGameplayAction(controls, actionName);
+            return InputSystemManager.GetGameplayAction(controls, actionName);
         }
 
         static void SetBindingButtonText(Button button, string label, InputAction action)

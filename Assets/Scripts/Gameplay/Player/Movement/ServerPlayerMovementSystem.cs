@@ -93,6 +93,8 @@ namespace Unity.MP_FPS
         private readonly Dictionary<int, float> m_SecondChanceInvulnerabilityTimers = new();
         private readonly Dictionary<int, float> m_ConservationCooldownTimers = new();
         private readonly HashSet<Entity> m_HeavyFootedTriggeredThisAirborne = new();
+        private readonly Dictionary<int, uint> m_ChargeActivationTicks = new();
+        private readonly Dictionary<int, HashSet<int>> m_ChargeHitTargets = new();
         private int m_SecondChanceRound = -1;
         private readonly Dictionary<int, Entity> m_PlayerEntitiesByNetworkId = new();
         private readonly HashSet<Entity> m_RuntimeAreaHitEntities = new();
@@ -237,6 +239,8 @@ namespace Unity.MP_FPS
             m_SecondChanceInvulnerabilityTimers.Clear();
             m_ConservationCooldownTimers.Clear();
             m_HeavyFootedTriggeredThisAirborne.Clear();
+            m_ChargeActivationTicks.Clear();
+            m_ChargeHitTargets.Clear();
             m_PlayerEntitiesByNetworkId.Clear();
             m_RuntimeAreaHitEntities.Clear();
             m_BleedEffects.Clear();
@@ -428,24 +432,46 @@ namespace Unity.MP_FPS
 
             // Resolve every shield press before processing any player's attack this
             // tick, so protection never depends on ECS entity iteration order.
-            foreach (var (predictedPlayer, inputLookup, entity) in
+            foreach (var (predictedPlayer, inputLookup, modifiers,
+                         controllerConsts, entity) in
                      SystemAPI.Query<RefRW<PredictedPlayerGhost>,
-                             RefRO<PlayerClientCommandInputLookup>>()
+                             RefRO<PlayerClientCommandInputLookup>,
+                             RefRO<Cards.PlayerModifierStacks>,
+                             RefRO<PredictedPlayerControllerConsts>>()
                          .WithAll<Simulate, GhostGameObjectLink>()
                          .WithEntityAccess())
             {
                 var predictedClient = predictedClientInputComponentLookup[
                     inputLookup.ValueRO.ClientCommandInputEntity];
+                var ghostLink = SystemAPI.ManagedAPI
+                    .GetComponent<GhostGameObjectLink>(entity);
+                var playerGhost = ghostLink.LinkedInstance
+                    .GetComponent<PlayerGhost>();
+                UtilityAbility resolvedUtility = playerGhost.ResolveUtilityAbility(
+                    predictedPlayer.ValueRO.SizeState, in modifiers.ValueRO);
+                if (predictedPlayer.ValueRO.ActiveUtilityAbility !=
+                    (int)resolvedUtility)
+                {
+                    predictedPlayer.ValueRW.UtilityEffectTimeRemaining = 0f;
+                }
+                predictedPlayer.ValueRW.ActiveUtilityAbility =
+                    (int)resolvedUtility;
                 for (int inputIndex = 0; inputIndex < predictedClient.InputCount; inputIndex++)
                 {
-                    var reflectInput = commands[predictedClient.BeginInputIndex + inputIndex];
-                    if (!reflectInput.PlayerInput.ReflectPressed)
+                    var abilityInput = commands[
+                        predictedClient.BeginInputIndex + inputIndex];
+                    if (abilityInput.PlayerInput.ReflectPressed)
                     {
-                        continue;
+                        TryActivateReflect(entity, ref predictedPlayer.ValueRW);
                     }
-
-                    TryActivateReflect(entity, ref predictedPlayer.ValueRW);
-                    break;
+                    if (abilityInput.PlayerInput.UtilityPressed)
+                    {
+                        TryActivateUtility(ref predictedPlayer.ValueRW,
+                            playerGhost,
+                            in modifiers.ValueRO,
+                            in controllerConsts.ValueRO.ControllerConsts,
+                            abilityInput.Tick.TickIndexForValidTick);
+                    }
                 }
             }
 
@@ -521,6 +547,12 @@ namespace Unity.MP_FPS
                 predictedPlayer.ValueRW.CrossWeaponCooldownRemaining = Mathf.Max(
                     0f, predictedPlayer.ValueRO.CrossWeaponCooldownRemaining -
                         deltaTime);
+                predictedPlayer.ValueRW.UtilityCooldownTimeRemaining = Mathf.Max(
+                    0f, predictedPlayer.ValueRO.UtilityCooldownTimeRemaining -
+                        deltaTime);
+                predictedPlayer.ValueRW.UtilityEffectTimeRemaining = Mathf.Max(
+                    0f, predictedPlayer.ValueRO.UtilityEffectTimeRemaining -
+                        deltaTime);
 
 
                 if (predictedPlayer.ValueRO.EquippedWeaponID != WeaponManager.SecondaryWeaponId &&
@@ -595,40 +627,33 @@ namespace Unity.MP_FPS
 
                     predictedPlayer.ValueRW.ControllerState.Shoot = false;
 
-                    bool secondaryFireHeld = commandInput.PlayerInput.GrowShot ||
-                                             commandInput.PlayerInput.TossGrenade;
                     if (commandInput.PlayerInput.Reload &&
                         playerGhost.Controller.TryReloadBothWeapons(
                             ref predictedPlayer.ValueRW, in modifiers.ValueRO))
                     {
                         predictedPlayer.ValueRW.LastReloadTick = serverTick;
                     }
-                    // Clear pending state left by the older delayed right-click path.
+                    // Clear obsolete secondary-fire state retained for snapshot compatibility.
                     predictedPlayer.ValueRW.GrowShotPending = false;
                     predictedPlayer.ValueRW.GrowShotReleaseTimer = 0f;
 
                     predictedPlayer.ValueRW.ShrinkCastHeld = commandInput.PlayerInput.Shoot &&
-                        !secondaryFireHeld &&
                         playerGhost.Controller.CanUseWeapon(
                             in predictedPlayer.ValueRO,
                             WeaponManager.PrimaryWeaponId) &&
                         predictedPlayer.ValueRO.CurrentAmmo > 0 &&
                         !predictedPlayer.ValueRO.ControllerState.IsReloadingState;
                     var weaponBeforeAbility = default(WeaponManager.TemporaryWeaponState);
-                    uint abilityWeaponId = secondaryFireHeld
-                        ? WeaponManager.SecondaryWeaponId
-                        : WeaponManager.PrimaryWeaponId;
-                    bool wantsToShoot = commandInput.PlayerInput.Shoot || secondaryFireHeld;
+                    uint abilityWeaponId = WeaponManager.PrimaryWeaponId;
+                    bool wantsToShoot = commandInput.PlayerInput.Shoot;
                     bool restoreWeaponAfterAbility = wantsToShoot &&
                         WeaponManager.Instance.TryBeginTemporaryWeapon(
                             ref predictedPlayer.ValueRW,
                             abilityWeaponId,
                             out weaponBeforeAbility);
 
-                    // The click that triggered this cast is the source of truth for the
-                    // hand. Do not derive the muzzle from temporary equipped-weapon state:
-                    // left click must always launch from the left hand and right click
-                    // must always launch from the right hand.
+                    // Weapon fire is now primary/left-hand only. The right hand is
+                    // reserved for the utility ability.
                     var runtimeProfile = WeaponManager.Instance.ResolveRuntimeProfile(
                         abilityWeaponId, in modifiers.ValueRO);
                     var weaponData = runtimeProfile.SourceProfile;
@@ -636,8 +661,7 @@ namespace Unity.MP_FPS
                     if (weaponData != null)
                     {
                         // Reload from the canonical weapon state after the temporary
-                        // right-hand swap is restored. Otherwise the restore step can
-                        // overwrite SecondaryIsReloading and cancel the reload.
+                        // weapon state is restored.
                         autoReloadRequested = wantsToShoot &&
                             predictedPlayer.ValueRO.CurrentAmmo <= 0;
 
@@ -671,14 +695,7 @@ namespace Unity.MP_FPS
                             playerGhost.Controller.StartCrossWeaponCooldown(
                                 ref predictedPlayer.ValueRW,
                                 abilityWeaponId);
-                            if (secondaryFireHeld)
-                            {
-                                predictedPlayer.ValueRW.LastGrenadeShotTick = serverTick;
-                            }
-                            else
-                            {
-                                predictedPlayer.ValueRW.LastShotTick = serverTick;
-                            }
+                            predictedPlayer.ValueRW.LastShotTick = serverTick;
 
                             var shooterNetworkId = ghostOwnerLookup[entity].NetworkId;
                             var controllerState = predictedPlayer.ValueRO.ControllerState;
@@ -959,6 +976,7 @@ namespace Unity.MP_FPS
                          .WithEntityAccess())
             {
                 var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+                var playerGhost = controllerLink.Controller.GetComponent<PlayerGhost>();
                 predictedPlayer.ValueRW.MoveSlowTimeRemaining = Mathf.Max(0f,
                     predictedPlayer.ValueRO.MoveSlowTimeRemaining - deltaTime);
                 if (predictedPlayer.ValueRW.MoveSlowTimeRemaining <= 0f)
@@ -1001,6 +1019,9 @@ namespace Unity.MP_FPS
                                 speedMultiplier *= 1f + modifiers.ValueRO.ShieldSpeed *
                                     Mathf.Max(0f, shieldSpeedCard?.ValuePerStack ?? 0.5f);
                             }
+                            speedMultiplier *= playerGhost
+                                .GetUtilityMovementSpeedMultiplier(
+                                    in predictedPlayer.ValueRO);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
@@ -1009,6 +1030,8 @@ namespace Unity.MP_FPS
                                 speedMultiplier,
                                 jumpHeightMultiplier,
                                 movementDt);
+                            playerGhost.AccumulateUtilityMovement(
+                                ref predictedPlayer.ValueRW, movementDt);
                             controllerLink.Controller.AccumulateAirborneThrust(
                                 ref predictedPlayer.ValueRW, movementDt);
                         }
@@ -1041,6 +1064,7 @@ namespace Unity.MP_FPS
                          .WithEntityAccess())
             {
                 var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+                var playerGhost = controllerLink.Controller.GetComponent<PlayerGhost>();
                 bool wasFalling = predictedPlayer.ValueRO.ControllerState.MovementType ==
                                   FirstPersonController.MovementType.Falling;
                 float fallHeightBeforeMove =
@@ -1054,6 +1078,9 @@ namespace Unity.MP_FPS
                 }
 
                 predictedPlayer.ValueRW.AccumulatedMovement = float3.zero;
+
+                TryApplyForwardChargeHit(entity, playerGhost,
+                    ref predictedPlayer.ValueRW, serverTick);
 
                 bool isStanding = predictedPlayer.ValueRO.ControllerState.MovementType ==
                                   FirstPersonController.MovementType.Standing;
@@ -1528,6 +1555,131 @@ namespace Unity.MP_FPS
                 radius, force, radius, damage, hitTick);
         }
 
+        private void TryApplyForwardChargeHit(Entity sourceEntity,
+            PlayerGhost sourceGhost, ref PredictedPlayerGhost sourcePlayer,
+            uint hitTick)
+        {
+            if (sourceGhost == null ||
+                (UtilityAbility)sourcePlayer.ActiveUtilityAbility !=
+                    UtilityAbility.ForwardCharge ||
+                sourcePlayer.UtilityEffectTimeRemaining <= 0f ||
+                sourcePlayer.SizeState != FirstPersonController.LargeSizeState ||
+                !ghostOwnerLookup.HasComponent(sourceEntity) ||
+                !EntityManager.HasComponent<PlayerControllerLink>(sourceEntity))
+            {
+                return;
+            }
+
+            int sourceNetworkId = ghostOwnerLookup[sourceEntity].NetworkId;
+            if (!m_ChargeActivationTicks.TryGetValue(sourceNetworkId,
+                    out uint activationTick) ||
+                activationTick != sourcePlayer.LastUtilityAbilityTick)
+            {
+                m_ChargeActivationTicks[sourceNetworkId] =
+                    sourcePlayer.LastUtilityAbilityTick;
+                if (!m_ChargeHitTargets.TryGetValue(sourceNetworkId,
+                        out var resetTargets))
+                {
+                    resetTargets = new HashSet<int>();
+                    m_ChargeHitTargets[sourceNetworkId] = resetTargets;
+                }
+                resetTargets.Clear();
+            }
+
+            HashSet<int> hitTargets = m_ChargeHitTargets[sourceNetworkId];
+            var sourceController = EntityManager
+                .GetComponentObject<PlayerControllerLink>(sourceEntity)?.Controller;
+            if (sourceController == null)
+            {
+                return;
+            }
+
+            sourceController.GetCurrentHitboxCapsule(
+                sourcePlayer.ControllerState.CurrentPosition,
+                sourcePlayer.ControllerState.CurrentRotation,
+                out Vector3 sourcePoint0, out Vector3 sourcePoint1,
+                out float sourceRadius);
+            Vector3 sourceCentre = (sourcePoint0 + sourcePoint1) * 0.5f;
+            float3 forward = math.mul(sourcePlayer.ControllerState.CurrentRotation,
+                new float3(0f, 0f, 1f));
+            forward.y = 0f;
+            forward = math.normalizesafe(forward, new float3(0f, 0f, 1f));
+
+            foreach (var pair in m_PlayerEntitiesByNetworkId)
+            {
+                int targetNetworkId = pair.Key;
+                Entity targetEntity = pair.Value;
+                if (targetEntity == sourceEntity ||
+                    hitTargets.Contains(targetNetworkId) ||
+                    !m_PlayerGhostLookup.HasComponent(targetEntity) ||
+                    m_PlayerGhostLookup[targetEntity].CurrentHealth <= 0f ||
+                    !EntityManager.HasComponent<PlayerControllerLink>(targetEntity))
+                {
+                    continue;
+                }
+
+                var targetController = EntityManager
+                    .GetComponentObject<PlayerControllerLink>(targetEntity)?.Controller;
+                if (targetController == null)
+                {
+                    continue;
+                }
+
+                PredictedPlayerGhost targetPlayer = m_PlayerGhostLookup[targetEntity];
+                targetController.GetCurrentHitboxCapsule(
+                    targetPlayer.ControllerState.CurrentPosition,
+                    targetPlayer.ControllerState.CurrentRotation,
+                    out Vector3 targetPoint0, out Vector3 targetPoint1,
+                    out float targetRadius);
+                Vector3 targetCentre = (targetPoint0 + targetPoint1) * 0.5f;
+                Vector3 horizontalOffset = targetCentre - sourceCentre;
+                horizontalOffset.y = 0f;
+                float horizontalDistance = horizontalOffset.magnitude;
+                float contactDistance = sourceRadius + targetRadius + 0.15f;
+                float sourceBottom = Mathf.Min(sourcePoint0.y, sourcePoint1.y) -
+                                     sourceRadius;
+                float sourceTop = Mathf.Max(sourcePoint0.y, sourcePoint1.y) +
+                                  sourceRadius;
+                float targetBottom = Mathf.Min(targetPoint0.y, targetPoint1.y) -
+                                     targetRadius;
+                float targetTop = Mathf.Max(targetPoint0.y, targetPoint1.y) +
+                                  targetRadius;
+                if (horizontalDistance > contactDistance ||
+                    sourceTop < targetBottom || targetTop < sourceBottom)
+                {
+                    continue;
+                }
+
+                float3 away = horizontalDistance > 0.001f
+                    ? (float3)(horizontalOffset / horizontalDistance)
+                    : forward;
+                if (math.dot(forward, away) < sourceGhost.ForwardChargeFrontDot)
+                {
+                    continue;
+                }
+
+                hitTargets.Add(targetNetworkId);
+                ApplyIncomingWeaponDamage(targetEntity, sourceNetworkId,
+                    -sourceGhost.ForwardChargeDamage, PlayerResizeEffect.None, 0f,
+                    0f, 0f, 0f, 0f, 0f, hitTick,
+                    m_PlayerGhostLookup, ghostOwnerLookup);
+
+                var target = m_PlayerGhostLookup.GetRefRW(targetEntity);
+                target.ValueRW.RecoilVelocity += away *
+                    sourceGhost.ForwardChargePushForce +
+                    new float3(0f, sourceGhost.ForwardChargeUpForce, 0f);
+                target.ValueRW.ControllerState.PreviousMovementType =
+                    target.ValueRO.ControllerState.MovementType;
+                target.ValueRW.ControllerState.MovementType =
+                    FirstPersonController.MovementType.Jumping;
+                target.ValueRW.ControllerState.JumpFallSpeed = Mathf.Max(
+                    target.ValueRO.ControllerState.JumpFallSpeed,
+                    sourceGhost.ForwardChargeUpForce);
+                target.ValueRW.AccumulatedMovement += away * 0.2f +
+                    new float3(0f, 0.2f, 0f);
+            }
+        }
+
         private void TriggerHeavyFooted(Entity sourceEntity, int sourceNetworkId,
             int stacks, uint hitTick, Entity directStompTarget)
         {
@@ -1795,6 +1947,32 @@ namespace Unity.MP_FPS
                     m_BleedEffects.RemoveAt(i);
                 }
             }
+        }
+
+        private static void TryActivateUtility(ref PredictedPlayerGhost player,
+            PlayerGhost playerGhost,
+            in Cards.PlayerModifierStacks modifiers,
+            in FirstPersonController.ControllerConsts controllerConsts,
+            uint tick)
+        {
+            UtilityAbility ability = playerGhost.ResolveUtilityAbility(
+                player.SizeState, in modifiers);
+            player.ActiveUtilityAbility = (int)ability;
+            if (player.CurrentHealth <= 0f ||
+                player.UtilityCooldownTimeRemaining > 0f ||
+                ability == UtilityAbility.None ||
+                !playerGhost.CanActivateUtility(ability, in player))
+            {
+                return;
+            }
+
+            player.UtilityCooldownDuration = playerGhost.UtilityCooldown;
+            player.UtilityCooldownTimeRemaining = playerGhost.UtilityCooldown;
+            player.UtilityEffectTimeRemaining = playerGhost
+                .ResolveUtilityEffectDuration(ability);
+            playerGhost.ApplyUtilityActivation(ref player, ability,
+                in modifiers, in controllerConsts);
+            player.LastUtilityAbilityTick = tick;
         }
 
         private void TryActivateReflect(Entity playerEntity,

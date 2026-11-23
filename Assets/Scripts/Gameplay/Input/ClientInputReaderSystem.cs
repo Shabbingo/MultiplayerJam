@@ -179,23 +179,23 @@ public partial class ClientInputReaderSystem : SystemBase
         bool reflectPressed = gameplayKeysEnabled &&
             InputSystemManager.GetGameplayAction(controls,
                 InputSystemManager.ReflectActionName).WasPressedThisFrame();
+        bool utilityPressed = gameplayKeysEnabled &&
+            InputSystemManager.GetGameplayAction(controls,
+                InputSystemManager.UtilityActionName).WasPressedThisFrame();
 
         playerInput.SetFlag(PlayerInput.InputFlag.Jump, controls.Player.Jump.triggered);
         bool primaryFireHeld = gameplayKeysEnabled &&
                                controls.FPS.ShootSingle.IsPressed();
-        bool secondaryFireHeld = gameplayKeysEnabled && !reflectPressed &&
-            (controls.UI.RightClick.IsPressed() ||
-             controls.FPS.ShootGrenade.IsPressed());
-
         playerInput.SetFlag(PlayerInput.InputFlag.Shoot, primaryFireHeld);
         playerInput.SetFlag(PlayerInput.InputFlag.Reload, controls.FPS.Reload.triggered);
-        // TossGrenade is retained in the network input layout for compatibility,
-        // but both right mouse and its alternate binding now use the same held
-        // secondary-fire path as left mouse.
+        // Legacy secondary-fire flags remain in the network layout so old command
+        // buffers deserialize, but the right hand is now utility-only.
         playerInput.SetFlag(PlayerInput.InputFlag.TossGrenade, false);
-        playerInput.SetFlag(PlayerInput.InputFlag.GrowShot, secondaryFireHeld);
+        playerInput.SetFlag(PlayerInput.InputFlag.GrowShot, false);
 
         playerInput.SetFlag(PlayerInput.InputFlag.ReflectPressed,
             reflectPressed);
+        playerInput.SetFlag(PlayerInput.InputFlag.UtilityPressed,
+            utilityPressed);
     }
 }

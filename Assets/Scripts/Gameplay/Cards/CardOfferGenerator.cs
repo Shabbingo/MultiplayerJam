@@ -81,7 +81,23 @@ namespace Unity.MP_FPS.Cards
         private static bool IsAvailable(CardModifierDefinition card,
             ModifierTarget target, in PlayerModifierStacks owned)
         {
-            return card.Allows(target);
+            if (!card.Allows(target))
+            {
+                return false;
+            }
+
+            // Utility unlocks replace a size-specific slot and are intentionally
+            // one-time draft choices rather than stackable stat modifiers.
+            if (target == ModifierTarget.Self &&
+                card.Kind is CardModifierKind.ActiveCamoUtility or
+                    CardModifierKind.ForwardChargeUtility or
+                    CardModifierKind.MegaJumpUtility or
+                    CardModifierKind.SmallDashUtility)
+            {
+                return owned.GetStacks(card.Kind, target) == 0;
+            }
+
+            return true;
         }
 
         private static List<CardModifierDefinition> GetFeasibleCandidates(

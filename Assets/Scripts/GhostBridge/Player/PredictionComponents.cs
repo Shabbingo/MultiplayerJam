@@ -80,6 +80,11 @@ public struct PredictedPlayerGhost : IComponentData
     [GhostField] public float ReflectCooldownDuration;
     [GhostField] public int ReflectCharges;
     [GhostField] public int MaxReflectCharges;
+    [GhostField] public int ActiveUtilityAbility;
+    [GhostField] public float UtilityCooldownTimeRemaining;
+    [GhostField] public float UtilityCooldownDuration;
+    [GhostField] public float UtilityEffectTimeRemaining;
+    [GhostField] public uint LastUtilityAbilityTick;
     [GhostField] public int SecondChanceUsesRemaining;
     [GhostField] public float SecondChanceInvulnerabilityTimeRemaining;
     [GhostField] public float GraceShieldAmount;

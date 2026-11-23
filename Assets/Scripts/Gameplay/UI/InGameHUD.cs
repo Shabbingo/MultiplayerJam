@@ -33,11 +33,13 @@ namespace Unity.MP_FPS
         private bool[] m_ActiveDamageIndicators;
         private ProgressBar m_SelfResizeChargeBar;
         private ProgressBar m_ShrinkAmmoBar;
-        private ProgressBar m_GrowAmmoBar;
         private Label m_ShrinkAmmoLabel;
-        private Label m_GrowAmmoLabel;
         private Label m_SelfShrinkUsesLabel;
         private Label m_SelfGrowUsesLabel;
+        private VisualElement m_UtilityAbilityContainer;
+        private Label m_UtilityAbilityLabel;
+        private ProgressBar m_UtilityCooldownBar;
+        private Label m_UtilityStatusLabel;
         private Label m_ReloadingLabel;
         private VisualElement m_Reticle;
 
@@ -104,11 +106,17 @@ namespace Unity.MP_FPS
             }
 
             m_ShrinkAmmoLabel = m_RootElement.Q<Label>("shrink-ammo-label");
-            m_GrowAmmoLabel = m_RootElement.Q<Label>("grow-ammo-label");
             m_ShrinkAmmoBar = m_RootElement.Q<ProgressBar>("shrink-ammo-bar");
-            m_GrowAmmoBar = m_RootElement.Q<ProgressBar>("grow-ammo-bar");
             m_SelfShrinkUsesLabel = m_RootElement.Q<Label>("self-shrink-uses-label");
             m_SelfGrowUsesLabel = m_RootElement.Q<Label>("self-grow-uses-label");
+            m_UtilityAbilityContainer = m_RootElement.Q<VisualElement>(
+                "utility-ability-container");
+            m_UtilityAbilityLabel = m_RootElement.Q<Label>(
+                "utility-ability-label");
+            m_UtilityCooldownBar = m_RootElement.Q<ProgressBar>(
+                "utility-cooldown-bar");
+            m_UtilityStatusLabel = m_RootElement.Q<Label>(
+                "utility-status-label");
             m_ReloadingLabel = m_RootElement.Q<Label>("reloading-label");
             m_Reticle = m_RootElement.Q<VisualElement>("player-reticle");
         }
@@ -208,6 +216,7 @@ namespace Unity.MP_FPS
                 }
             }
             UpdateReflectCooldownWheel(in playerData, in modifiers);
+            UpdateUtilityAbilitySlot(in playerData);
             UpdateDamageIndicator(in playerData);
 
             // Update Health Bar
@@ -253,30 +262,19 @@ namespace Unity.MP_FPS
             }
 
 
-            // Both abilities are always available, so show both persistent magazines.
-            if (m_ShrinkAmmoLabel != null && m_GrowAmmoLabel != null)
+            if (m_ShrinkAmmoLabel != null)
             {
                 var shrinkWeapon = WeaponManager.Instance.ResolveRuntimeProfile(
                     WeaponManager.PrimaryWeaponId, in modifiers);
-                var growWeapon = WeaponManager.Instance.ResolveRuntimeProfile(
-                    WeaponManager.SecondaryWeaponId, in modifiers);
                 int shrinkCapacity = shrinkWeapon.SourceProfile != null
                     ? shrinkWeapon.MagazineSize
-                    : 0;
-                int growCapacity = growWeapon.SourceProfile != null
-                    ? growWeapon.MagazineSize
                     : 0;
                 int shrinkAmmo = playerData.EquippedWeaponID == WeaponManager.PrimaryWeaponId
                     ? playerData.CurrentAmmo
                     : playerData.ControllerState.PrimaryWeaponAmmo;
-                int growAmmo = playerData.EquippedWeaponID == WeaponManager.SecondaryWeaponId
-                    ? playerData.CurrentAmmo
-                    : playerData.ControllerState.SecondaryWeaponAmmo;
 
                 UpdateAbilityAmmoDisplay(m_ShrinkAmmoLabel, m_ShrinkAmmoBar,
                     "LMB WEAPON", shrinkAmmo, shrinkCapacity);
-                UpdateAbilityAmmoDisplay(m_GrowAmmoLabel, m_GrowAmmoBar,
-                    "RMB WEAPON", growAmmo, growCapacity);
             }
 
             // Update Reloading Indicator
@@ -391,6 +389,67 @@ namespace Unity.MP_FPS
             {
                 bar.highValue = Mathf.Max(1, capacity);
                 bar.value = ammo;
+            }
+        }
+
+        private void UpdateUtilityAbilitySlot(
+            in PredictedPlayerGhost playerData)
+        {
+            if (m_UtilityAbilityContainer == null)
+            {
+                return;
+            }
+
+            UtilityAbility ability =
+                (UtilityAbility)playerData.ActiveUtilityAbility;
+            string binding = "RMB";
+            if (InputSystemManager.TryGetFirstInputUser(out var inputUser))
+            {
+                var controls = (InputSystem_Actions)inputUser.actions;
+                binding = InputSystemManager.GetBindingDisplayName(
+                    InputSystemManager.GetGameplayAction(controls,
+                        InputSystemManager.UtilityActionName)).ToUpperInvariant();
+            }
+
+            if (m_UtilityAbilityLabel != null)
+            {
+                m_UtilityAbilityLabel.text =
+                    $"{binding}  {UtilityAbilityCatalog.GetDisplayName(ability)}";
+            }
+
+            float duration = Mathf.Max(0.1f,
+                playerData.UtilityCooldownDuration > 0f
+                    ? playerData.UtilityCooldownDuration
+                    : 10f);
+            float remaining = Mathf.Max(0f,
+                playerData.UtilityCooldownTimeRemaining);
+            if (m_UtilityCooldownBar != null)
+            {
+                m_UtilityCooldownBar.highValue = duration;
+                m_UtilityCooldownBar.value = duration - remaining;
+            }
+
+            bool isActive = playerData.UtilityEffectTimeRemaining > 0f;
+            bool isReady = remaining <= 0f && ability != UtilityAbility.None;
+            m_UtilityAbilityContainer.EnableInClassList(
+                "utility-active", isActive);
+            m_UtilityAbilityContainer.EnableInClassList(
+                "utility-ready", isReady && !isActive);
+            if (m_UtilityStatusLabel != null)
+            {
+                string activeStatus = ability switch
+                {
+                    UtilityAbility.ActiveCamo => "CAMOUFLAGED",
+                    UtilityAbility.ForwardCharge => "CHARGING",
+                    UtilityAbility.MegaJump => "LAUNCHING",
+                    UtilityAbility.SmallDash => "DASHING",
+                    _ => "SCANNING"
+                };
+                m_UtilityStatusLabel.text = isActive
+                    ? $"{activeStatus}  {playerData.UtilityEffectTimeRemaining:0.0}s"
+                    : isReady
+                        ? "READY"
+                        : $"COOLDOWN  {remaining:0.0}s";
             }
         }
 

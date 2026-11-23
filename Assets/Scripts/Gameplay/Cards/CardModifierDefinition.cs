@@ -74,7 +74,11 @@ namespace Unity.MP_FPS.Cards
         GravityWell,
         LastWord,
         BloodReload,
-        GrenadeLauncher
+        GrenadeLauncher,
+        ActiveCamoUtility,
+        ForwardChargeUtility,
+        MegaJumpUtility,
+        SmallDashUtility
     }
 
     [CreateAssetMenu(fileName = "CardModifier", menuName = "Multiplayer Jam/Card Modifier")]

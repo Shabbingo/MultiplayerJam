@@ -93,6 +93,10 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
         {
             predictedPlayer.ValueRW.CrossWeaponCooldownRemaining = Mathf.Max(0f,
                 predictedPlayer.ValueRO.CrossWeaponCooldownRemaining - dt);
+            predictedPlayer.ValueRW.UtilityCooldownTimeRemaining = Mathf.Max(0f,
+                predictedPlayer.ValueRO.UtilityCooldownTimeRemaining - dt);
+            predictedPlayer.ValueRW.UtilityEffectTimeRemaining = Mathf.Max(0f,
+                predictedPlayer.ValueRO.UtilityEffectTimeRemaining - dt);
             if (predictedPlayer.ValueRO.WeaponCooldown < float.MaxValue)
             {
                 predictedPlayer.ValueRW.WeaponCooldown += dt;
@@ -227,6 +231,15 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     .WithAll<Simulate, PlayerControllerLink>())
         {
             var controllerLink = SystemAPI.ManagedAPI.GetComponent<PlayerControllerLink>(entity);
+            var playerGhost = controllerLink.Controller.GetComponent<PlayerGhost>();
+            UtilityAbility resolvedUtility = playerGhost.ResolveUtilityAbility(
+                predictedPlayer.ValueRO.SizeState, in modifiers.ValueRO);
+            if (predictedPlayer.ValueRO.ActiveUtilityAbility !=
+                (int)resolvedUtility)
+            {
+                predictedPlayer.ValueRW.UtilityEffectTimeRemaining = 0f;
+            }
+            predictedPlayer.ValueRW.ActiveUtilityAbility = (int)resolvedUtility;
             predictedPlayer.ValueRW.MoveSlowTimeRemaining = Mathf.Max(0f,
                 predictedPlayer.ValueRO.MoveSlowTimeRemaining - dt);
             if (predictedPlayer.ValueRW.MoveSlowTimeRemaining <= 0f)
@@ -247,29 +260,34 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                     {
                         predictedPlayer.ValueRW.LocalLookYawPitchDegrees = input.LookYawPitchDegrees;
 
-                        bool secondaryFireHeld = input.GrowShot || input.TossGrenade;
+                        if (input.UtilityPressed)
+                        {
+                            TryActivateUtility(ref predictedPlayer.ValueRW,
+                                playerGhost,
+                                in modifiers.ValueRO,
+                                in controllerConsts.ValueRO.ControllerConsts,
+                                commandInput.Tick.TickIndexForValidTick);
+                        }
+
                         if (input.Reload && controllerLink.Controller.TryReloadBothWeapons(
                                 ref predictedPlayer.ValueRW, in modifiers.ValueRO))
                         {
                             predictedPlayer.ValueRW.LastReloadTick =
                                 commandInput.Tick.TickIndexForValidTick;
                         }
-                        // Clear pending state left by the older delayed right-click path.
+                        // Clear obsolete secondary-fire state retained for snapshot compatibility.
                         predictedPlayer.ValueRW.GrowShotPending = false;
                         predictedPlayer.ValueRW.GrowShotReleaseTimer = 0f;
 
                         predictedPlayer.ValueRW.ShrinkCastHeld = input.Shoot &&
-                            !secondaryFireHeld &&
                             controllerLink.Controller.CanUseWeapon(
                                 in predictedPlayer.ValueRO,
                                 WeaponManager.PrimaryWeaponId) &&
                             predictedPlayer.ValueRO.CurrentAmmo > 0 &&
                             !predictedPlayer.ValueRO.ControllerState.IsReloadingState;
                         var weaponBeforeAbility = default(WeaponManager.TemporaryWeaponState);
-                        uint abilityWeaponId = secondaryFireHeld
-                            ? WeaponManager.SecondaryWeaponId
-                            : WeaponManager.PrimaryWeaponId;
-                        bool wantsToShoot = input.Shoot || secondaryFireHeld;
+                        uint abilityWeaponId = WeaponManager.PrimaryWeaponId;
+                        bool wantsToShoot = input.Shoot;
                         bool restoreWeaponAfterAbility = wantsToShoot &&
                             WeaponManager.Instance.TryBeginTemporaryWeapon(
                                 ref predictedPlayer.ValueRW,
@@ -285,10 +303,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         bool autoReloadRequested = false;
                         if (weaponData != null)
                         {
-                            // Defer automatic reload until the temporary right-hand
-                            // weapon has been restored. Starting it while the secondary
-                            // weapon is temporarily equipped causes EndTemporaryWeapon
-                            // to restore the old reload state and cancel the reload.
+                            // Defer automatic reload until the temporary weapon state
+                            // has been restored.
                             autoReloadRequested = wantsToShoot &&
                                 predictedPlayer.ValueRO.CurrentAmmo <= 0;
                             
@@ -306,18 +322,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 controllerLink.Controller.StartCrossWeaponCooldown(
                                     ref predictedPlayer.ValueRW,
                                     abilityWeaponId);
-                                if (secondaryFireHeld)
-                                {
-                                    predictedPlayer.ValueRW.LastGrenadeShotTick =
-                                        commandInput.Tick.TickIndexForValidTick;
-                                }
-                                else
-                                {
-                                    predictedPlayer.ValueRW.LastShotTick =
-                                        commandInput.Tick.TickIndexForValidTick;
-                                }
+                                predictedPlayer.ValueRW.LastShotTick =
+                                    commandInput.Tick.TickIndexForValidTick;
 
-                                var playerGhost = controllerLink.Controller.GetComponent<PlayerGhost>();
                                 float sizeOutputMultiplier = controllerLink.Controller
                                     .GetSizeOutputMultiplier(in predictedPlayer.ValueRO);
                                 float explosionOutputMultiplier = controllerLink.Controller
@@ -465,6 +472,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 speedMultiplier *= 1f + modifiers.ValueRO.ShieldSpeed *
                                     Mathf.Max(0f, shieldSpeedCard?.ValuePerStack ?? 0.5f);
                             }
+                            speedMultiplier *= playerGhost
+                                .GetUtilityMovementSpeedMultiplier(
+                                    in predictedPlayer.ValueRO);
                             FirstPersonController.AccumulateMovement(ref predictedPlayer.ValueRW.ControllerState,
                                 ref predictedPlayer.ValueRW.AccumulatedMovement,
                                 input,
@@ -473,6 +483,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 speedMultiplier,
                                 jumpHeightMultiplier,
                                 accumulateDT);
+                            playerGhost.AccumulateUtilityMovement(
+                                ref predictedPlayer.ValueRW, accumulateDT);
                             controllerLink.Controller.AccumulateAirborneThrust(
                                 ref predictedPlayer.ValueRW, accumulateDT);
                             
@@ -489,7 +501,7 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                         }
                     }
 
-                    // Size is controlled by weapon hits; right click no longer self-resizes.
+                    // Size is controlled by weapon hits.
                 }
 
                 // apply
@@ -573,6 +585,31 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
         }
 
         ecb.Playback(EntityManager);
+    }
+
+    private static void TryActivateUtility(ref PredictedPlayerGhost player,
+        PlayerGhost playerGhost,
+        in Unity.MP_FPS.Cards.PlayerModifierStacks modifiers,
+        in FirstPersonController.ControllerConsts controllerConsts, uint tick)
+    {
+        UtilityAbility ability = playerGhost.ResolveUtilityAbility(
+            player.SizeState, in modifiers);
+        player.ActiveUtilityAbility = (int)ability;
+        if (player.CurrentHealth <= 0f ||
+            player.UtilityCooldownTimeRemaining > 0f ||
+            ability == UtilityAbility.None ||
+            !playerGhost.CanActivateUtility(ability, in player))
+        {
+            return;
+        }
+
+        player.UtilityCooldownDuration = playerGhost.UtilityCooldown;
+        player.UtilityCooldownTimeRemaining = playerGhost.UtilityCooldown;
+        player.UtilityEffectTimeRemaining = playerGhost
+            .ResolveUtilityEffectDuration(ability);
+        playerGhost.ApplyUtilityActivation(ref player, ability, in modifiers,
+            in controllerConsts);
+        player.LastUtilityAbilityTick = tick;
     }
     
     [FeatureToggle(Name = "prediction_enabletickbatching", Default = false)]

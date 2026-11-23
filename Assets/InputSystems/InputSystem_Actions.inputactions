@@ -1097,15 +1097,6 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "ShootGrenade",
-                    "type": "Button",
-                    "id": "05ce2eb0-4760-450f-86cf-3668a6e75e59",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
                     "name": "Reload",
                     "type": "Button",
                     "id": "47c2ad3d-e98c-4dc9-a043-388661fc974e",
@@ -1153,17 +1144,6 @@
                     "processors": "",
                     "groups": ";Keyboard&Mouse",
                     "action": "ShoortFullAuto",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "663ba268-e999-4b57-9c66-acde5f5d03bb",
-                    "path": "<Keyboard>/g",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": ";Keyboard&Mouse",
-                    "action": "ShootGrenade",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

@@ -20,7 +20,8 @@ public struct PlayerInput
         ReflectPressed = 1 << 13,
         SelfShrinkReleased = 1 << 14,
         SelfGrowReleased = 1 << 15,
-        ToggleSelfResizeMode = 1 << 16
+        ToggleSelfResizeMode = 1 << 16,
+        UtilityPressed = 1 << 17
     }
 
     public float2 MoveInput;
@@ -40,6 +41,7 @@ public struct PlayerInput
     public bool ToggleSelfResizeMode =>
         (InputFlags & (uint)InputFlag.ToggleSelfResizeMode) != 0;
     public bool ReflectPressed => (InputFlags & (uint)InputFlag.ReflectPressed) != 0;
+    public bool UtilityPressed => (InputFlags & (uint)InputFlag.UtilityPressed) != 0;
 
     public void SetFlag(InputFlag flag, bool set)
     {

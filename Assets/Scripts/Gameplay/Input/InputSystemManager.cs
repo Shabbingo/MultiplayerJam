@@ -5,14 +5,15 @@ using UnityEngine;
 
 public class InputSystemManager : Singleton<InputSystemManager>
 {
-    private const string k_GrenadeBindingOverridesKey = "GrenadeBindingOverrides";
     private const string k_SelfShrinkBindingOverridesKey = "SelfShrinkBindingOverrides";
     private const string k_SelfGrowBindingOverridesKey = "SelfGrowBindingOverrides";
     private const string k_ReflectBindingOverridesKey = "ReflectBindingOverrides";
+    private const string k_UtilityBindingOverridesKey = "UtilityBindingOverrides";
 
     public const string SelfShrinkActionName = "SelfShrink";
     public const string SelfGrowActionName = "SelfGrow";
     public const string ReflectActionName = "Reflect";
+    public const string UtilityActionName = "Utility";
 
     protected override bool Persistent => true;
 
@@ -160,44 +161,22 @@ public class InputSystemManager : Singleton<InputSystemManager>
         return user;
     }
 
-    public static void ApplySavedGrenadeBinding(InputSystem_Actions controls)
-    {
-        string bindingOverrides = PlayerPrefs.GetString(
-            k_GrenadeBindingOverridesKey, string.Empty);
-        if (!string.IsNullOrEmpty(bindingOverrides))
-        {
-            controls.FPS.ShootGrenade.LoadBindingOverridesFromJson(bindingOverrides);
-            if (controls.FPS.ShootGrenade.bindings.Count > 0 &&
-                string.Equals(controls.FPS.ShootGrenade.bindings[0].effectivePath,
-                    "<Keyboard>/f", System.StringComparison.OrdinalIgnoreCase))
-            {
-                controls.FPS.ShootGrenade.RemoveBindingOverride(0);
-                PlayerPrefs.DeleteKey(k_GrenadeBindingOverridesKey);
-            }
-        }
-    }
-
-    public static void SaveGrenadeBinding(InputSystem_Actions controls)
-    {
-        PlayerPrefs.SetString(k_GrenadeBindingOverridesKey,
-            controls.FPS.ShootGrenade.SaveBindingOverridesAsJson());
-        PlayerPrefs.Save();
-    }
-
     public static void ConfigureGameplayBindings(InputSystem_Actions controls)
     {
         var fpsMap = controls.asset.FindActionMap("FPS", true);
         EnsureAction(fpsMap, SelfShrinkActionName, "<Keyboard>/leftCtrl");
         EnsureAction(fpsMap, SelfGrowActionName, "<Keyboard>/leftShift");
         EnsureAction(fpsMap, ReflectActionName, "<Keyboard>/f");
+        EnsureAction(fpsMap, UtilityActionName, "<Mouse>/rightButton");
 
-        ApplySavedGrenadeBinding(controls);
         ApplySavedBinding(GetGameplayAction(controls, SelfShrinkActionName),
             k_SelfShrinkBindingOverridesKey);
         ApplySavedBinding(GetGameplayAction(controls, SelfGrowActionName),
             k_SelfGrowBindingOverridesKey);
         ApplySavedBinding(GetGameplayAction(controls, ReflectActionName),
             k_ReflectBindingOverridesKey);
+        ApplySavedBinding(GetGameplayAction(controls, UtilityActionName),
+            k_UtilityBindingOverridesKey);
     }
 
     public static InputAction GetGameplayAction(InputSystem_Actions controls,
@@ -254,6 +233,7 @@ public class InputSystemManager : Singleton<InputSystemManager>
             SelfShrinkActionName => k_SelfShrinkBindingOverridesKey,
             SelfGrowActionName => k_SelfGrowBindingOverridesKey,
             ReflectActionName => k_ReflectBindingOverridesKey,
+            UtilityActionName => k_UtilityBindingOverridesKey,
             _ => throw new System.ArgumentOutOfRangeException(nameof(actionName), actionName,
                 "No saved binding key is registered for this action.")
         };

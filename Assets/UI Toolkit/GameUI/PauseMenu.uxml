@@ -10,7 +10,7 @@
                     <ui:Button text="Self Shrink Binding: Ctrl" name="SelfShrinkBindingButton" tabindex="0"/>
                     <ui:Button text="Self Grow Binding: Shift" name="SelfGrowBindingButton" tabindex="1"/>
                     <ui:Button text="Reflect Shield Binding: F" name="ReflectBindingButton" tabindex="2"/>
-                    <ui:Button text="Growth Missile Alt Binding: G" name="GrenadeBindingButton" tabindex="3"/>
+                    <ui:Button text="Utility Ability Binding: Right Button" name="UtilityBindingButton" tabindex="3"/>
                     <ui:Button text="Resume" name="ResumeButton" tabindex="4" selectable="false" focusable="false"/>
                     <ui:Button text="Main Menu" name="MainMenuButton" tabindex="5"/>
                     <ui:Button text="Quit" name="QuitButton" tabindex="6"/>

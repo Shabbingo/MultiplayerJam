@@ -67,6 +67,12 @@ namespace Unity.MP_FPS.Cards
         [GhostField] public byte RightBloodReload;
         [GhostField] public byte LeftGrenadeLauncher;
         [GhostField] public byte RightGrenadeLauncher;
+        [GhostField] public byte ActiveCamoUtility;
+        [GhostField] public byte ForwardChargeUtility;
+        [GhostField] public byte MegaJumpUtility;
+        [GhostField] public byte SmallDashUtility;
+        [GhostField] public byte SmallUtilitySelection;
+        [GhostField] public byte LargeUtilitySelection;
 
         public int GetStacks(CardModifierKind kind, ModifierTarget target)
         {
@@ -130,6 +136,10 @@ namespace Unity.MP_FPS.Cards
                 (CardModifierKind.BloodReload, ModifierTarget.RightHand) => RightBloodReload,
                 (CardModifierKind.GrenadeLauncher, ModifierTarget.LeftHand) => LeftGrenadeLauncher,
                 (CardModifierKind.GrenadeLauncher, ModifierTarget.RightHand) => RightGrenadeLauncher,
+                (CardModifierKind.ActiveCamoUtility, ModifierTarget.Self) => ActiveCamoUtility,
+                (CardModifierKind.ForwardChargeUtility, ModifierTarget.Self) => ForwardChargeUtility,
+                (CardModifierKind.MegaJumpUtility, ModifierTarget.Self) => MegaJumpUtility,
+                (CardModifierKind.SmallDashUtility, ModifierTarget.Self) => SmallDashUtility,
                 _ => 0
             };
         }
@@ -264,6 +274,22 @@ namespace Unity.MP_FPS.Cards
                     return Increment(ref LeftGrenadeLauncher);
                 case (CardModifierKind.GrenadeLauncher, ModifierTarget.RightHand):
                     return Increment(ref RightGrenadeLauncher);
+                case (CardModifierKind.ActiveCamoUtility, ModifierTarget.Self):
+                    if (!Increment(ref ActiveCamoUtility)) return false;
+                    SmallUtilitySelection = (byte)UtilityAbility.ActiveCamo;
+                    return true;
+                case (CardModifierKind.ForwardChargeUtility, ModifierTarget.Self):
+                    if (!Increment(ref ForwardChargeUtility)) return false;
+                    LargeUtilitySelection = (byte)UtilityAbility.ForwardCharge;
+                    return true;
+                case (CardModifierKind.MegaJumpUtility, ModifierTarget.Self):
+                    if (!Increment(ref MegaJumpUtility)) return false;
+                    LargeUtilitySelection = (byte)UtilityAbility.MegaJump;
+                    return true;
+                case (CardModifierKind.SmallDashUtility, ModifierTarget.Self):
+                    if (!Increment(ref SmallDashUtility)) return false;
+                    SmallUtilitySelection = (byte)UtilityAbility.SmallDash;
+                    return true;
                 default:
                     return false;
             }

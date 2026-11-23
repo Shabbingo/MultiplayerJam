@@ -1185,15 +1185,6 @@ namespace Unity.MP_FPS
                     ""initialStateCheck"": false
                 },
                 {
-                    ""name"": ""ShootGrenade"",
-                    ""type"": ""Button"",
-                    ""id"": ""05ce2eb0-4760-450f-86cf-3668a6e75e59"",
-                    ""expectedControlType"": """",
-                    ""processors"": """",
-                    ""interactions"": """",
-                    ""initialStateCheck"": false
-                },
-                {
                     ""name"": ""Reload"",
                     ""type"": ""Button"",
                     ""id"": ""47c2ad3d-e98c-4dc9-a043-388661fc974e"",
@@ -1241,17 +1232,6 @@ namespace Unity.MP_FPS
                     ""processors"": """",
                     ""groups"": "";Keyboard&Mouse"",
                     ""action"": ""ShoortFullAuto"",
-                    ""isComposite"": false,
-                    ""isPartOfComposite"": false
-                },
-                {
-                    ""name"": """",
-                    ""id"": ""663ba268-e999-4b57-9c66-acde5f5d03bb"",
-                    ""path"": ""<Keyboard>/g"",
-                    ""interactions"": """",
-                    ""processors"": """",
-                    ""groups"": "";Keyboard&Mouse"",
-                    ""action"": ""ShootGrenade"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 },
@@ -1494,7 +1474,6 @@ namespace Unity.MP_FPS
             m_FPS = asset.FindActionMap("FPS", throwIfNotFound: true);
             m_FPS_ShootSingle = m_FPS.FindAction("ShootSingle", throwIfNotFound: true);
             m_FPS_ShoortFullAuto = m_FPS.FindAction("ShoortFullAuto", throwIfNotFound: true);
-            m_FPS_ShootGrenade = m_FPS.FindAction("ShootGrenade", throwIfNotFound: true);
             m_FPS_Reload = m_FPS.FindAction("Reload", throwIfNotFound: true);
             m_FPS_Jump = m_FPS.FindAction("Jump", throwIfNotFound: true);
             m_FPS_Move = m_FPS.FindAction("Move", throwIfNotFound: true);
@@ -1994,7 +1973,6 @@ namespace Unity.MP_FPS
         private List<IFPSActions> m_FPSActionsCallbackInterfaces = new List<IFPSActions>();
         private readonly InputAction m_FPS_ShootSingle;
         private readonly InputAction m_FPS_ShoortFullAuto;
-        private readonly InputAction m_FPS_ShootGrenade;
         private readonly InputAction m_FPS_Reload;
         private readonly InputAction m_FPS_Jump;
         private readonly InputAction m_FPS_Move;
@@ -2017,10 +1995,6 @@ namespace Unity.MP_FPS
             /// Provides access to the underlying input action "FPS/ShoortFullAuto".
             /// </summary>
             public InputAction @ShoortFullAuto => m_Wrapper.m_FPS_ShoortFullAuto;
-            /// <summary>
-            /// Provides access to the underlying input action "FPS/ShootGrenade".
-            /// </summary>
-            public InputAction @ShootGrenade => m_Wrapper.m_FPS_ShootGrenade;
             /// <summary>
             /// Provides access to the underlying input action "FPS/Reload".
             /// </summary>
@@ -2065,9 +2039,6 @@ namespace Unity.MP_FPS
                 @ShoortFullAuto.started += instance.OnShoortFullAuto;
                 @ShoortFullAuto.performed += instance.OnShoortFullAuto;
                 @ShoortFullAuto.canceled += instance.OnShoortFullAuto;
-                @ShootGrenade.started += instance.OnShootGrenade;
-                @ShootGrenade.performed += instance.OnShootGrenade;
-                @ShootGrenade.canceled += instance.OnShootGrenade;
                 @Reload.started += instance.OnReload;
                 @Reload.performed += instance.OnReload;
                 @Reload.canceled += instance.OnReload;
@@ -2094,9 +2065,6 @@ namespace Unity.MP_FPS
                 @ShoortFullAuto.started -= instance.OnShoortFullAuto;
                 @ShoortFullAuto.performed -= instance.OnShoortFullAuto;
                 @ShoortFullAuto.canceled -= instance.OnShoortFullAuto;
-                @ShootGrenade.started -= instance.OnShootGrenade;
-                @ShootGrenade.performed -= instance.OnShootGrenade;
-                @ShootGrenade.canceled -= instance.OnShootGrenade;
                 @Reload.started -= instance.OnReload;
                 @Reload.performed -= instance.OnReload;
                 @Reload.canceled -= instance.OnReload;
@@ -2395,13 +2363,6 @@ namespace Unity.MP_FPS
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnShoortFullAuto(InputAction.CallbackContext context);
-            /// <summary>
-            /// Method invoked when associated input action "ShootGrenade" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
-            /// </summary>
-            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
-            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
-            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
-            void OnShootGrenade(InputAction.CallbackContext context);
             /// <summary>
             /// Method invoked when associated input action "Reload" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
             /// </summary>

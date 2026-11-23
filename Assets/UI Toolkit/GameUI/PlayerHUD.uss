@@ -20,10 +20,60 @@
     align-items: flex-start;
 }
 
-#right-ability-container {
+#right-resize-container {
     right: 20px;
     left: auto;
     align-items: flex-end;
+}
+
+.utility-ability-slot {
+    position: absolute;
+    right: 35px;
+    bottom: 145px;
+    width: 270px;
+    padding: 10px;
+    background-color: rgba(5, 18, 24, 0.82);
+    border-width: 2px;
+    border-color: rgba(50, 190, 220, 0.6);
+    border-radius: 6px;
+}
+
+.utility-ability-slot.utility-ready {
+    border-color: rgb(60, 235, 255);
+    background-color: rgba(5, 35, 42, 0.9);
+}
+
+.utility-ability-slot.utility-active {
+    border-color: rgb(120, 255, 255);
+    background-color: rgba(10, 75, 88, 0.94);
+}
+
+.utility-ability-label,
+.utility-status-label {
+    color: white;
+    -unity-font-style: bold;
+}
+
+.utility-ability-label {
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.utility-status-label {
+    align-self: flex-end;
+    margin-top: 3px;
+    font-size: 11px;
+    color: rgb(125, 235, 255);
+}
+
+.utility-cooldown-bar {
+    width: 100%;
+    height: 15px;
+    min-height: 15px;
+}
+
+.utility-cooldown-bar .unity-progress-bar__progress {
+    background-color: rgb(35, 195, 225);
 }
 
 #health-info-container {
@@ -380,10 +430,6 @@
 
 .kits-ammo-bar .unity-progress-bar__progress {
     background-color: var(--color-progressbar-ammo-blue);
-}
-
-.kits-grow-ammo-bar .unity-progress-bar__progress {
-    background-color: rgba(255, 132, 35, 0.85);
 }
 
 .kits-shrink-resource-bar .unity-progress-bar__progress {
