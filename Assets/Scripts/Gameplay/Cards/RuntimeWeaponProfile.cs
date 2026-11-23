@@ -157,21 +157,23 @@ namespace Unity.MP_FPS.Cards
             : -Mathf.Abs(Damage);
 
         /// <summary>
-        /// Snapshots the physical output of a shot at the shooter's current size.
-        /// Card modifiers are already resolved into this profile, so size is the
-        /// final baseline multiplier and later resizing cannot alter the shot.
+        /// Snapshots the physical output and damage of a shot at the shooter's
+        /// current size. Card modifiers are already resolved into this profile, so
+        /// later resizing cannot alter the shot.
         /// Timing values such as speed, fire interval, reload and duration are not
         /// physical output and intentionally remain unchanged.
         /// </summary>
         public SizeScaledWeaponOutput CreateSizeScaledOutput(
-            float playerSizeMultiplier, float explosionSizeMultiplier)
+            float playerSizeMultiplier, float explosionSizeMultiplier,
+            float weaponDamageMultiplier)
         {
             float sizeMultiplier = Mathf.Max(0.01f, playerSizeMultiplier);
             float aoeMultiplier = Mathf.Max(0.01f, explosionSizeMultiplier);
+            float damageMultiplier = Mathf.Max(0f, weaponDamageMultiplier);
             return new SizeScaledWeaponOutput(
-                SignedSizeDelta * sizeMultiplier,
+                SignedSizeDelta * damageMultiplier,
                 ExplosionRadius * aoeMultiplier,
-                BleedDamagePerSecond * sizeMultiplier,
+                BleedDamagePerSecond * damageMultiplier,
                 ProjectileScale * sizeMultiplier,
                 GravityWellPullStrength * sizeMultiplier);
         }

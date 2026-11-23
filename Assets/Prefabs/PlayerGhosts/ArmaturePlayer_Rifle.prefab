@@ -274,12 +274,17 @@ MonoBehaviour:
   PlayerHitSFX: {fileID: 11400000, guid: defef7f2f2fde3b4e9cc4d9a8b44f480, type: 2}
   m_ReflectDuration: 2
   m_ReflectCooldown: 15
-  m_SmallMaxHealth: 30
+  m_SmallMaxHealth: 100
   m_NormalMaxHealth: 100
-  m_LargeMaxHealth: 150
-  m_LargeIncomingDamageReduction: 0.25
-  m_SmallMovementSpeedMultiplier: 1
-  m_LargeMovementSpeedMultiplier: 1
+  m_LargeMaxHealth: 100
+  m_SmallIncomingDamageIncrease: 0.3
+  m_LargeIncomingDamageReduction: 0.3
+  m_SmallWeaponDamageMultiplier: 1
+  m_LargeWeaponDamageMultiplier: 1
+  m_SmallMovementSpeedMultiplier: 1.3
+  m_LargeMovementSpeedMultiplier: 0.9
+  m_SmallJumpHeightMultiplier: 0.8
+  m_LargeJumpHeightMultiplier: 1.2
   m_SharedWeaponCooldown: 0.25
   m_AirShrinkPushSpeed: 7
   m_ResizeBounceInputWindow: 0.3

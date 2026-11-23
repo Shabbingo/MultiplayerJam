@@ -34,12 +34,22 @@ public class FirstPersonController : MonoBehaviour
     [SerializeField, Min(1f)] private float m_SmallMaxHealth = 30f;
     [SerializeField, Min(1f)] private float m_NormalMaxHealth = DefaultNormalMaxHealth;
     [SerializeField, Min(1f)] private float m_LargeMaxHealth = 150f;
+    [SerializeField, Range(0f, 1f), Tooltip("Fraction of additional incoming damage taken while in the small stance. 1 doubles incoming damage.")]
+    private float m_SmallIncomingDamageIncrease;
     [SerializeField, Range(0f, 1f), Tooltip("Fraction of all incoming damage prevented while in the large stance.")]
     private float m_LargeIncomingDamageReduction = 0.25f;
+    [SerializeField, Range(0f, 3f), Tooltip("Outgoing weapon-damage multiplier while in the small stance. Set to 1 for normal-size damage.")]
+    private float m_SmallWeaponDamageMultiplier = 0.2f;
+    [SerializeField, Range(0f, 3f), Tooltip("Outgoing weapon-damage multiplier while in the large stance. Set to 1 for normal-size damage.")]
+    private float m_LargeWeaponDamageMultiplier = 2f;
     [SerializeField, Min(0f), Tooltip("Movement multiplier while using the small stance.")]
     private float m_SmallMovementSpeedMultiplier = 1.5f;
     [SerializeField, Min(0f), Tooltip("Movement multiplier while using the large stance.")]
     private float m_LargeMovementSpeedMultiplier = 0.5f;
+    [SerializeField, Range(0f, 3f), Tooltip("Jump-height multiplier while using the small stance. Set to 1 for normal jump height.")]
+    private float m_SmallJumpHeightMultiplier = 1f;
+    [SerializeField, Range(0f, 3f), Tooltip("Jump-height multiplier while using the large stance. Set to 1 for normal jump height.")]
+    private float m_LargeJumpHeightMultiplier = 1f;
     [Header("Weapon Input")]
     [SerializeField, Min(0f),
      Tooltip("Seconds after firing one hand before the opposite hand may fire. Continued fire from the same hand is unaffected.")]
@@ -57,6 +67,19 @@ public class FirstPersonController : MonoBehaviour
 
     public float LargeIncomingDamageReduction =>
         Mathf.Clamp01(m_LargeIncomingDamageReduction);
+    public float SmallIncomingDamageIncrease =>
+        Mathf.Clamp01(m_SmallIncomingDamageIncrease);
+
+    public float GetWeaponDamageMultiplier(
+        in PredictedPlayerGhost predictedPlayer)
+    {
+        return predictedPlayer.SizeState switch
+        {
+            SmallSizeState => Mathf.Max(0f, m_SmallWeaponDamageMultiplier),
+            LargeSizeState => Mathf.Max(0f, m_LargeWeaponDamageMultiplier),
+            _ => 1f
+        };
+    }
 
     public bool CanUseWeapon(in PredictedPlayerGhost predictedPlayer,
         uint weaponId)
@@ -74,8 +97,8 @@ public class FirstPersonController : MonoBehaviour
     }
 
     /// <summary>
-    /// Returns the player's actual world-scale multiplier for damage, projectile
-    /// dimensions and other physical outputs created at this moment.
+    /// Returns the player's actual world-scale multiplier for projectile dimensions
+    /// and other physical outputs created at this moment.
     /// </summary>
     public float GetSizeOutputMultiplier(in PredictedPlayerGhost predictedPlayer)
     {
@@ -969,7 +992,12 @@ public class FirstPersonController : MonoBehaviour
         {
             speedMultiplier *= 1f - Mathf.Clamp01(predictedPlayer.MoveSlowPercent);
         }
-        jumpHeightMultiplier = 1f;
+        jumpHeightMultiplier = predictedPlayer.SizeState switch
+        {
+            SmallSizeState => Mathf.Max(0f, m_SmallJumpHeightMultiplier),
+            LargeSizeState => Mathf.Max(0f, m_LargeJumpHeightMultiplier),
+            _ => 1f
+        };
     }
 
     public float GetModifiedReloadTime(float baseReloadTime,

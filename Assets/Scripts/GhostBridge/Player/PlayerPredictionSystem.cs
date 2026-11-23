@@ -323,10 +323,14 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 float explosionOutputMultiplier = controllerLink.Controller
                                     .GetExplosionOutputMultiplier(
                                         in predictedPlayer.ValueRO);
+                                float weaponDamageMultiplier = controllerLink.Controller
+                                    .GetWeaponDamageMultiplier(
+                                        in predictedPlayer.ValueRO);
                                 Unity.MP_FPS.Cards.SizeScaledWeaponOutput shotOutput =
                                     runtimeProfile.CreateSizeScaledOutput(
                                         sizeOutputMultiplier,
-                                        explosionOutputMultiplier);
+                                        explosionOutputMultiplier,
+                                        weaponDamageMultiplier);
                                 var controllerState = predictedPlayer.ValueRO.ControllerState;
                                 var aimRotation = quaternion.Euler(
                                     math.radians(controllerState.PitchDegrees),

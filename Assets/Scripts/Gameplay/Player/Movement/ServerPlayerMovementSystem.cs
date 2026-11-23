@@ -640,9 +640,12 @@ namespace Unity.MP_FPS
                                 .GetSizeOutputMultiplier(in predictedPlayer.ValueRO);
                             float explosionOutputMultiplier = playerGhost.Controller
                                 .GetExplosionOutputMultiplier(in predictedPlayer.ValueRO);
+                            float weaponDamageMultiplier = playerGhost.Controller
+                                .GetWeaponDamageMultiplier(in predictedPlayer.ValueRO);
                             Cards.SizeScaledWeaponOutput shotOutput = runtimeProfile
                                 .CreateSizeScaledOutput(sizeOutputMultiplier,
-                                    explosionOutputMultiplier);
+                                    explosionOutputMultiplier,
+                                    weaponDamageMultiplier);
                             float shotSignedSizeDelta = shotOutput.SignedSizeDelta *
                                 (isFinalMagazineRound
                                     ? runtimeProfile.LastWordDamageMultiplier
@@ -2162,9 +2165,9 @@ namespace Unity.MP_FPS
                                        healthDamage <= 0f;
             if (healthDamage > 0f)
             {
-                float damageReduction = GetIncomingDamageReduction(
+                float incomingDamageMultiplier = GetIncomingDamageMultiplier(
                     damageTargetEntity, in damagedPlayer.ValueRO);
-                healthDamage *= 1f - Mathf.Clamp01(damageReduction);
+                healthDamage *= incomingDamageMultiplier;
             }
             float appliedDelta = -healthDamage;
             damagedPlayer.ValueRW.CurrentHealth = Mathf.Clamp(
@@ -2523,7 +2526,7 @@ namespace Unity.MP_FPS
                                            healthDamage <= 0f;
                 if (healthDamage > 0f)
                 {
-                    healthDamage *= 1f - GetIncomingDamageReduction(
+                    healthDamage *= GetIncomingDamageMultiplier(
                         effect.Target, in player);
                 }
                 player.CurrentHealth = Mathf.Clamp(
@@ -2568,7 +2571,7 @@ namespace Unity.MP_FPS
             }
         }
 
-        private float GetIncomingDamageReduction(Entity targetEntity,
+        private float GetIncomingDamageMultiplier(Entity targetEntity,
             in PredictedPlayerGhost player)
         {
             Cards.PlayerModifierStacks modifiers =
@@ -2578,6 +2581,7 @@ namespace Unity.MP_FPS
             var catalog = WeaponManager.Instance?.CardModifierCatalog;
 
             float reduction = 0f;
+            float increase = 0f;
             if (player.SizeState == FirstPersonController.LargeSizeState)
             {
                 reduction = 0.25f;
@@ -2597,12 +2601,23 @@ namespace Unity.MP_FPS
             }
             else if (player.SizeState == FirstPersonController.SmallSizeState)
             {
+                if (EntityManager.HasComponent<PlayerControllerLink>(targetEntity))
+                {
+                    var controllerLink =
+                        EntityManager.GetComponentObject<PlayerControllerLink>(targetEntity);
+                    if (controllerLink?.Controller != null)
+                    {
+                        increase = controllerLink.Controller.SmallIncomingDamageIncrease;
+                    }
+                }
+
                 reduction = modifiers.SmallHealthCapacity *
                     (catalog?.FindByKind(Cards.CardModifierKind.SmallHealthCapacity)?
                         .DamageReductionPercent ?? 0f);
             }
 
-            return Mathf.Clamp01(reduction);
+            return (1f + Mathf.Clamp01(increase)) *
+                   (1f - Mathf.Clamp01(reduction));
         }
 
         public bool TryGetGuidedAimPoint(int ownerNetworkId, float range, out Vector3 targetPoint)
