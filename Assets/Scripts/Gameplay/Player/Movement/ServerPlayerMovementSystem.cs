@@ -49,6 +49,11 @@ namespace Unity.MP_FPS
         public byte IsLobbedProjectile;
         public float LobUpwardSpeed;
         public float ProjectileGravity;
+        public byte UsesTrajectory;
+        public float3 TrajectoryOrigin;
+        public float3 TrajectoryInitialVelocity;
+        public float3 TrajectoryAcceleration;
+        public uint TrajectoryStartTick;
     }
 
     struct VfxSpawnData
@@ -881,7 +886,22 @@ namespace Unity.MP_FPS
                                             GravityWellPullStrength = shotOutput.GravityWellPullStrength,
                                             IsLobbedProjectile = runtimeProfile.IsLobbedProjectile ? (byte)1 : (byte)0,
                                             LobUpwardSpeed = runtimeProfile.LobUpwardSpeed,
-                                            ProjectileGravity = runtimeProfile.ProjectileGravity
+                                            ProjectileGravity = runtimeProfile.ProjectileGravity,
+                                            UsesTrajectory = Projectile.SupportsTrajectory(
+                                                runtimeProfile.IsHoming,
+                                                runtimeProfile.IsLobbedProjectile,
+                                                runtimeProfile.MaxBounces,
+                                                runtimeProfile.WallPenetrations,
+                                                shotOutput.GravityWellPullStrength)
+                                                ? (byte)1
+                                                : (byte)0,
+                                            TrajectoryOrigin = shotOriginPosition,
+                                            TrajectoryInitialVelocity =
+                                                (float3)(spawnRotation * Vector3.forward) *
+                                                runtimeProfile.ProjectileSpeed,
+                                            TrajectoryAcceleration = float3.zero,
+                                            TrajectoryStartTick =
+                                                commandInput.Tick.TickIndexForValidTick
                                         });
                                     }
                                     else
@@ -952,7 +972,14 @@ namespace Unity.MP_FPS
                             GravityWellPullStrength = spawnData.GravityWellPullStrength,
                             IsLobbedProjectile = spawnData.IsLobbedProjectile,
                             LobUpwardSpeed = spawnData.LobUpwardSpeed,
-                            ProjectileGravity = spawnData.ProjectileGravity
+                            ProjectileGravity = spawnData.ProjectileGravity,
+                            UsesTrajectory = spawnData.UsesTrajectory,
+                            TrajectoryOrigin = spawnData.TrajectoryOrigin,
+                            TrajectoryInitialVelocity =
+                                spawnData.TrajectoryInitialVelocity,
+                            TrajectoryAcceleration =
+                                spawnData.TrajectoryAcceleration,
+                            TrajectoryStartTick = spawnData.TrajectoryStartTick
                         });
                     });
             }

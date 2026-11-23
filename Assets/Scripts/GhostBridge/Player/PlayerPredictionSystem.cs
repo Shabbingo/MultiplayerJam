@@ -434,7 +434,8 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                         !runtimeProfile.TracksPlayers,
                                         runtimeProfile.IsLobbedProjectile,
                                         runtimeProfile.LobUpwardSpeed,
-                                        runtimeProfile.ProjectileGravity);
+                                        runtimeProfile.ProjectileGravity,
+                                        shotOutput.GravityWellPullStrength);
                                 }
                             }
 

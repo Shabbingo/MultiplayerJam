@@ -39,6 +39,11 @@ namespace Unity.MP_FPS
             [GhostField] public uint WeaponID;
             [GhostField] public float3 Position;
             [GhostField] public float3 Velocity;
+            [GhostField] public byte UsesTrajectory;
+            [GhostField] public float3 TrajectoryOrigin;
+            [GhostField] public float3 TrajectoryInitialVelocity;
+            [GhostField] public float3 TrajectoryAcceleration;
+            [GhostField] public uint TrajectoryStartTick;
             [GhostField] public float3 TargetPosition;
             [GhostField] public int BounceCount;
             [GhostField] public float Age;
@@ -90,6 +95,11 @@ namespace Unity.MP_FPS
                 var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(_weaponId);
                 if (weaponData != null)
                 {
+                    if (_trajectoryInitialized &&
+                        SimulatePredictedTrajectory())
+                    {
+                        return;
+                    }
                     SimulateCosmeticProjectile(Time.deltaTime, weaponData);
                 }
             }
@@ -120,6 +130,9 @@ namespace Unity.MP_FPS
         private bool _runtimeLobbedProjectile;
         private float _runtimeLobUpwardSpeed;
         private float _runtimeProjectileGravity;
+        private ProjectileTrajectory _trajectory;
+        private bool _trajectoryInitialized;
+        private uint _predictedTrajectoryStartTick;
 
         private float CurrentProjectileScale => Mathf.Max(0.1f,
             _runtimeProjectileScale * (_growsOverDistance
@@ -163,6 +176,33 @@ namespace Unity.MP_FPS
             transform.localScale = Vector3.one * _runtimeProjectileScale;
         }
 
+        public void SetPredictedTrajectory(uint startTick, Vector3 origin,
+            Quaternion rotation, float gravityWellPullStrength = 0f)
+        {
+            if (!SupportsTrajectory(_runtimeHoming, _runtimeLobbedProjectile,
+                    _runtimeMaxBounces, _remainingWallPenetrations,
+                    gravityWellPullStrength))
+            {
+                return;
+            }
+
+            float launchSpeed = Mathf.Max(0f, _runtimeProjectileSpeed);
+            _trajectory = new ProjectileTrajectory(origin,
+                rotation * Vector3.forward * launchSpeed, float3.zero);
+            _predictedTrajectoryStartTick = startTick;
+            _trajectoryInitialized = true;
+            _velocity = _trajectory.InitialVelocity;
+            _motionInitialized = true;
+        }
+
+        public static bool SupportsTrajectory(bool isHoming,
+            bool isLobbedProjectile, int maxBounces, int wallPenetrations,
+            float gravityWellPullStrength)
+        {
+            return !isHoming && !isLobbedProjectile && maxBounces <= 0 &&
+                   wallPenetrations <= 0 && gravityWellPullStrength <= 0f;
+        }
+
         public override void OnGhostLinked()
         {
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
@@ -188,6 +228,7 @@ namespace Unity.MP_FPS
             _runtimeProjectileGravity = Mathf.Max(0f,
                 projectileData.ProjectileGravity);
             transform.localScale = Vector3.one * _runtimeProjectileScale;
+            ApplyTrajectoryState(projectileData);
             ApplyServerMotionState(projectileData);
         }
 
@@ -202,6 +243,11 @@ namespace Unity.MP_FPS
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             SetRuntimeMotion(projectileData.IsHoming != 0,
                 projectileData.HomingTurnSpeed);
+            if (projectileData.UsesTrajectory != 0 &&
+                SimulateServerTrajectory(weaponData, projectileData))
+            {
+                return;
+            }
             EnsureMotionInitialized(weaponData);
             if (_runtimeHoming)
             {
@@ -397,6 +443,14 @@ namespace Unity.MP_FPS
                 var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
                 SetRuntimeMotion(projectileData.IsHoming != 0,
                     projectileData.HomingTurnSpeed);
+                if (projectileData.UsesTrajectory != 0)
+                {
+                    ApplyTrajectoryState(projectileData);
+                    if (SimulateClientTrajectory(projectileData))
+                    {
+                        return;
+                    }
+                }
                 ApplyServerMotionState(projectileData);
             }
 
@@ -405,6 +459,186 @@ namespace Unity.MP_FPS
             {
                 SimulateCosmeticProjectile(deltaTime, weaponData);
             }
+        }
+
+        private bool SimulateServerTrajectory(WeaponData weaponData,
+            in ProjectileData projectileData)
+        {
+            ApplyTrajectoryState(projectileData);
+            if (!_trajectoryInitialized ||
+                !TryGetTrajectoryElapsedSeconds(projectileData.TrajectoryStartTick,
+                    true, out float elapsedSeconds))
+            {
+                return false;
+            }
+
+            Vector3 targetPosition = _trajectory.EvaluatePosition(elapsedSeconds);
+            _velocity = _trajectory.EvaluateVelocity(elapsedSeconds);
+            Vector3 displacement = targetPosition - transform.position;
+
+            var movementSystem = GhostGameObject.World
+                .GetExistingSystemManaged<ServerPlayerMovementSystem>();
+            if (movementSystem != null &&
+                movementSystem.TryAbsorbProjectile(transform.position,
+                    targetPosition, projectileData.OwnerNetworkId,
+                    out Vector3 absorptionPosition))
+            {
+                if (weaponData.ProjectileHitVfxPrefab != null)
+                {
+                    Vector3 effectDirection = _velocity.sqrMagnitude > 0.0001f
+                        ? -_velocity.normalized
+                        : -transform.forward;
+                    SpawnImpactEffect(weaponData, absorptionPosition,
+                        effectDirection, 0f,
+                        GetSignedSizeDelta(weaponData, projectileData),
+                        CurrentProjectileScale);
+                }
+                RequestImpactSound(absorptionPosition, weaponData, projectileData);
+                HandleGeometryImpact(absorptionPosition);
+                return true;
+            }
+
+            if (CheckForCollision(weaponData, displacement))
+            {
+                return true;
+            }
+
+            Move(displacement);
+            _distanceTravelled = Vector3.Distance(_trajectory.Origin,
+                transform.position);
+            _localTime = elapsedSeconds;
+            if (_growsOverDistance)
+            {
+                transform.localScale = Vector3.one * _runtimeProjectileScale *
+                                       (1f + _distanceTravelled * _growthPerMetre);
+            }
+
+            if (_localTime > weaponData.ProjectileFuseTime)
+            {
+                DetonateFromFuse(weaponData);
+            }
+
+            return true;
+        }
+
+        private bool SimulateClientTrajectory(in ProjectileData projectileData)
+        {
+            bool usePredictedTimeline = GhostGameObject.Role ==
+                                        MultiplayerRole.ClientOwned;
+            if (!_trajectoryInitialized ||
+                !TryGetTrajectoryElapsedSeconds(projectileData.TrajectoryStartTick,
+                    usePredictedTimeline, out float elapsedSeconds))
+            {
+                return false;
+            }
+
+            Vector3 targetPosition = _trajectory.EvaluatePosition(elapsedSeconds);
+            _velocity = _trajectory.EvaluateVelocity(elapsedSeconds);
+            Move(targetPosition - transform.position);
+            _distanceTravelled = Vector3.Distance(_trajectory.Origin,
+                transform.position);
+            _localTime = elapsedSeconds;
+            if (_growsOverDistance)
+            {
+                transform.localScale = Vector3.one * _runtimeProjectileScale *
+                                       (1f + _distanceTravelled * _growthPerMetre);
+            }
+
+            return true;
+        }
+
+        private bool SimulatePredictedTrajectory()
+        {
+            if (!TryGetTrajectoryElapsedSeconds(_predictedTrajectoryStartTick,
+                    true, out float elapsedSeconds))
+            {
+                return false;
+            }
+
+            Vector3 targetPosition = _trajectory.EvaluatePosition(elapsedSeconds);
+            _velocity = _trajectory.EvaluateVelocity(elapsedSeconds);
+            Move(targetPosition - transform.position);
+            _distanceTravelled = Vector3.Distance(_trajectory.Origin,
+                transform.position);
+            _localTime = elapsedSeconds;
+            if (_growsOverDistance)
+            {
+                transform.localScale = Vector3.one * _runtimeProjectileScale *
+                                       (1f + _distanceTravelled * _growthPerMetre);
+            }
+
+            return true;
+        }
+
+        private void ApplyTrajectoryState(in ProjectileData projectileData)
+        {
+            if (projectileData.UsesTrajectory == 0)
+            {
+                return;
+            }
+
+            _trajectory = new ProjectileTrajectory(
+                projectileData.TrajectoryOrigin,
+                projectileData.TrajectoryInitialVelocity,
+                projectileData.TrajectoryAcceleration);
+            _predictedTrajectoryStartTick = projectileData.TrajectoryStartTick;
+            _trajectoryInitialized = true;
+            _velocity = projectileData.TrajectoryInitialVelocity;
+            _motionInitialized = true;
+        }
+
+        private bool TryGetTrajectoryElapsedSeconds(uint startTick,
+            bool usePredictedTimeline, out float elapsedSeconds)
+        {
+            elapsedSeconds = 0f;
+            World world = GhostGameObject != null &&
+                          GhostGameObject.IsGhostLinked()
+                ? GhostGameObject.World
+                : GhostBridgeBootstrap.Instance?.ClientWorld;
+            if (world == null || !world.IsCreated)
+            {
+                return false;
+            }
+
+            NetworkTime networkTime;
+            ClientServerTickRate tickRate;
+            if (GhostGameObject != null && GhostGameObject.IsGhostLinked())
+            {
+                if (!GhostGameObject.TryReadSingleton(out networkTime) ||
+                    !GhostGameObject.TryReadSingleton(out tickRate))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                using EntityQuery networkTimeQuery = world.EntityManager
+                    .CreateEntityQuery(ComponentType.ReadOnly<NetworkTime>());
+                using EntityQuery tickRateQuery = world.EntityManager
+                    .CreateEntityQuery(ComponentType.ReadOnly<ClientServerTickRate>());
+                if (!networkTimeQuery.TryGetSingleton(out networkTime) ||
+                    !tickRateQuery.TryGetSingleton(out tickRate))
+                {
+                    return false;
+                }
+            }
+
+            tickRate.ResolveDefaults();
+            NetworkTick currentTick = usePredictedTimeline
+                ? networkTime.ServerTick
+                : networkTime.InterpolationTick;
+            float fraction = usePredictedTimeline
+                ? networkTime.ServerTickFraction
+                : networkTime.InterpolationTickFraction;
+            if (!currentTick.IsValid)
+            {
+                return false;
+            }
+
+            elapsedSeconds = ProjectileTrajectory.ElapsedSeconds(
+                currentTick.TickIndexForValidTick, fraction, startTick,
+                tickRate.SimulationFixedTimeStep);
+            return true;
         }
 
         private void SimulateCosmeticProjectile(float deltaTime, WeaponData weaponData)

@@ -1923,7 +1923,8 @@ public class FirstPersonController : MonoBehaviour
         float growthPerMetre = 0f, float bounceVelocityRetention = 1f,
         int wallPenetrations = 0, float wallDamageRetention = 0.4f,
         bool hasHomingTarget = true, bool isLobbedProjectile = false,
-        float lobUpwardSpeed = 0f, float projectileGravity = 0f)
+        float lobUpwardSpeed = 0f, float projectileGravity = 0f,
+        float gravityWellPullStrength = 0f)
     {
         try
         {
@@ -1988,6 +1989,8 @@ public class FirstPersonController : MonoBehaviour
                 bounceVelocityRetention, wallPenetrations,
                 wallDamageRetention, isLobbedProjectile,
                 lobUpwardSpeed, projectileGravity);
+            projectile.SetPredictedTrajectory(spawnTick, spawnPosition,
+                spawnRotation, gravityWellPullStrength);
 
             var projectileInfo = new Projectile.PredictedProjectileInfo
             {
