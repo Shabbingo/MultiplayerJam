@@ -118,7 +118,12 @@ namespace Unity.MP_FPS
                 tuning.SlowDuration = slow.EffectDurationSeconds;
                 tuning.SlowReloadMultiplier = slow.ReloadTimeMultiplierPerStack;
             }
-            if (homing != null) tuning.AddedHomingTurnSpeed = homing.ValuePerStack;
+            if (homing != null)
+            {
+                tuning.AddedHomingTurnSpeed = homing.ValuePerStack;
+                tuning.HomingProjectileSpeedMultiplier =
+                    homing.ProjectileSpeedMultiplierPerStack;
+            }
             if (wireGuided != null) tuning.WireGuidedTurnSpeed = wireGuided.ValuePerStack;
             if (reload != null)
             {

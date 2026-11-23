@@ -8,12 +8,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 3
   m_DisplayName: Slow Shield
-  m_Description: A successful reflect slows the opponent by 50%.
+  m_Description: A successful reflect slows the opponent by 35% for 2.5 seconds.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 2
+  m_Rarity: 1
   m_BaseOfferWeight: 1
   m_Category: 4
   m_Kind: 18
   m_AllowedTargets: 4
-  m_ValuePerStack: 0.5
-  m_EffectDurationSeconds: 3
+  m_ValuePerStack: 0.35
+  m_EffectDurationSeconds: 2.5

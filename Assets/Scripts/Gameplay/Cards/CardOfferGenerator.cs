@@ -10,8 +10,8 @@ namespace Unity.MP_FPS.Cards
     /// </summary>
     public static class CardOfferGenerator
     {
-        // Strength score serves two purposes: high-score cards are globally rarer,
-        // but the first players eliminated receive a strong-card comeback bias.
+        // Rarity serves two purposes: stronger cards are globally rarer, but the
+        // first players eliminated receive a stronger-card comeback bias.
         private const float GlobalRarityBase = 1.6f;
         private const float PlacementBiasBase = 2f;
 
@@ -21,6 +21,7 @@ namespace Unity.MP_FPS.Cards
             int finishingPosition,
             int playerCount,
             int offerCount,
+            int offerPointBudget,
             int seed,
             int roundNumber = 1,
             int openingHandBiasRounds = 2,
@@ -28,7 +29,7 @@ namespace Unity.MP_FPS.Cards
             float openingSelfWeightMultiplier = 0.5f)
         {
             var result = new List<CardModifierDefinition>(Mathf.Max(0, offerCount));
-            if (catalog == null || offerCount <= 0)
+            if (catalog == null || offerCount <= 0 || offerPointBudget <= 0)
             {
                 return result;
             }
@@ -44,14 +45,26 @@ namespace Unity.MP_FPS.Cards
 
             var random = new System.Random(seed);
             int drawCount = Mathf.Min(offerCount, candidates.Count);
+            int remainingBudget = offerPointBudget;
             for (int draw = 0; draw < drawCount; draw++)
             {
-                int selectedIndex = DrawWeightedIndex(candidates, finishingPosition,
+                int remainingSlots = drawCount - draw - 1;
+                var feasibleCandidates = GetFeasibleCandidates(candidates,
+                    remainingSlots, remainingBudget);
+                if (feasibleCandidates.Count == 0)
+                {
+                    break;
+                }
+
+                int selectedIndex = DrawWeightedIndex(feasibleCandidates,
+                    finishingPosition,
                     playerCount, roundNumber, openingHandBiasRounds,
                     openingHandWeightMultiplier,
                     openingSelfWeightMultiplier, random);
-                result.Add(candidates[selectedIndex]);
-                candidates.RemoveAt(selectedIndex);
+                CardModifierDefinition selected = feasibleCandidates[selectedIndex];
+                result.Add(selected);
+                remainingBudget -= selected.DraftPointCost;
+                candidates.Remove(selected);
             }
 
             return result;
@@ -69,6 +82,54 @@ namespace Unity.MP_FPS.Cards
             ModifierTarget target, in PlayerModifierStacks owned)
         {
             return card.Allows(target);
+        }
+
+        private static List<CardModifierDefinition> GetFeasibleCandidates(
+            IReadOnlyList<CardModifierDefinition> candidates,
+            int remainingSlots, int remainingBudget)
+        {
+            var feasible = new List<CardModifierDefinition>(candidates.Count);
+            for (int candidateIndex = 0;
+                 candidateIndex < candidates.Count;
+                 candidateIndex++)
+            {
+                CardModifierDefinition candidate = candidates[candidateIndex];
+                int budgetAfterPick = remainingBudget - candidate.DraftPointCost;
+                if (budgetAfterPick < 0 ||
+                    !CanFillRemainingSlots(candidates, candidateIndex,
+                        remainingSlots, budgetAfterPick))
+                {
+                    continue;
+                }
+
+                feasible.Add(candidate);
+            }
+
+            return feasible;
+        }
+
+        private static bool CanFillRemainingSlots(
+            IReadOnlyList<CardModifierDefinition> candidates,
+            int excludedIndex, int remainingSlots, int remainingBudget)
+        {
+            if (remainingSlots <= 0) return true;
+            if (candidates.Count - 1 < remainingSlots) return false;
+
+            var remainingCosts = new List<int>(candidates.Count - 1);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (i == excludedIndex) continue;
+                remainingCosts.Add(candidates[i].DraftPointCost);
+            }
+
+            remainingCosts.Sort();
+            int minimumRequiredBudget = 0;
+            for (int i = 0; i < remainingSlots; i++)
+            {
+                minimumRequiredBudget += remainingCosts[i];
+            }
+
+            return minimumRequiredBudget <= remainingBudget;
         }
 
         private static int DrawWeightedIndex(
@@ -117,10 +178,10 @@ namespace Unity.MP_FPS.Cards
             float openingHandWeightMultiplier,
             float openingSelfWeightMultiplier)
         {
-            int centeredStrength = card.StrengthScore - 3;
-            double rarityWeight = Math.Pow(GlobalRarityBase, -centeredStrength);
+            int centeredRarity = (int)card.Rarity - (int)CardRarity.Rare;
+            double rarityWeight = Math.Pow(GlobalRarityBase, -centeredRarity);
             double placementWeight = Math.Pow(
-                PlacementBiasBase, comebackBias * centeredStrength);
+                PlacementBiasBase, comebackBias * centeredRarity);
             double openingTargetWeight = GetOpeningTargetWeight(card, roundNumber,
                 openingHandBiasRounds, openingHandWeightMultiplier,
                 openingSelfWeightMultiplier);

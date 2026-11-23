@@ -17,7 +17,7 @@ MonoBehaviour:
   m_Description: Adds two bullets to the selected magazine, but increases reload time by
     15%.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 2
+  m_Rarity: 1
   m_BaseOfferWeight: 1
   m_Category: 1
   m_Kind: 9

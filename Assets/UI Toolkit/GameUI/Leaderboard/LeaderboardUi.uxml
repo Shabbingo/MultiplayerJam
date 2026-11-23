@@ -16,10 +16,12 @@
             <ui:Label text="ROUND DRAFT" name="draft-title" style="font-size: 28px; color: rgb(255, 170, 40); -unity-font-style: bold; -unity-text-align: middle-center;"/>
             <ui:Label text="PLAYER IS CHOOSING" name="draft-player" style="font-size: 20px; color: white; -unity-text-align: middle-center; margin-top: 6px;"/>
             <ui:Label text="10 SECONDS" name="draft-timer" style="font-size: 17px; color: rgb(180, 220, 255); -unity-text-align: middle-center; margin-top: 4px; margin-bottom: 12px;"/>
-            <ui:VisualElement name="draft-cards" style="flex-direction: row; justify-content: space-around;">
-                <ui:Button text="CARD ONE" name="card-0" style="width: 275px; height: 170px; font-size: 17px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
-                <ui:Button text="CARD TWO" name="card-1" style="width: 275px; height: 170px; font-size: 17px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
-                <ui:Button text="CARD THREE" name="card-2" style="width: 275px; height: 170px; font-size: 17px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
+            <ui:VisualElement name="draft-cards" style="flex-direction: row; flex-wrap: wrap; justify-content: center;">
+                <ui:Button text="CARD ONE" name="card-0" style="width: 275px; height: 155px; margin: 4px; font-size: 15px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
+                <ui:Button text="CARD TWO" name="card-1" style="width: 275px; height: 155px; margin: 4px; font-size: 15px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
+                <ui:Button text="CARD THREE" name="card-2" style="width: 275px; height: 155px; margin: 4px; font-size: 15px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
+                <ui:Button text="CARD FOUR" name="card-3" style="width: 275px; height: 155px; margin: 4px; font-size: 15px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
+                <ui:Button text="CARD FIVE" name="card-4" style="width: 275px; height: 155px; margin: 4px; font-size: 15px; white-space: normal; color: white; background-color: rgba(35, 55, 75, 0.96);"/>
             </ui:VisualElement>
             <ui:Label text="CHOOSE A CARD, THEN CHOOSE WHERE TO APPLY IT" name="draft-help" style="font-size: 15px; color: rgb(220, 220, 220); -unity-text-align: middle-center; margin-top: 14px;"/>
             <ui:VisualElement name="draft-targets" style="flex-direction: row; justify-content: center; margin-top: 8px;">

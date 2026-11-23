@@ -36,7 +36,6 @@ namespace Gameplay.Leaderboard
             public bool IsLateJoinCatchUp;
             public int CatchUpPickNumber;
             public int CatchUpPickTotal;
-            public bool AllowsOffHandAdaptation;
             public FixedString64Bytes ReferenceLoserName;
         }
 
@@ -61,12 +60,11 @@ namespace Gameplay.Leaderboard
 
         // Client presentation state. RPCs update these even while the local player is dead.
         private int _localNetworkId = -1;
-        private readonly int[] _offeredCardIds = { -1, -1, -1 };
+        private readonly int[] _offeredCardIds = { -1, -1, -1, -1, -1 };
         private FixedString64Bytes _activeDraftPlayerName;
         private bool _activeDraftIsLateJoinCatchUp;
         private int _activeCatchUpPickNumber;
         private int _activeCatchUpPickTotal;
-        private bool _activeDraftAllowsOffHandAdaptation;
         private FixedString64Bytes _activeCatchUpReferenceLoserName;
         private FixedString128Bytes _lastPickMessage;
         private DraftPickRequestRpc? _pendingClientPick;
@@ -80,18 +78,27 @@ namespace Gameplay.Leaderboard
         public RoundPhase Phase => _phase;
         public int CurrentRound => _currentRound;
         public int RoundWinsToWin => GetRules().RoundWinsToWin;
+        public int OfferPointBudget => GetRules().OfferPointBudget;
+        public int CurrentOfferPointTotal
+        {
+            get
+            {
+                int total = 0;
+                for (int i = 0; i < _offeredCardIds.Length; i++)
+                {
+                    CardModifierDefinition card = GetCardDefinition(
+                        _offeredCardIds[i]);
+                    if (card != null) total += card.DraftPointCost;
+                }
+
+                return total;
+            }
+        }
         public int ActiveDraftNetworkId => _activeDraftNetworkId;
         public string ActiveDraftPlayerName => _activeDraftPlayerName.ToString();
         public bool IsLateJoinCatchUpDraft => _activeDraftIsLateJoinCatchUp;
         public int CatchUpPickNumber => _activeCatchUpPickNumber;
         public int CatchUpPickTotal => _activeCatchUpPickTotal;
-        public bool IsCatchUpAdaptationPick =>
-            _activeDraftIsLateJoinCatchUp &&
-            _activeDraftAllowsOffHandAdaptation;
-        public ModifierTarget CurrentRoundHandTarget =>
-            GetRoundHandTarget(_currentRound);
-        public string CurrentRoundHandName =>
-            CurrentRoundHandTarget == ModifierTarget.LeftHand ? "LEFT" : "RIGHT";
         public string CatchUpReferenceLoserName =>
             _activeCatchUpReferenceLoserName.ToString();
         public string LastPickMessage => _lastPickMessage.ToString();
@@ -190,13 +197,7 @@ namespace Gameplay.Leaderboard
         public bool CanApplyDraftCardToTarget(CardModifierDefinition card,
             ModifierTarget target)
         {
-            if (card == null || !card.Allows(target)) return false;
-            if (target == ModifierTarget.Self) return true;
-            if (target == GetRoundHandTarget(_currentRound)) return true;
-            return _activeDraftIsLateJoinCatchUp &&
-                   _activeDraftAllowsOffHandAdaptation &&
-                   (target == ModifierTarget.LeftHand ||
-                    target == ModifierTarget.RightHand);
+            return card != null && card.Allows(target);
         }
 
         public void RequestDraftPick(int cardId, ModifierTarget target)
@@ -375,14 +376,14 @@ namespace Gameplay.Leaderboard
                 _activeDraftIsLateJoinCatchUp = draftRpc.IsLateJoinCatchUp != 0;
                 _activeCatchUpPickNumber = draftRpc.CatchUpPickNumber;
                 _activeCatchUpPickTotal = draftRpc.CatchUpPickTotal;
-                _activeDraftAllowsOffHandAdaptation =
-                    draftRpc.AllowsOffHandAdaptation != 0;
                 _activeCatchUpReferenceLoserName =
                     draftRpc.ReferenceLoserName;
                 _draftSecondsRemaining = draftRpc.SecondsRemaining;
                 _offeredCardIds[0] = draftRpc.CardId0;
                 _offeredCardIds[1] = draftRpc.CardId1;
                 _offeredCardIds[2] = draftRpc.CardId2;
+                _offeredCardIds[3] = draftRpc.CardId3;
+                _offeredCardIds[4] = draftRpc.CardId4;
             }
 
             while (ConsumeRPC(out CardPickedRpc pickedRpc))
@@ -729,8 +730,6 @@ namespace Gameplay.Leaderboard
             _activeDraftIsLateJoinCatchUp = turn.IsLateJoinCatchUp;
             _activeCatchUpPickNumber = turn.CatchUpPickNumber;
             _activeCatchUpPickTotal = turn.CatchUpPickTotal;
-            _activeDraftAllowsOffHandAdaptation =
-                turn.AllowsOffHandAdaptation;
             _activeCatchUpReferenceLoserName = turn.ReferenceLoserName;
             var store = World.GetExistingSystemManaged<PlayerRunModifierStoreSystem>();
             PlayerModifierStacks owned = store != null
@@ -743,6 +742,7 @@ namespace Gameplay.Leaderboard
             var generated = CardOfferGenerator.Generate(catalog, in owned,
                 finishingPosition, Mathf.Max(1, _finishingOrder.Count),
                 rules.CardsPerOffer,
+                rules.OfferPointBudget,
                 (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663) ^
                 (_activeCatchUpPickNumber * 83492791),
                 _currentRound, rules.OpeningHandBiasRounds,
@@ -774,13 +774,13 @@ namespace Gameplay.Leaderboard
                 IsLateJoinCatchUp = _activeDraftIsLateJoinCatchUp ? (byte)1 : (byte)0,
                 CatchUpPickNumber = _activeCatchUpPickNumber,
                 CatchUpPickTotal = _activeCatchUpPickTotal,
-                AllowsOffHandAdaptation =
-                    _activeDraftAllowsOffHandAdaptation ? (byte)1 : (byte)0,
                 ReferenceLoserName = _activeCatchUpReferenceLoserName,
                 SecondsRemaining = Mathf.Max(0f, _draftSecondsRemaining),
                 CardId0 = GetServerOfferId(0),
                 CardId1 = GetServerOfferId(1),
-                CardId2 = GetServerOfferId(2)
+                CardId2 = GetServerOfferId(2),
+                CardId3 = GetServerOfferId(3),
+                CardId4 = GetServerOfferId(4)
             });
         }
 
@@ -828,8 +828,8 @@ namespace Gameplay.Leaderboard
 
         private void AutoPickCurrentOffer()
         {
-            ModifierTarget roundHand = GetRoundHandTarget(_currentRound);
-            ModifierTarget otherHand = roundHand == ModifierTarget.LeftHand
+            ModifierTarget preferredHand = GetAutoPickPreferredHand(_currentRound);
+            ModifierTarget otherHand = preferredHand == ModifierTarget.LeftHand
                 ? ModifierTarget.RightHand
                 : ModifierTarget.LeftHand;
             for (int cardIndex = 0; cardIndex < _currentOffers.Count; cardIndex++)
@@ -837,7 +837,7 @@ namespace Gameplay.Leaderboard
                 var card = _currentOffers[cardIndex];
                 foreach (var target in new[]
                          {
-                             roundHand,
+                             preferredHand,
                              otherHand,
                              ModifierTarget.Self
                          })
@@ -972,7 +972,6 @@ namespace Gameplay.Leaderboard
             _activeDraftIsLateJoinCatchUp = false;
             _activeCatchUpPickNumber = 0;
             _activeCatchUpPickTotal = 0;
-            _activeDraftAllowsOffHandAdaptation = false;
             _activeCatchUpReferenceLoserName = default;
             _draftSecondsRemaining = 0f;
             _lastPickMessage = default;
@@ -1073,18 +1072,12 @@ namespace Gameplay.Leaderboard
                     loserProjectedCardCount - projectedJoinerCardCount);
                 for (int pick = 1; pick <= catchUpPickTotal; pick++)
                 {
-                    int adaptationInterval = GetRules()
-                        .CatchUpAdaptationPickInterval;
                     _draftOrder.Add(new DraftTurnEntry
                     {
                         NetworkId = lateJoinerNetworkId,
                         IsLateJoinCatchUp = true,
                         CatchUpPickNumber = pick,
                         CatchUpPickTotal = catchUpPickTotal,
-                        AllowsOffHandAdaptation =
-                            pick % adaptationInterval == 0 ||
-                            (catchUpPickTotal < adaptationInterval &&
-                             pick == catchUpPickTotal),
                         ReferenceLoserName = loserName
                     });
                 }
@@ -1133,7 +1126,7 @@ namespace Gameplay.Leaderboard
             return new FixedString64Bytes(fallback);
         }
 
-        private static ModifierTarget GetRoundHandTarget(int roundNumber)
+        private static ModifierTarget GetAutoPickPreferredHand(int roundNumber)
         {
             return Mathf.Max(1, roundNumber) % 2 == 1
                 ? ModifierTarget.LeftHand
@@ -1184,12 +1177,13 @@ namespace Gameplay.Leaderboard
         public byte IsLateJoinCatchUp;
         public int CatchUpPickNumber;
         public int CatchUpPickTotal;
-        public byte AllowsOffHandAdaptation;
         public FixedString64Bytes ReferenceLoserName;
         public float SecondsRemaining;
         public int CardId0;
         public int CardId1;
         public int CardId2;
+        public int CardId3;
+        public int CardId4;
     }
 
     public struct CardPickedRpc : IRpcCommand

@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 11
   m_DisplayName: Wire Guided
-  m_Description: Projectiles from the selected hand continuously steer toward your live crosshair.
+  m_Description: Projectiles from the selected hand steer toward your live crosshair at 90 degrees per second per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 5
+  m_Rarity: 3
   m_BaseOfferWeight: 1
   m_Category: 2
   m_Kind: 10
   m_AllowedTargets: 3
-  m_ValuePerStack: 120
+  m_ValuePerStack: 90

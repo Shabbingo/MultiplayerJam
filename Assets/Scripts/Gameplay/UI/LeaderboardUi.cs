@@ -28,7 +28,8 @@ namespace Unity.MP_FPS.UI
         private Label _draftTimerLabel;
         private Label _draftHelpLabel;
         private Label _draftPickResultLabel;
-        private readonly Button[] _cardButtons = new Button[3];
+        private readonly Button[] _cardButtons =
+            new Button[RoundCardRules.MaximumCardsPerOffer];
         private Button _leftTargetButton;
         private Button _selfTargetButton;
         private Button _rightTargetButton;
@@ -204,14 +205,14 @@ namespace Unity.MP_FPS.UI
             _scoreTable.style.display = DisplayStyle.None;
             _draftPanel.style.display = DisplayStyle.Flex;
             _draftTitleLabel.text = manager.IsLateJoinCatchUpDraft
-                ? manager.IsCatchUpAdaptationPick
-                    ? $"CATCH-UP ADAPTATION — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
-                    : $"LATE-JOIN CATCH-UP — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
-                : $"ROUND {manager.CurrentRound} COMPLETE — {manager.CurrentRoundHandName} HAND DRAFT";
+                ? $"LATE-JOIN CATCH-UP — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
+                : $"ROUND {manager.CurrentRound} COMPLETE — CHOOSE A CARD";
 
-            int offerHash = manager.GetOfferedCardId(0) * 397 ^
-                            manager.GetOfferedCardId(1) * 31 ^
-                            manager.GetOfferedCardId(2);
+            int offerHash = 17;
+            for (int i = 0; i < _cardButtons.Length; i++)
+            {
+                offerHash = offerHash * 31 + manager.GetOfferedCardId(i);
+            }
             if (_lastActiveDraftPlayerId != manager.ActiveDraftNetworkId ||
                 _lastOfferHash != offerHash)
             {
@@ -234,15 +235,11 @@ namespace Unity.MP_FPS.UI
                     $"{Mathf.CeilToInt(manager.DraftSecondsRemaining)} SECONDS";
                 _draftHelpLabel.text = manager.IsLocalDraftTurn
                     ? manager.IsLateJoinCatchUpDraft
-                        ? manager.IsCatchUpAdaptationPick
-                            ? $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} — ADAPTATION PICK: EITHER HAND OR SELF"
-                            : $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} — {manager.CurrentRoundHandName} HAND OR SELF"
-                        : $"WEAPON CARDS APPLY TO {manager.CurrentRoundHandName} HAND — SELF CARDS ARE ALWAYS ALLOWED"
+                        ? $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} • OFFER {manager.CurrentOfferPointTotal}/{manager.OfferPointBudget} POINTS • CHOOSE AN ALLOWED TARGET"
+                        : $"OFFER {manager.CurrentOfferPointTotal}/{manager.OfferPointBudget} POINTS • SELECT ONE CARD, THEN CHOOSE ITS TARGET"
                     : manager.IsLateJoinCatchUpDraft
-                        ? manager.IsCatchUpAdaptationPick
-                            ? $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — EITHER HAND IS OPEN"
-                            : $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — {manager.CurrentRoundHandName} HAND ROUND"
-                        : $"{manager.CurrentRoundHandName} HAND WEAPON CARDS • SELF CARDS ALWAYS ALLOWED";
+                        ? $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — CHOOSING A CARD AND TARGET"
+                        : "WEAPON CARDS CAN APPLY TO EITHER HAND • SELF CARDS APPLY TO YOU";
             }
             else
             {
@@ -262,14 +259,24 @@ namespace Unity.MP_FPS.UI
                     : DisplayStyle.None;
                 if (!visible) continue;
                 _cardButtons[i].text =
-                    $"{definition.DisplayName.ToUpperInvariant()}\n\n{definition.Description}\n\nTYPE: {definition.CategoryDisplayName.ToUpperInvariant()}  •  RARITY: {definition.StrengthScore}/5";
+                    $"{definition.DisplayName.ToUpperInvariant()}\n\n{definition.Description}\n\n{definition.Rarity.ToString().ToUpperInvariant()} • {definition.DraftPointCost} {(definition.DraftPointCost == 1 ? "POINT" : "POINTS")}";
                 _cardButtons[i].SetEnabled(manager.IsLocalDraftTurn && activeTurn);
                 _cardButtons[i].style.backgroundColor = cardId == _selectedCardId
                     ? new Color(0.18f, 0.48f, 0.68f, 0.98f)
-                    : new Color(0.14f, 0.22f, 0.30f, 0.96f);
+                    : GetRarityColor(definition.Rarity);
             }
 
             RefreshTargetButtons(manager);
+        }
+
+        private static Color GetRarityColor(CardRarity rarity)
+        {
+            return rarity switch
+            {
+                CardRarity.Rare => new Color(0.12f, 0.28f, 0.52f, 0.98f),
+                CardRarity.Epic => new Color(0.38f, 0.16f, 0.52f, 0.98f),
+                _ => new Color(0.14f, 0.22f, 0.30f, 0.96f)
+            };
         }
 
         private void ShowRoundPreparing(LeaderboardManager manager)

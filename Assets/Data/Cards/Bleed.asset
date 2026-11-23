@@ -14,15 +14,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 12
   m_DisplayName: Bleed
-  m_Description: Hits apply a stacking 10 damage-per-second bleed, but direct bullet
+  m_Description: Hits apply a stacking 8 damage-per-second bleed, but direct bullet
     damage becomes zero.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 5
+  m_Rarity: 3
   m_BaseOfferWeight: 1
   m_Category: 2
   m_Kind: 11
   m_AllowedTargets: 3
-  m_ValuePerStack: 10
+  m_ValuePerStack: 8
   m_EffectDurationSeconds: 3
   m_EffectRadiusMetres: 0
   m_SecondaryEffectRadiusMetres: 0

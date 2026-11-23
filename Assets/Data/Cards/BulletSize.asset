@@ -14,19 +14,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 14
   m_DisplayName: Bullet Size
-  m_Description: Increases the selected hand's bullet scale by 0.5 and damage by 10%. Larger
+  m_Description: Increases the selected hand's bullet scale by 35% and damage by 8%. Larger
     bullets may clip walls.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 1
+  m_Rarity: 1
   m_BaseOfferWeight: 1
   m_Category: 1
   m_Kind: 14
   m_AllowedTargets: 3
-  m_ValuePerStack: 0.5
+  m_ValuePerStack: 0.35
   m_EffectDurationSeconds: 0
   m_EffectRadiusMetres: 0
   m_SecondaryEffectRadiusMetres: 0
-  m_DamagePercentPerStack: 0.1
+  m_DamagePercentPerStack: 0.08
   m_AreaDamagePerStack: 0
   m_BaseDamageMultiplier: 1
   m_FireIntervalMultiplierPerStack: 1
@@ -35,7 +35,7 @@ MonoBehaviour:
   m_ReloadTimeMultiplierPerStack: 1
   m_MinimumReloadMultiplier: 0.25
   m_MagazineDeltaPerStack: 0
-  m_ProjectileScalePerStack: 0.5
+  m_ProjectileScalePerStack: 0.35
   m_ProjectileSpeedMultiplierPerStack: 1
   m_LobUpwardSpeedPerStack: 0
   m_ProjectileGravityPerStack: 0

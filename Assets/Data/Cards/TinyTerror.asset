@@ -8,12 +8,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 31
   m_DisplayName: Tiny Terror
-  m_Description: While small, deal 20% more damage per stack to larger players, but take 20% more damage per stack from them.
+  m_Description: While small, deal 15% more damage per stack to larger players, but take 15% more damage per stack from them.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 3
   m_Kind: 33
   m_AllowedTargets: 4
-  m_ValuePerStack: 0.2
-  m_IncomingDamageMultiplierPerStack: 1.2
+  m_ValuePerStack: 0.15
+  m_IncomingDamageMultiplierPerStack: 1.15

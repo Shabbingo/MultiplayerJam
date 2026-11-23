@@ -10,7 +10,7 @@ MonoBehaviour:
   m_DisplayName: Small Target
   m_Description: While small, movement and reload speed increase by 10% per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 1
   m_BaseOfferWeight: 1
   m_Category: 2
   m_Kind: 30

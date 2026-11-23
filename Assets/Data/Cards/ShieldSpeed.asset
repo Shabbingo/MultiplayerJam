@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 19
   m_DisplayName: Burst of Speed Shield
-  m_Description: Increases movement speed by 50% while your reflect shield is active.
+  m_Description: Increases movement speed by 30% per stack while your reflect shield is active.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 1
+  m_Rarity: 1
   m_BaseOfferWeight: 1
   m_Category: 4
   m_Kind: 21
   m_AllowedTargets: 4
-  m_ValuePerStack: 0.5
+  m_ValuePerStack: 0.3

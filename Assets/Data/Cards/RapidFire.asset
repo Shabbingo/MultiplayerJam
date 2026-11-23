@@ -14,10 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 26
   m_DisplayName: Rapid Fire
-  m_Description: 'Reduces firing interval by 65% per stack, but each stack also reduces
-    damage by 20%. '
+  m_Description: Reduces firing interval by 50%, reduces bullet damage by 55%, and adds six magazine rounds per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 1
   m_Kind: 28
@@ -28,13 +27,13 @@ MonoBehaviour:
   m_SecondaryEffectRadiusMetres: 0
   m_DamagePercentPerStack: 0
   m_AreaDamagePerStack: 0
-  m_BaseDamageMultiplier: 0.3
-  m_FireIntervalMultiplierPerStack: 0.35
+  m_BaseDamageMultiplier: 0.45
+  m_FireIntervalMultiplierPerStack: 0.5
   m_MovementSpeedMultiplierPerStack: 1
   m_IncomingDamageMultiplierPerStack: 1
   m_ReloadTimeMultiplierPerStack: 1
   m_MinimumReloadMultiplier: 0.25
-  m_MagazineDeltaPerStack: 10
+  m_MagazineDeltaPerStack: 6
   m_ProjectileScalePerStack: 0
   m_ProjectileSpeedMultiplierPerStack: 1
   m_LobUpwardSpeedPerStack: 0
@@ -44,5 +43,5 @@ MonoBehaviour:
   m_ExplosionRadiusMultiplierPerStack: 1
   m_ScatterHalfAngleDegrees: 7.5
   m_BounceVelocityRetention: 1
-  m_DamageReductionPercent: 0.2
+  m_DamageReductionPercent: 0
   m_TeleportFreezeSeconds: 0.1

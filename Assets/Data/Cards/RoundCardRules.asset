@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.RoundCardRules
   m_RoundWinsToWin: 10
   m_CardsPerOffer: 5
+  m_OfferPointBudget: 10
   m_SecondsPerDraftTurn: 30
   m_RoundStartDelay: 2
   m_OpeningHandBiasRounds: 2
   m_OpeningHandWeightMultiplier: 3
   m_OpeningSelfWeightMultiplier: 0.5
-  m_CatchUpAdaptationPickInterval: 3

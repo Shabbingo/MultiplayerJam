@@ -10,7 +10,7 @@ MonoBehaviour:
   m_DisplayName: Last Word
   m_Description: The final round in the selected hand's magazine deals 20% bonus damage per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 2
+  m_Rarity: 1
   m_BaseOfferWeight: 1
   m_Category: 3
   m_Kind: 35

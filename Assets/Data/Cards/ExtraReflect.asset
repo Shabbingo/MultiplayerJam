@@ -10,7 +10,7 @@ MonoBehaviour:
   m_DisplayName: Extra Reflect
   m_Description: Adds one reflect use at the start of every round.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 1
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 4
   m_Kind: 3

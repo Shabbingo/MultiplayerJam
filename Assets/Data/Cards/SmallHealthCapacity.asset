@@ -8,12 +8,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 21
   m_DisplayName: Increase Size Capacity Small
-  m_Description: Increases small-size health capacity by 50%, with 10% damage reduction.
+  m_Description: Increases small-size maximum health by 25% and grants 5% damage reduction per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 2
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 4
   m_Kind: 23
   m_AllowedTargets: 4
-  m_ValuePerStack: 0.5
-  m_DamageReductionPercent: 0.1
+  m_ValuePerStack: 0.25
+  m_DamageReductionPercent: 0.05

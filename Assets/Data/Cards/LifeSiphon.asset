@@ -8,12 +8,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 13
   m_DisplayName: Siphon Life Bullets
-  m_Description: Heals you for 50% of damage dealt, but reduces base bullet damage by 25%.
+  m_Description: Heals you for 35% of damage dealt, but reduces base bullet damage by 20% per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 2
   m_Kind: 13
   m_AllowedTargets: 3
-  m_ValuePerStack: 0.5
-  m_BaseDamageMultiplier: 0.75
+  m_ValuePerStack: 0.35
+  m_BaseDamageMultiplier: 0.8

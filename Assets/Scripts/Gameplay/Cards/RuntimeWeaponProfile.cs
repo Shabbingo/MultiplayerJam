@@ -19,6 +19,7 @@ namespace Unity.MP_FPS.Cards
         [Range(0f, 1f)] public float SlowPercent;
         [Min(0f)] public float SlowDuration;
         [Min(0f)] public float AddedHomingTurnSpeed;
+        [Min(0f)] public float HomingProjectileSpeedMultiplier;
         [Min(0f)] public float WireGuidedTurnSpeed;
         [Range(0f, 0.5f)] public float ReloadTimeReductionPerStack;
         [Min(0)] public int AmmoPerStack;
@@ -52,41 +53,42 @@ namespace Unity.MP_FPS.Cards
         public static ModifierGameplayTuning Default => new()
         {
             DamagePerStack = 0.1f,
-            ExplosionRadiusPerStack = 1f,
-            ScatterPelletCount = 10,
+            ExplosionRadiusPerStack = 1.25f,
+            ScatterPelletCount = 6,
             ScatterHalfAngleDegrees = 7.5f,
-            SlowPercent = 0.5f,
-            SlowDuration = 3f,
-            AddedHomingTurnSpeed = 15f,
-            WireGuidedTurnSpeed = 120f,
-            ReloadTimeReductionPerStack = 0.15f,
+            SlowPercent = 0.35f,
+            SlowDuration = 2f,
+            AddedHomingTurnSpeed = 25f,
+            HomingProjectileSpeedMultiplier = 0.5f,
+            WireGuidedTurnSpeed = 90f,
+            ReloadTimeReductionPerStack = 0.25f,
             AmmoPerStack = 2,
-            BleedDamagePerSecond = 10f,
+            BleedDamagePerSecond = 8f,
             BleedDuration = 3f,
-            LifeStealPercent = 0.5f,
-            SlowReloadMultiplier = 1.25f,
+            LifeStealPercent = 0.35f,
+            SlowReloadMultiplier = 1.15f,
             AmmoReloadMultiplier = 1.15f,
             ScatterMagazineDelta = -1,
-            BulletSizeDamagePerStack = 0.1f,
-            BulletSizeScalePerStack = 0.5f,
-            BulletSpeedMultiplierPerStack = 1.3f,
-            BulletSpeedScaleMultiplier = 0.8f,
-            BulletSpeedExplosionMultiplier = 0.5f,
-            LifeSiphonDamageMultiplier = 0.75f,
-            BulletGrowthPerMetre = 0.01f,
-            BounceVelocityRetention = 1f,
+            BulletSizeDamagePerStack = 0.08f,
+            BulletSizeScalePerStack = 0.35f,
+            BulletSpeedMultiplierPerStack = 1.25f,
+            BulletSpeedScaleMultiplier = 0.9f,
+            BulletSpeedExplosionMultiplier = 0.75f,
+            LifeSiphonDamageMultiplier = 0.8f,
+            BulletGrowthPerMetre = 0.0075f,
+            BounceVelocityRetention = 0.8f,
             BounceCountPerStack = 1f,
             MinimumReloadMultiplier = 0.25f,
-            WallDamageRetention = 0.4f,
-            RapidFireDamageMultiplier = 0.3f,
-            RapidFireIntervalMultiplier = 0.35f,
-            RapidFireMagazineDelta = 0,
-            GravityWellPullPerStack = 8f,
+            WallDamageRetention = 0.5f,
+            RapidFireDamageMultiplier = 0.45f,
+            RapidFireIntervalMultiplier = 0.5f,
+            RapidFireMagazineDelta = 6,
+            GravityWellPullPerStack = 6f,
             LastWordDamagePerStack = 0.2f,
-            GrenadeSpeedMultiplier = 0.45f,
-            GrenadeExplosionRadius = 2f,
-            LobUpwardSpeedPerStack = 8f,
-            ProjectileGravityPerStack = 20f
+            GrenadeSpeedMultiplier = 0.55f,
+            GrenadeExplosionRadius = 1.5f,
+            LobUpwardSpeedPerStack = 6f,
+            ProjectileGravityPerStack = 16f
         };
     }
 
@@ -348,6 +350,11 @@ namespace Unity.MP_FPS.Cards
             float projectileSpeed = source.ProjectileSpeed *
                                     Mathf.Pow(tuning.BulletSpeedMultiplierPerStack,
                                         bulletSpeedStacks);
+            if (homingStacks > 0)
+            {
+                projectileSpeed *= Mathf.Pow(Mathf.Max(0f,
+                    tuning.HomingProjectileSpeedMultiplier), homingStacks);
+            }
             if (grenadeLauncherStacks > 0)
             {
                 // The conversion happens once; additional stacks shape the arc

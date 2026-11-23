@@ -10,9 +10,9 @@ MonoBehaviour:
   m_DisplayName: Gravity Well
   m_Description: Explosions pull affected players toward their centre before dealing damage. Pull force increases per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 2
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 3
   m_Kind: 34
   m_AllowedTargets: 3
-  m_ValuePerStack: 8
+  m_ValuePerStack: 6

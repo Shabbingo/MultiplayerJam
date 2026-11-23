@@ -16,14 +16,14 @@ MonoBehaviour:
   m_DisplayName: Heavy Footed
   m_Description: Landing after falling three metres while large launches players
     within four metres and deals 50 damage per stack within one metre. Large movement
-    speed halves per stack.
+    speed is reduced by 25% per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 4
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 3
   m_Kind: 32
   m_AllowedTargets: 4
-  m_ValuePerStack: 100
+  m_ValuePerStack: 50
   m_EffectDurationSeconds: 0
   m_EffectRadiusMetres: 4
   m_SecondaryEffectRadiusMetres: 1
@@ -31,7 +31,7 @@ MonoBehaviour:
   m_AreaDamagePerStack: 0
   m_BaseDamageMultiplier: 1
   m_FireIntervalMultiplierPerStack: 1
-  m_MovementSpeedMultiplierPerStack: 0.5
+  m_MovementSpeedMultiplierPerStack: 0.75
   m_IncomingDamageMultiplierPerStack: 1
   m_ReloadTimeMultiplierPerStack: 1
   m_MinimumReloadMultiplier: 0.25

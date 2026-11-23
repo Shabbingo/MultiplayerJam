@@ -10,11 +10,11 @@ MonoBehaviour:
   m_DisplayName: Scatter Weapon
   m_Description: Converts the selected hand to a short-range shotgun and reduces its magazine by one.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 1
   m_Kind: 7
   m_AllowedTargets: 3
-  m_ValuePerStack: 10
+  m_ValuePerStack: 6
   m_MagazineDeltaPerStack: -1
   m_ScatterHalfAngleDegrees: 7.5

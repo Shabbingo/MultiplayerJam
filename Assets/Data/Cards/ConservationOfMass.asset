@@ -18,14 +18,14 @@ MonoBehaviour:
     and deals 10 damage per stack, whether they are grounded or airborne. Cooldown
     is ten seconds.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 3
   m_Kind: 31
   m_AllowedTargets: 4
   m_ValuePerStack: 30
   m_EffectDurationSeconds: 10
-  m_EffectRadiusMetres: 7
+  m_EffectRadiusMetres: 4
   m_SecondaryEffectRadiusMetres: 0
   m_DamagePercentPerStack: 0
   m_AreaDamagePerStack: 10

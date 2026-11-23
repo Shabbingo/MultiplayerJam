@@ -17,12 +17,12 @@ MonoBehaviour:
   m_Description: Bullets from the selected hand grow larger and deal more damage over distance.
     Large shots may clip walls.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 2
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 2
   m_Kind: 16
   m_AllowedTargets: 3
-  m_ValuePerStack: 0.01
+  m_ValuePerStack: 0.0075
   m_EffectDurationSeconds: 0
   m_EffectRadiusMetres: 0
   m_SecondaryEffectRadiusMetres: 0

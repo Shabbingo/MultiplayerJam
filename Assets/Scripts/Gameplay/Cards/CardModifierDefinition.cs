@@ -28,6 +28,13 @@ namespace Unity.MP_FPS.Cards
         Wildcard
     }
 
+    public enum CardRarity : byte
+    {
+        Common = 1,
+        Rare = 2,
+        Epic = 3
+    }
+
     public enum CardModifierKind : byte
     {
         DamagePercent,
@@ -80,7 +87,7 @@ namespace Unity.MP_FPS.Cards
         [SerializeField] private Sprite m_Icon;
 
         [Header("Drafting")]
-        [SerializeField, Range(1, 5)] private int m_StrengthScore = 1;
+        [SerializeField] private CardRarity m_Rarity = CardRarity.Common;
         [SerializeField, Min(0.01f)] private float m_BaseOfferWeight = 1f;
         [SerializeField] private CardCategory m_Category = CardCategory.Unclassified;
 
@@ -137,7 +144,13 @@ namespace Unity.MP_FPS.Cards
         public string DisplayName => m_DisplayName;
         public string Description => m_Description;
         public Sprite Icon => m_Icon;
-        public int StrengthScore => m_StrengthScore;
+        public CardRarity Rarity => m_Rarity;
+        public int DraftPointCost => m_Rarity switch
+        {
+            CardRarity.Rare => 2,
+            CardRarity.Epic => 3,
+            _ => 1
+        };
         public float BaseOfferWeight => m_BaseOfferWeight;
         public CardCategory Category => m_Category;
         public string CategoryDisplayName => m_Category switch
@@ -191,7 +204,8 @@ namespace Unity.MP_FPS.Cards
         private void OnValidate()
         {
             m_CardId = Mathf.Max(1, m_CardId);
-            m_StrengthScore = Mathf.Clamp(m_StrengthScore, 1, 5);
+            if (!System.Enum.IsDefined(typeof(CardRarity), m_Rarity))
+                m_Rarity = CardRarity.Common;
             m_BaseOfferWeight = Mathf.Max(0.01f, m_BaseOfferWeight);
             m_EffectDurationSeconds = Mathf.Max(0f, m_EffectDurationSeconds);
             m_EffectRadiusMetres = Mathf.Max(0f, m_EffectRadiusMetres);
@@ -227,8 +241,7 @@ namespace Unity.MP_FPS.Cards
             m_DamageReductionPercent = Mathf.Clamp01(m_DamageReductionPercent);
             m_TeleportFreezeSeconds = Mathf.Max(0f, m_TeleportFreezeSeconds);
 
-            // Weapon modifiers are always assigned to exactly one hand. The draft
-            // decides which hand is legal for the current round.
+            // Weapon modifiers are assigned to one hand chosen by the player.
             if (m_Kind is CardModifierKind.BulletSize or
                 CardModifierKind.BulletSpeed or
                 CardModifierKind.BulletGrowth)

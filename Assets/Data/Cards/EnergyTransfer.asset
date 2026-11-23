@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 18
   m_DisplayName: Energy Transfer
-  m_Description: A successful reflect heals you for 50% of the incoming damage.
+  m_Description: A successful reflect heals you for 35% of the incoming damage per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 3
   m_Kind: 20
   m_AllowedTargets: 4
-  m_ValuePerStack: 0.5
+  m_ValuePerStack: 0.35

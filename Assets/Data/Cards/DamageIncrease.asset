@@ -8,12 +8,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 1
   m_DisplayName: Bounce
-  m_Description: Projectiles from the selected hand bounce once and can return to hit you.
+  m_Description: Projectiles from the selected hand bounce once at 80% speed and can return to hit you.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 4
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 1
   m_Kind: 12
   m_AllowedTargets: 3
   m_ValuePerStack: 1
-  m_BounceVelocityRetention: 1
+  m_BounceVelocityRetention: 0.8

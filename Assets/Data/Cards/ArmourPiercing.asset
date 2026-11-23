@@ -8,12 +8,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 25
   m_DisplayName: Armour Piercing
-  m_Description: Projectiles pass through one wall per stack. Each wall passed reduces that shot's remaining damage by 60%.
+  m_Description: Projectiles pass through one wall per stack. Each wall passed reduces that shot's remaining damage by 50%.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 1
   m_Kind: 27
   m_AllowedTargets: 3
   m_ValuePerStack: 1
-  m_BaseDamageMultiplier: 0.4
+  m_BaseDamageMultiplier: 0.5

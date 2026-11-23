@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 34
   m_DisplayName: Blood Reload
-  m_Description: Reload the selected hand instantly by sacrificing 5% maximum health, never dropping below one health. Extra stacks divide the health cost.
+  m_Description: Reload the selected hand instantly by sacrificing 8% maximum health, never dropping below one health. Extra stacks divide the health cost.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 3
   m_Kind: 36
   m_AllowedTargets: 3
-  m_ValuePerStack: 0.05
+  m_ValuePerStack: 0.08

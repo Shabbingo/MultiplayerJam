@@ -8,11 +8,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unity.MP_FPS.Cards.CardModifierDefinition
   m_CardId: 27
   m_DisplayName: More Health
-  m_Description: Increases maximum health in every size state by 10% per stack.
+  m_Description: Increases maximum health in every size state by 15% per stack.
   m_Icon: {fileID: 0}
-  m_StrengthScore: 3
+  m_Rarity: 2
   m_BaseOfferWeight: 1
   m_Category: 4
   m_Kind: 29
   m_AllowedTargets: 4
-  m_ValuePerStack: 0.1
+  m_ValuePerStack: 0.15
