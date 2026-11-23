@@ -169,8 +169,13 @@ namespace Unity.MP_FPS.UI
                 $"ROUND {manager.CurrentRound} — FIRST TO {manager.RoundWinsToWin} WINS";
             if (manager.IsDrafting)
             {
-                if (!_cursorReleasedForDraft)
+                if (!_cursorReleasedForDraft ||
+                    UnityEngine.Cursor.lockState != CursorLockMode.None ||
+                    !UnityEngine.Cursor.visible)
                 {
+                    // Reassert ownership because the respawn/spectator UI runs in
+                    // LateUpdate and may have changed cursor state during the frame
+                    // a late joiner receives their first catch-up offer.
                     Utils.SetCursorVisible(true);
                     _cursorReleasedForDraft = true;
                 }

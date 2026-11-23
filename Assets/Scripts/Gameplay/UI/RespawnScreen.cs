@@ -122,12 +122,15 @@ namespace Unity.MP_FPS.UI
                 return;
             }
 
-            HideLobby(true);
+            bool draftUiOwnsOverlay = roundManager != null &&
+                                       roundManager.IsDrafting;
+            // A late joiner can transition directly from the lobby/waiting UI into
+            // a private catch-up draft. Do not let the respawn screen relock the
+            // cursor after the draft UI has released it for card selection.
+            HideLobby(!draftUiOwnsOverlay);
 
             CachePlayerCameraPose();
             bool isSpectating = UpdateSpectatorCamera();
-            bool draftUiOwnsOverlay = roundManager != null &&
-                                      roundManager.IsDrafting;
             if (!ClientRespawnState.IsRespawning && !isSpectating)
             {
                 m_IsRespawning = false;
