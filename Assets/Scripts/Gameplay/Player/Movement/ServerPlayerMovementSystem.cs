@@ -1966,8 +1966,9 @@ namespace Unity.MP_FPS
                 return;
             }
 
-            player.UtilityCooldownDuration = playerGhost.UtilityCooldown;
-            player.UtilityCooldownTimeRemaining = playerGhost.UtilityCooldown;
+            float utilityCooldown = playerGhost.ResolveUtilityCooldown(ability);
+            player.UtilityCooldownDuration = utilityCooldown;
+            player.UtilityCooldownTimeRemaining = utilityCooldown;
             player.UtilityEffectTimeRemaining = playerGhost
                 .ResolveUtilityEffectDuration(ability);
             playerGhost.ApplyUtilityActivation(ref player, ability,

@@ -22,7 +22,7 @@ MonoBehaviour:
   m_Category: 4
   m_Kind: 40
   m_AllowedTargets: 4
-  m_ValuePerStack: 6
+  m_ValuePerStack: 3
   m_EffectDurationSeconds: 0
   m_EffectRadiusMetres: 0
   m_SecondaryEffectRadiusMetres: 0
@@ -46,3 +46,4 @@ MonoBehaviour:
   m_BounceVelocityRetention: 1
   m_DamageReductionPercent: 0
   m_TeleportFreezeSeconds: 0.1
+  m_UtilityCooldownSeconds: 0

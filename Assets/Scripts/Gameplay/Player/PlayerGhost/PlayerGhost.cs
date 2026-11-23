@@ -97,11 +97,18 @@ namespace Unity.MP_FPS
         public float UtilityCooldown => Mathf.Max(0.1f, m_UtilityCooldown);
         public float UtilityEffectDuration =>
             Mathf.Max(0.1f, m_UtilityEffectDuration);
-        public float ForwardChargeDamage => Mathf.Max(0f, m_ForwardChargeDamage);
-        public float ForwardChargePushForce => Mathf.Max(0f, m_ForwardChargePushForce);
-        public float ForwardChargeUpForce => Mathf.Max(0f, m_ForwardChargeUpForce);
-        public float ForwardChargeFrontDot => Mathf.Clamp(m_ForwardChargeFrontDot,
-            -1f, 1f);
+        public float ForwardChargeDamage => Mathf.Max(0f,
+            GetUtilityCard(UtilityAbility.ForwardCharge)?.ValuePerStack ??
+            m_ForwardChargeDamage);
+        public float ForwardChargePushForce => Mathf.Max(0f,
+            GetUtilityCard(UtilityAbility.ForwardCharge)?.UtilityPushForce ??
+            m_ForwardChargePushForce);
+        public float ForwardChargeUpForce => Mathf.Max(0f,
+            GetUtilityCard(UtilityAbility.ForwardCharge)?.UtilityUpForce ??
+            m_ForwardChargeUpForce);
+        public float ForwardChargeFrontDot => Mathf.Clamp(
+            GetUtilityCard(UtilityAbility.ForwardCharge)?.UtilityFrontDot ??
+            m_ForwardChargeFrontDot, -1f, 1f);
 
         [Header("Reflect Shield Glow")]
         [SerializeField] private Color m_ReflectGlowColour = new(0.2f, 0.75f, 1f, 1f);
@@ -289,6 +296,12 @@ namespace Unity.MP_FPS
 
         public float ResolveUtilityEffectDuration(UtilityAbility ability)
         {
+            Cards.CardModifierDefinition card = GetUtilityCard(ability);
+            if (card != null && card.EffectDurationSeconds > 0f)
+            {
+                return card.EffectDurationSeconds;
+            }
+
             return ability switch
             {
                 UtilityAbility.PingScan => Mathf.Max(0.1f,
@@ -301,6 +314,15 @@ namespace Unity.MP_FPS
                     m_SmallDashDuration),
                 _ => 0f
             };
+        }
+
+        public float ResolveUtilityCooldown(UtilityAbility ability)
+        {
+            float overrideSeconds = GetUtilityCard(ability)?.UtilityCooldownSeconds ??
+                                    0f;
+            return overrideSeconds > 0f
+                ? overrideSeconds
+                : UtilityCooldown;
         }
 
         public bool CanActivateUtility(UtilityAbility ability,
@@ -326,7 +348,9 @@ namespace Unity.MP_FPS
                 out _, out float sizeJumpHeightMultiplier);
             float jumpHeight = Mathf.Max(0f, controllerConsts.JumpHeight) *
                 Mathf.Max(0f, sizeJumpHeightMultiplier) *
-                Mathf.Max(1f, m_MegaJumpHeightMultiplier);
+                Mathf.Max(1f,
+                    GetUtilityCard(UtilityAbility.MegaJump)?.ValuePerStack ??
+                    m_MegaJumpHeightMultiplier);
             player.ControllerState.JumpFallSpeed = math.sqrt(
                 jumpHeight * Mathf.Max(0f, -2f * controllerConsts.Gravity));
             player.ControllerState.PreviousMovementType =
@@ -348,7 +372,9 @@ namespace Unity.MP_FPS
                        UtilityAbility.SmallDash &&
                    player.UtilityEffectTimeRemaining > 0f &&
                    player.SizeState == FirstPersonController.SmallSizeState
-                ? Mathf.Max(1f, m_SmallDashSpeedMultiplier)
+                ? Mathf.Max(1f,
+                    GetUtilityCard(UtilityAbility.SmallDash)?.ValuePerStack ??
+                    m_SmallDashSpeedMultiplier)
                 : 1f;
         }
 
@@ -368,7 +394,31 @@ namespace Unity.MP_FPS
             forward.y = 0f;
             forward = math.normalizesafe(forward, new float3(0f, 0f, 1f));
             player.AccumulatedMovement += forward *
-                Mathf.Max(0f, m_ForwardChargeSpeed) * Mathf.Max(0f, deltaTime);
+                Mathf.Max(0f,
+                    GetUtilityCard(UtilityAbility.ForwardCharge)?
+                        .UtilityForwardSpeed ?? m_ForwardChargeSpeed) *
+                Mathf.Max(0f, deltaTime);
+        }
+
+        private static Cards.CardModifierDefinition GetUtilityCard(
+            UtilityAbility ability)
+        {
+            Cards.CardModifierKind? kind = ability switch
+            {
+                UtilityAbility.ActiveCamo =>
+                    Cards.CardModifierKind.ActiveCamoUtility,
+                UtilityAbility.ForwardCharge =>
+                    Cards.CardModifierKind.ForwardChargeUtility,
+                UtilityAbility.MegaJump =>
+                    Cards.CardModifierKind.MegaJumpUtility,
+                UtilityAbility.SmallDash =>
+                    Cards.CardModifierKind.SmallDashUtility,
+                _ => null
+            };
+            return kind.HasValue
+                ? WeaponManager.Instance?.CardModifierCatalog?.FindByKind(
+                    kind.Value)
+                : null;
         }
 
         public Camera GetPlayerCamera()
@@ -875,14 +925,17 @@ namespace Unity.MP_FPS
             {
                 name = "Runtime Active Camo Mirage Material"
             };
+            Cards.CardModifierDefinition activeCamoCard = GetUtilityCard(
+                UtilityAbility.ActiveCamo);
             m_ActiveCamoMirageMaterial.SetColor("_MirageTint",
-                m_ActiveCamoMirageTint);
+                activeCamoCard?.UtilityMirageTint ?? m_ActiveCamoMirageTint);
             m_ActiveCamoMirageMaterial.SetFloat("_DistortionStrength",
+                activeCamoCard?.UtilityMirageDistortion ??
                 m_ActiveCamoDistortion);
             m_ActiveCamoMirageMaterial.SetFloat("_MirageOpacity",
-                m_ActiveCamoOpacity);
+                activeCamoCard?.UtilityMirageOpacity ?? m_ActiveCamoOpacity);
             m_ActiveCamoMirageMaterial.SetFloat("_WobbleStrength",
-                m_ActiveCamoWobble);
+                activeCamoCard?.UtilityMirageWobble ?? m_ActiveCamoWobble);
             var pipelineAsset = UnityEngine.Rendering.GraphicsSettings
                 .currentRenderPipeline as
                 UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;

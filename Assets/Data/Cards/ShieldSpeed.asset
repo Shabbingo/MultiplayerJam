@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Icon: {fileID: 0}
   m_Rarity: 1
   m_BaseOfferWeight: 1
-  m_Category: 4
+  m_Category: 6
   m_Kind: 21
   m_AllowedTargets: 4
   m_ValuePerStack: 0.3

@@ -17,4 +17,9 @@ MonoBehaviour:
   m_AllowedTargets: 4
   m_ValuePerStack: 1
   m_EffectDurationSeconds: 4
+  m_UtilityCooldownSeconds: 0
+  m_UtilityMirageTint: {r: 0.35, g: 0.85, b: 1, a: 1}
+  m_UtilityMirageDistortion: 0.012
+  m_UtilityMirageOpacity: 0.78
+  m_UtilityMirageWobble: 0.009
 

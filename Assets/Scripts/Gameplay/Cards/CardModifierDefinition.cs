@@ -20,12 +20,14 @@ namespace Unity.MP_FPS.Cards
 
     public enum CardCategory : byte
     {
-        Unclassified,
-        Foundational,
-        BuildAround,
-        Synergy,
-        Utility,
-        Wildcard
+        Unclassified = 0,
+        Foundational = 1,
+        BuildAround = 2,
+        Synergy = 3,
+        Utility = 4,
+        Wildcard = 5,
+        [InspectorName("Shield Effects")] ShieldEffects = 6,
+        [InspectorName("Self Effects")] SelfEffects = 7
     }
 
     public enum CardRarity : byte
@@ -144,6 +146,26 @@ namespace Unity.MP_FPS.Cards
         [SerializeField, Range(0f, 1f)] private float m_DamageReductionPercent;
         [SerializeField, Min(0f)] private float m_TeleportFreezeSeconds = 0.1f;
 
+        [Header("Utility Ability Tuning")]
+        [SerializeField, Min(0f), Tooltip("Optional cooldown override in seconds. Zero uses the player utility cooldown.")]
+        private float m_UtilityCooldownSeconds;
+        [SerializeField, Min(0f), Tooltip("Forward movement speed in metres per second while a charge utility is active.")]
+        private float m_UtilityForwardSpeed = 18f;
+        [SerializeField, Min(0f), Tooltip("Horizontal launch force applied to players hit by a charge utility.")]
+        private float m_UtilityPushForce = 12f;
+        [SerializeField, Min(0f), Tooltip("Upward launch force applied to players hit by a charge utility.")]
+        private float m_UtilityUpForce = 8f;
+        [SerializeField, Range(-1f, 1f), Tooltip("Minimum forward dot product for a charge collision to count as a frontal hit.")]
+        private float m_UtilityFrontDot = 0.35f;
+        [SerializeField, ColorUsage(false, true), Tooltip("Edge tint used by the Active Camo heat-mirage effect.")]
+        private Color m_UtilityMirageTint = new(0.35f, 0.85f, 1f, 1f);
+        [SerializeField, Range(0f, 0.04f), Tooltip("Screen-space refraction strength used by Active Camo.")]
+        private float m_UtilityMirageDistortion = 0.012f;
+        [SerializeField, Range(0.05f, 1f), Tooltip("Visibility of the Active Camo refracted silhouette.")]
+        private float m_UtilityMirageOpacity = 0.78f;
+        [SerializeField, Range(0f, 0.04f), Tooltip("Animated surface wobble in metres used by Active Camo.")]
+        private float m_UtilityMirageWobble = 0.009f;
+
         public int CardId => m_CardId;
         public string DisplayName => m_DisplayName;
         public string Description => m_Description;
@@ -160,6 +182,8 @@ namespace Unity.MP_FPS.Cards
         public string CategoryDisplayName => m_Category switch
         {
             CardCategory.BuildAround => "Build Around",
+            CardCategory.ShieldEffects => "Shield Effects",
+            CardCategory.SelfEffects => "Self Effects",
             CardCategory.Unclassified => "General",
             _ => m_Category.ToString()
         };
@@ -196,6 +220,15 @@ namespace Unity.MP_FPS.Cards
         public float BounceVelocityRetention => m_BounceVelocityRetention;
         public float DamageReductionPercent => m_DamageReductionPercent;
         public float TeleportFreezeSeconds => m_TeleportFreezeSeconds;
+        public float UtilityCooldownSeconds => m_UtilityCooldownSeconds;
+        public float UtilityForwardSpeed => m_UtilityForwardSpeed;
+        public float UtilityPushForce => m_UtilityPushForce;
+        public float UtilityUpForce => m_UtilityUpForce;
+        public float UtilityFrontDot => m_UtilityFrontDot;
+        public Color UtilityMirageTint => m_UtilityMirageTint;
+        public float UtilityMirageDistortion => m_UtilityMirageDistortion;
+        public float UtilityMirageOpacity => m_UtilityMirageOpacity;
+        public float UtilityMirageWobble => m_UtilityMirageWobble;
 
         public bool Allows(ModifierTarget target)
         {
@@ -244,6 +277,17 @@ namespace Unity.MP_FPS.Cards
             m_BounceVelocityRetention = Mathf.Clamp01(m_BounceVelocityRetention);
             m_DamageReductionPercent = Mathf.Clamp01(m_DamageReductionPercent);
             m_TeleportFreezeSeconds = Mathf.Max(0f, m_TeleportFreezeSeconds);
+            m_UtilityCooldownSeconds = Mathf.Max(0f, m_UtilityCooldownSeconds);
+            m_UtilityForwardSpeed = Mathf.Max(0f, m_UtilityForwardSpeed);
+            m_UtilityPushForce = Mathf.Max(0f, m_UtilityPushForce);
+            m_UtilityUpForce = Mathf.Max(0f, m_UtilityUpForce);
+            m_UtilityFrontDot = Mathf.Clamp(m_UtilityFrontDot, -1f, 1f);
+            m_UtilityMirageDistortion = Mathf.Clamp(m_UtilityMirageDistortion,
+                0f, 0.04f);
+            m_UtilityMirageOpacity = Mathf.Clamp(m_UtilityMirageOpacity,
+                0.05f, 1f);
+            m_UtilityMirageWobble = Mathf.Clamp(m_UtilityMirageWobble,
+                0f, 0.04f);
 
             // Weapon modifiers are assigned to one hand chosen by the player.
             if (m_Kind is CardModifierKind.BulletSize or
