@@ -47,6 +47,8 @@ namespace Gameplay.Leaderboard
         private readonly HashSet<int> _waitingForNextRound = new();
         private readonly List<CardModifierDefinition> _currentOffers = new();
         private int _draftIndex;
+        private int _matchDraftSeed;
+        private int _draftOfferSequence;
         private int _activeDraftNetworkId = -1;
         private float _draftSecondsRemaining;
         private float _draftSyncTimer;
@@ -602,6 +604,9 @@ namespace Gameplay.Leaderboard
         private void BeginOpeningDraft(
             DynamicBuffer<PlayerScoreEntry> buffer, bool respawnAllAfterDraft)
         {
+            _matchDraftSeed = Guid.NewGuid().GetHashCode();
+            if (_matchDraftSeed == 0) _matchDraftSeed = 1;
+            _draftOfferSequence = 0;
             _currentRound = 1;
             _phase = RoundPhase.Drafting;
             _isOpeningDraft = true;
@@ -853,12 +858,20 @@ namespace Gameplay.Leaderboard
                 ? 1
                 : Mathf.Max(1, _finishingOrder.Count);
             RoundCardRules rules = GetRules();
+            int ownedHandScore = CardOfferGenerator.CalculateHandScore(catalog,
+                in owned);
+            float averageHandScore = CalculateAverageHandScore(buffer, store,
+                catalog);
+            int offerSequence = ++_draftOfferSequence;
             var generated = CardOfferGenerator.Generate(catalog, in owned,
                 finishingPosition, finishingPlayerCount,
                 rules.CardsPerOffer,
                 rules.OfferPointBudget,
-                (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663) ^
-                (_activeCatchUpPickNumber * 83492791),
+                _matchDraftSeed ^ (_currentRound * 73856093) ^
+                (_activeDraftNetworkId * 19349663) ^
+                (_activeCatchUpPickNumber * 83492791) ^
+                (offerSequence * 1640531513),
+                ownedHandScore, averageHandScore,
                 _currentRound, rules.OpeningHandBiasRounds,
                 rules.OpeningHandWeightMultiplier,
                 rules.OpeningSelfWeightMultiplier);
@@ -876,6 +889,28 @@ namespace Gameplay.Leaderboard
             _draftSyncTimer = 1f;
             _pickRevealTimer = 0f;
             BroadcastCurrentDraftTurn(buffer);
+        }
+
+        private static float CalculateAverageHandScore(
+            DynamicBuffer<PlayerScoreEntry> buffer,
+            PlayerRunModifierStoreSystem store,
+            CardModifierCatalog catalog)
+        {
+            if (store == null || catalog == null || buffer.Length == 0)
+            {
+                return 0f;
+            }
+
+            int totalScore = 0;
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                PlayerModifierStacks playerCards =
+                    store.GetOrCreate(buffer[i].NetworkId);
+                totalScore += CardOfferGenerator.CalculateHandScore(catalog,
+                    in playerCards);
+            }
+
+            return totalScore / (float)buffer.Length;
         }
 
         private void BroadcastCurrentDraftTurn(DynamicBuffer<PlayerScoreEntry> buffer)

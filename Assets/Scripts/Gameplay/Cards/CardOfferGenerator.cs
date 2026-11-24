@@ -14,6 +14,7 @@ namespace Unity.MP_FPS.Cards
         // first players eliminated receive a stronger-card comeback bias.
         private const float GlobalRarityBase = 1.6f;
         private const float PlacementBiasBase = 2f;
+        private const float HandScoreBiasBase = 2f;
 
         public static List<CardModifierDefinition> Generate(
             CardModifierCatalog catalog,
@@ -23,6 +24,8 @@ namespace Unity.MP_FPS.Cards
             int offerCount,
             int offerPointBudget,
             int seed,
+            int ownedHandScore,
+            float averageHandScore,
             int roundNumber = 1,
             int openingHandBiasRounds = 2,
             float openingHandWeightMultiplier = 3f,
@@ -58,7 +61,8 @@ namespace Unity.MP_FPS.Cards
 
                 int selectedIndex = DrawWeightedIndex(feasibleCandidates,
                     finishingPosition,
-                    playerCount, roundNumber, openingHandBiasRounds,
+                    playerCount, ownedHandScore, averageHandScore,
+                    roundNumber, openingHandBiasRounds,
                     openingHandWeightMultiplier,
                     openingSelfWeightMultiplier, random);
                 CardModifierDefinition selected = feasibleCandidates[selectedIndex];
@@ -76,6 +80,35 @@ namespace Unity.MP_FPS.Cards
             return IsAvailable(card, ModifierTarget.LeftHand, in owned) ||
                    IsAvailable(card, ModifierTarget.RightHand, in owned) ||
                    IsAvailable(card, ModifierTarget.Self, in owned);
+        }
+
+        public static int CalculateHandScore(CardModifierCatalog catalog,
+            in PlayerModifierStacks owned)
+        {
+            if (catalog == null) return 0;
+
+            int score = 0;
+            foreach (CardModifierDefinition card in catalog.Cards)
+            {
+                if (card == null) continue;
+                if (card.Allows(ModifierTarget.LeftHand))
+                {
+                    score += owned.GetStacks(card.Kind,
+                        ModifierTarget.LeftHand) * card.DraftPointCost;
+                }
+                if (card.Allows(ModifierTarget.RightHand))
+                {
+                    score += owned.GetStacks(card.Kind,
+                        ModifierTarget.RightHand) * card.DraftPointCost;
+                }
+                if (card.Allows(ModifierTarget.Self))
+                {
+                    score += owned.GetStacks(card.Kind,
+                        ModifierTarget.Self) * card.DraftPointCost;
+                }
+            }
+
+            return score;
         }
 
         private static bool IsAvailable(CardModifierDefinition card,
@@ -152,6 +185,8 @@ namespace Unity.MP_FPS.Cards
             IReadOnlyList<CardModifierDefinition> candidates,
             int finishingPosition,
             int playerCount,
+            int ownedHandScore,
+            float averageHandScore,
             int roundNumber,
             int openingHandBiasRounds,
             float openingHandWeightMultiplier,
@@ -163,10 +198,14 @@ namespace Unity.MP_FPS.Cards
                 : Mathf.Clamp01(finishingPosition / (float)(playerCount - 1));
             // +1 for first eliminated, -1 for the round winner.
             float comebackBias = 1f - placement01 * 2f;
+            float handScoreBias = Mathf.Clamp(
+                (averageHandScore - ownedHandScore) /
+                Mathf.Max(1f, averageHandScore), -1f, 1f);
             double totalWeight = 0d;
             for (int i = 0; i < candidates.Count; i++)
             {
                 totalWeight += GetWeight(candidates[i], comebackBias,
+                    handScoreBias,
                     roundNumber, openingHandBiasRounds,
                     openingHandWeightMultiplier,
                     openingSelfWeightMultiplier);
@@ -175,7 +214,8 @@ namespace Unity.MP_FPS.Cards
             double roll = random.NextDouble() * totalWeight;
             for (int i = 0; i < candidates.Count; i++)
             {
-                roll -= GetWeight(candidates[i], comebackBias, roundNumber,
+                roll -= GetWeight(candidates[i], comebackBias, handScoreBias,
+                    roundNumber,
                     openingHandBiasRounds, openingHandWeightMultiplier,
                     openingSelfWeightMultiplier);
                 if (roll <= 0d)
@@ -189,6 +229,7 @@ namespace Unity.MP_FPS.Cards
 
         private static double GetWeight(CardModifierDefinition card,
             float comebackBias,
+            float handScoreBias,
             int roundNumber,
             int openingHandBiasRounds,
             float openingHandWeightMultiplier,
@@ -198,11 +239,13 @@ namespace Unity.MP_FPS.Cards
             double rarityWeight = Math.Pow(GlobalRarityBase, -centeredRarity);
             double placementWeight = Math.Pow(
                 PlacementBiasBase, comebackBias * centeredRarity);
+            double handScoreWeight = Math.Pow(
+                HandScoreBiasBase, handScoreBias * centeredRarity);
             double openingTargetWeight = GetOpeningTargetWeight(card, roundNumber,
                 openingHandBiasRounds, openingHandWeightMultiplier,
                 openingSelfWeightMultiplier);
             return card.BaseOfferWeight * rarityWeight * placementWeight *
-                   openingTargetWeight;
+                   handScoreWeight * openingTargetWeight;
         }
 
         private static double GetOpeningTargetWeight(
