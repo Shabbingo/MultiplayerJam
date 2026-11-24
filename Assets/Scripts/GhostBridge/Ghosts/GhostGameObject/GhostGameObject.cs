@@ -942,6 +942,22 @@ public class GhostGameObject : MonoBehaviour
         }
     }
 
+    public float GetCurrentSimulationFixedTimeStep()
+    {
+        if (UpdateEntityCommandBuffer.IsCreated && UpdateInterface != null)
+        {
+            return UpdateInterface.GetSimulationFixedTimeStep();
+        }
+
+        if (TryReadSingleton<ClientServerTickRate>(out var tickRate))
+        {
+            tickRate.ResolveDefaults();
+            return tickRate.SimulationFixedTimeStep;
+        }
+
+        return 0f;
+    }
+
     public static bool TryFindGhostGameObject(GameObject currentObject, out GhostGameObject ghost)
     {
         ghost = null;

@@ -39,6 +39,7 @@ namespace Unity.MP_FPS
             [GhostField] public int OwnerNetworkId;
             [GhostField] public uint SpawnTick;
             [GhostField] public uint WeaponID;
+            [GhostField] public int PelletIndex;
             [GhostField] public float3 Position;
             [GhostField] public float3 Velocity;
             [GhostField] public byte UsesTrajectory;
@@ -75,15 +76,14 @@ namespace Unity.MP_FPS
             [GhostField] public int WallPenetrations;
             [GhostField] public float WallDamageRetention;
             [GhostField] public float GravityWellPullStrength;
-            [GhostField] public byte IsLobbedProjectile;
-            [GhostField] public float LobUpwardSpeed;
-            [GhostField] public float ProjectileGravity;
         }
 
         public class PredictedProjectileInfo
         {
             public GameObject Instance;
             public uint SpawnTick;
+            public uint WeaponId;
+            public int PelletIndex;
         }
 
         private void Awake()
@@ -118,6 +118,11 @@ namespace Unity.MP_FPS
         private float _localTime;
         private uint _weaponId;
         private uint _lastServerMotionRevision;
+        private bool _loggedServerTrajectoryAcceleration;
+        private bool _loggedServerTrajectoryTimingFailure;
+        private int _debugPelletIndex = -1;
+        private int _debugTrajectorySamplesRemaining;
+        private bool _debugServerSamplesInitialized;
         private Vector3 _guidedTarget;
         private bool _hasGuidedTarget;
         private bool _runtimeHoming;
@@ -131,9 +136,7 @@ namespace Unity.MP_FPS
         private float _bounceVelocityRetention = 1f;
         private int _remainingWallPenetrations;
         private float _wallDamageRetention = 0.4f;
-        private bool _runtimeLobbedProjectile;
-        private float _runtimeLobUpwardSpeed;
-        private float _runtimeProjectileGravity;
+        private float3 _runtimeAcceleration;
         private ProjectileTrajectory _trajectory;
         private bool _trajectoryInitialized;
         private uint _predictedTrajectoryStartTick;
@@ -157,6 +160,11 @@ namespace Unity.MP_FPS
             _hasGuidedTarget = isActive;
         }
 
+        public void SetDebugPelletIndex(int pelletIndex)
+        {
+            _debugPelletIndex = pelletIndex;
+        }
+
         public void SetRuntimeMotion(bool isHoming, float homingTurnSpeed)
         {
             _runtimeHoming = isHoming;
@@ -167,9 +175,7 @@ namespace Unity.MP_FPS
             bool growsOverDistance, int maxBounces, float growthPerMetre,
             float bounceVelocityRetention, int wallPenetrations = 0,
             float wallDamageRetention = 0.4f,
-            bool isLobbedProjectile = false,
-            float lobUpwardSpeed = 0f,
-            float projectileGravity = 0f)
+            float3 trajectoryAcceleration = default)
         {
             _runtimeProjectileSpeed = Mathf.Max(0f, speed);
             _runtimeProjectileScale = Mathf.Max(0.1f, scale);
@@ -179,30 +185,21 @@ namespace Unity.MP_FPS
             _bounceVelocityRetention = Mathf.Clamp01(bounceVelocityRetention);
             _remainingWallPenetrations = Mathf.Max(0, wallPenetrations);
             _wallDamageRetention = Mathf.Clamp01(wallDamageRetention);
-            _runtimeLobbedProjectile = isLobbedProjectile;
-            _runtimeLobUpwardSpeed = Mathf.Max(0f, lobUpwardSpeed);
-            _runtimeProjectileGravity = Mathf.Max(0f, projectileGravity);
+            _runtimeAcceleration = trajectoryAcceleration;
             transform.localScale = Vector3.one * _runtimeProjectileScale;
         }
 
         public void SetPredictedTrajectory(uint startTick, Vector3 origin,
-            Quaternion rotation, float gravityWellPullStrength = 0f)
+            float3 initialVelocity, float3 acceleration,
+            float gravityWellPullStrength = 0f)
         {
-            if (!SupportsTrajectory(_runtimeHoming, _runtimeLobbedProjectile,
-                    _runtimeMaxBounces, _remainingWallPenetrations,
+            if (!SupportsTrajectory(_runtimeHoming,
+                    _remainingWallPenetrations,
                     gravityWellPullStrength))
             {
                 return;
             }
 
-            float launchSpeed = Mathf.Max(0f, _runtimeProjectileSpeed);
-            Vector3 initialVelocity = rotation * Vector3.forward * launchSpeed;
-            float3 acceleration = float3.zero;
-            if (_runtimeLobbedProjectile)
-            {
-                initialVelocity += Vector3.up * _runtimeLobUpwardSpeed;
-                acceleration = new float3(0f, -_runtimeProjectileGravity, 0f);
-            }
             _trajectory = new ProjectileTrajectory(origin, initialVelocity,
                 acceleration);
             _predictedTrajectoryStartTick = startTick;
@@ -211,10 +208,14 @@ namespace Unity.MP_FPS
             _trajectoryInitialized = true;
             _velocity = _trajectory.InitialVelocity;
             _motionInitialized = true;
+            if (_debugPelletIndex == 0 && math.lengthsq(acceleration) > 0.000001f)
+            {
+                _debugTrajectorySamplesRemaining = 6;
+            }
         }
 
         public static bool SupportsTrajectory(bool isHoming,
-            bool isLobbedProjectile, int maxBounces, int wallPenetrations,
+            int wallPenetrations,
             float gravityWellPullStrength)
         {
             return !isHoming && wallPenetrations <= 0 &&
@@ -240,11 +241,7 @@ namespace Unity.MP_FPS
                 projectileData.WallPenetrations);
             _wallDamageRetention = Mathf.Clamp01(
                 projectileData.WallDamageRetention);
-            _runtimeLobbedProjectile = projectileData.IsLobbedProjectile != 0;
-            _runtimeLobUpwardSpeed = Mathf.Max(0f,
-                projectileData.LobUpwardSpeed);
-            _runtimeProjectileGravity = Mathf.Max(0f,
-                projectileData.ProjectileGravity);
+            _runtimeAcceleration = projectileData.TrajectoryAcceleration;
             transform.localScale = Vector3.one * _runtimeProjectileScale;
             ApplyTrajectoryState(projectileData);
             ApplyServerMotionState(projectileData);
@@ -259,11 +256,34 @@ namespace Unity.MP_FPS
             }
 
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
+            _runtimeAcceleration = projectileData.TrajectoryAcceleration;
+            if (!_debugServerSamplesInitialized)
+            {
+                _debugServerSamplesInitialized = true;
+                _debugPelletIndex = projectileData.PelletIndex;
+                if (_debugPelletIndex == 0 &&
+                    math.lengthsq(projectileData.TrajectoryAcceleration) > 0.000001f)
+                {
+                    _debugTrajectorySamplesRemaining = 6;
+                }
+            }
+            if (!_loggedServerTrajectoryAcceleration &&
+                (projectileData.HasExplosion != 0 ||
+                 math.lengthsq(projectileData.TrajectoryAcceleration) > 0.000001f))
+            {
+                _loggedServerTrajectoryAcceleration = true;
+                // Projectile trajectory simulation diagnostic disabled.
+            }
             SetRuntimeMotion(projectileData.IsHoming != 0,
                 projectileData.HomingTurnSpeed);
-            if (projectileData.UsesTrajectory != 0 &&
-                SimulateServerTrajectory(weaponData, projectileData))
+            if (projectileData.UsesTrajectory != 0)
             {
+                if (!SimulateServerTrajectory(weaponData, projectileData) &&
+                    !_loggedServerTrajectoryTimingFailure)
+                {
+                    _loggedServerTrajectoryTimingFailure = true;
+                    // Projectile trajectory timing diagnostic disabled.
+                }
                 return;
             }
             EnsureMotionInitialized(weaponData);
@@ -340,6 +360,7 @@ namespace Unity.MP_FPS
                 transform.localScale = Vector3.one * _runtimeProjectileScale *
                                        (1f + _distanceTravelled * _growthPerMetre);
             PublishServerMotionState();
+
             if (_localTime > weaponData.ProjectileFuseTime)
             {
                 DetonateFromFuse(weaponData);
@@ -358,11 +379,7 @@ namespace Unity.MP_FPS
                 ? _runtimeProjectileSpeed
                 : weaponData.ProjectileSpeed;
             _velocity = transform.forward * launchSpeed;
-            if (IsLobbedProjectile(weaponData))
-            {
-                _velocity += Vector3.up * GetLobUpwardSpeed(weaponData);
-            }
-            else if (_runtimeHoming)
+            if (_runtimeHoming)
             {
                 _velocity += Vector3.up * weaponData.GuidedLaunchUpwardSpeed;
             }
@@ -397,30 +414,7 @@ namespace Unity.MP_FPS
                     _velocity = steeredDirection * speed;
                 }
             }
-            if (IsLobbedProjectile(weaponData))
-            {
-                _velocity += Vector3.down *
-                    (GetProjectileGravity(weaponData) * deltaTime);
-            }
-        }
-
-        private bool IsLobbedProjectile(WeaponData weaponData)
-        {
-            return _runtimeLobbedProjectile || weaponData.IsLobbedProjectile;
-        }
-
-        private float GetLobUpwardSpeed(WeaponData weaponData)
-        {
-            return _runtimeLobbedProjectile
-                ? _runtimeLobUpwardSpeed
-                : Mathf.Max(0f, weaponData.LobUpwardSpeed);
-        }
-
-        private float GetProjectileGravity(WeaponData weaponData)
-        {
-            return _runtimeLobbedProjectile
-                ? _runtimeProjectileGravity
-                : Mathf.Max(0f, weaponData.ProjectileGravity);
+            _velocity += (Vector3)_runtimeAcceleration * deltaTime;
         }
 
         private bool HasClearLineOfSight(Vector3 toTarget)
@@ -552,6 +546,18 @@ namespace Unity.MP_FPS
                                        (1f + _distanceTravelled * _growthPerMetre);
             }
 
+            PublishServerMotionState();
+
+            if (_debugPelletIndex == 0 &&
+                _debugTrajectorySamplesRemaining > 0)
+            {
+                int sample = 7 - _debugTrajectorySamplesRemaining;
+                float horizontalSpeed = new Vector2(_velocity.x,
+                    _velocity.z).magnitude;
+                // Projectile server speed diagnostic disabled.
+                _debugTrajectorySamplesRemaining--;
+            }
+
             if (_localTime > weaponData.ProjectileFuseTime)
             {
                 DetonateFromFuse(weaponData);
@@ -669,11 +675,8 @@ namespace Unity.MP_FPS
                     _predictedTrajectoryStartTick += wholeTickOffset;
                 }
 
-                float3 acceleration = IsLobbedProjectile(weaponData)
-                    ? new float3(0f, -GetProjectileGravity(weaponData), 0f)
-                    : float3.zero;
                 _trajectory = new ProjectileTrajectory(bounceOrigin,
-                    bounceVelocity, acceleration);
+                    bounceVelocity, _trajectory.Acceleration);
                 _trajectoryAgeOffset = impactAge;
                 _trajectoryDistanceOffset = impactDistance;
                 _bounceCount++;
@@ -701,6 +704,16 @@ namespace Unity.MP_FPS
                                        (1f + _distanceTravelled * _growthPerMetre);
             }
 
+            if (_debugPelletIndex == 0 &&
+                _debugTrajectorySamplesRemaining > 0)
+            {
+                int sample = 7 - _debugTrajectorySamplesRemaining;
+                float horizontalSpeed = new Vector2(_velocity.x,
+                    _velocity.z).magnitude;
+                // Projectile visual speed diagnostic disabled.
+                _debugTrajectorySamplesRemaining--;
+            }
+
             return true;
         }
 
@@ -721,6 +734,7 @@ namespace Unity.MP_FPS
                 projectileData.TrajectoryOrigin,
                 projectileData.TrajectoryInitialVelocity,
                 projectileData.TrajectoryAcceleration);
+            _runtimeAcceleration = projectileData.TrajectoryAcceleration;
             _predictedTrajectoryStartTick = projectileData.TrajectoryStartTick;
             _trajectoryAgeOffset = projectileData.TrajectoryAgeOffset;
             _trajectoryDistanceOffset = projectileData.TrajectoryDistanceOffset;
@@ -748,22 +762,11 @@ namespace Unity.MP_FPS
                 return false;
             }
 
-            ClientServerTickRate tickRate;
-            if (GhostGameObject != null && GhostGameObject.IsGhostLinked())
+            using EntityQuery query = world.EntityManager.CreateEntityQuery(
+                ComponentType.ReadOnly<ClientServerTickRate>());
+            if (!query.TryGetSingleton(out ClientServerTickRate tickRate))
             {
-                if (!GhostGameObject.TryReadSingleton(out tickRate))
-                {
-                    return false;
-                }
-            }
-            else
-            {
-                using EntityQuery query = world.EntityManager.CreateEntityQuery(
-                    ComponentType.ReadOnly<ClientServerTickRate>());
-                if (!query.TryGetSingleton(out tickRate))
-                {
-                    return false;
-                }
+                return false;
             }
 
             tickRate.ResolveDefaults();
@@ -782,6 +785,39 @@ namespace Unity.MP_FPS
             if (world == null || !world.IsCreated)
             {
                 return false;
+            }
+
+            // Server projectile updates already run inside the Ghost bridge update
+            // loop, which caches the authoritative server tick. Use that tick rather
+            // than asking the lifetime system for NetworkTime again; that lookup can
+            // fail during this callback and previously sent trajectories through the
+            // legacy straight-line simulation.
+            if (GhostGameObject != null &&
+                GhostGameObject.IsGhostLinked() &&
+                GhostGameObject.Role == MultiplayerRole.Server)
+            {
+                float serverFixedTimeStep =
+                    GhostGameObject.GetCurrentSimulationFixedTimeStep();
+                if (serverFixedTimeStep <= 0f)
+                {
+                    return false;
+                }
+
+                uint serverTick = GhostGameObject.GetCurrentTick();
+                float serverTickFraction = 1f;
+                using EntityQuery serverTimeQuery = world.EntityManager
+                    .CreateEntityQuery(ComponentType.ReadOnly<NetworkTime>());
+                if (serverTimeQuery.TryGetSingleton(out NetworkTime serverTime))
+                {
+                    serverTickFraction = serverTime.ServerTickFraction;
+                }
+
+                float serverStartTickFraction = Mathf.Repeat(
+                    _trajectoryAgeOffset / serverFixedTimeStep, 1f);
+                elapsedSeconds = ProjectileTrajectory.ElapsedSeconds(
+                    serverTick, serverTickFraction, startTick,
+                    serverStartTickFraction, serverFixedTimeStep);
+                return true;
             }
 
             NetworkTime networkTime;
@@ -836,7 +872,8 @@ namespace Unity.MP_FPS
             _collisionGraceTimer = Mathf.Max(0f, _collisionGraceTimer - deltaTime);
             Vector3 displacement = _velocity * deltaTime;
 
-            if ((IsLobbedProjectile(weaponData) || _runtimeMaxBounces > 0) &&
+            if ((math.lengthsq(_runtimeAcceleration) > 0.000001f ||
+                 _runtimeMaxBounces > 0) &&
                 _collisionGraceTimer <= 0f &&
                 displacement.sqrMagnitude > 0.000001f &&
                 UnityEngine.Physics.SphereCast(
@@ -1169,17 +1206,13 @@ namespace Unity.MP_FPS
                                        wholeTickOffset;
                 }
             }
-            float3 acceleration = IsLobbedProjectile(weaponData)
-                ? new float3(0f, -GetProjectileGravity(weaponData), 0f)
-                : float3.zero;
-
             projectileData.Position = transform.position;
             projectileData.Velocity = _velocity;
             projectileData.BounceCount = _bounceCount;
             projectileData.Age = _localTime;
             projectileData.TrajectoryOrigin = transform.position;
             projectileData.TrajectoryInitialVelocity = _velocity;
-            projectileData.TrajectoryAcceleration = acceleration;
+            projectileData.TrajectoryAcceleration = _trajectory.Acceleration;
             projectileData.TrajectoryStartTick = segmentStartTick;
             projectileData.TrajectoryAgeOffset = _localTime;
             projectileData.TrajectoryDistanceOffset = _distanceTravelled;

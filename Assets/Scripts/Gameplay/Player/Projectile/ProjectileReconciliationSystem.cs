@@ -46,6 +46,12 @@ namespace Unity.MP_FPS
                 // Find the closest predicted projectile within the window.
                 foreach (var prediction in Projectile.PredictedProjectiles)
                 {
+                    if (prediction.WeaponId != projectileData.ValueRO.WeaponID ||
+                        prediction.PelletIndex != projectileData.ValueRO.PelletIndex)
+                    {
+                        continue;
+                    }
+
                     // Use absolute difference safely
                     uint tickDifference = (uint)Math.Abs((int)prediction.SpawnTick - (int)serverInputTick);
                     if (tickDifference < smallestTickDifference)

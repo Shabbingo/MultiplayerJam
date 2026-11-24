@@ -350,14 +350,9 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 int localNetworkId = EntityManager.HasComponent<GhostOwner>(entity)
                                     ? EntityManager.GetComponentData<GhostOwner>(entity).NetworkId
                                     : 0;
-                                Vector3 cosmeticDirection = runtimeProfile.PelletCount > 1
-                                    ? Unity.MP_FPS.Cards.WeaponModifierResolver.ApplyScatterDirection(
-                                        aimDirection,
-                                        runtimeProfile.ScatterHalfAngleDegrees,
-                                        shotTick,
-                                        localNetworkId,
-                                        0)
-                                    : (Vector3)aimDirection;
+                                Vector3 cosmeticDirection = ProjectileShotBuilder.ResolvePelletDirection(
+                                    in runtimeProfile, aimDirection, shotTick,
+                                    localNetworkId, 0);
                                 // Match the server's deterministic hand origin exactly so predicted
                                 // projectiles reconcile without a sideways correction.
                                 float3 handShotOffset = playerGhost.GetScaledHandShotOffset(
@@ -367,6 +362,17 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 shotOriginPosition = playerGhost.ApplyShotOriginClearance(
                                     shotOriginPosition,
                                     abilityWeaponId);
+                                if (input.HasProjectileLaunchRequest != 0 &&
+                                    math.all(math.isfinite(
+                                        input.ProjectileLaunchPosition)) &&
+                                    math.all(math.isfinite(
+                                        input.ProjectileAimDirection)) &&
+                                    math.lengthsq(input.ProjectileAimDirection) > 0.000001f)
+                                {
+                                    shotOriginPosition = input.ProjectileLaunchPosition;
+                                    aimDirection = math.normalize(
+                                        input.ProjectileAimDirection);
+                                }
                                 controllerLink.Controller.ApplyAirborneShotThrust(
                                     ref predictedPlayer.ValueRW, aimDirection);
                                     
@@ -392,50 +398,76 @@ public partial class PlayerPredictionSystem : SingletonSystem<PlayerPredictionSy
                                 }
                                 else if (weaponData.Type == WeaponType.Projectile)
                                 {
-                                    Vector3 targetPoint;
+                                    uint sourceWeaponId = WeaponManager.Instance.GetWeaponId(
+                                        runtimeProfile.SourceProfile, abilityWeaponId);
+                                    int pelletCount = Mathf.Max(1, runtimeProfile.PelletCount);
                                     float targetRange = runtimeProfile.IsHoming
                                         ? weaponData.GuidedTargetRange
                                         : 1000f;
-                                    if (Physics.Raycast(eyePosition, cosmeticDirection, out RaycastHit aimHit,
-                                            targetRange, s_ProjectileTargetLayerMask))
-                                    {
-                                        targetPoint = aimHit.point;
-                                    }
-                                    else
-                                    {
-                                        targetPoint = eyePosition + targetRange *
-                                            (float3)cosmeticDirection;
-                                    }
 
-                                    var directionToTarget = runtimeProfile.IsLobbedProjectile
-                                        ? cosmeticDirection
-                                        : (targetPoint - (Vector3)shotOriginPosition).normalized;
-                                    var spawnRotation = Quaternion.LookRotation(directionToTarget);
+                                    for (int pelletIndex = 0; pelletIndex < pelletCount; pelletIndex++)
+                                    {
+                                        Vector3 pelletDirection = ProjectileShotBuilder
+                                            .ResolvePelletDirection(in runtimeProfile, aimDirection,
+                                                shotTick, localNetworkId, pelletIndex);
+                                        Vector3 targetPoint;
+                                        if (Physics.Raycast(eyePosition, pelletDirection,
+                                                out RaycastHit aimHit, targetRange,
+                                                s_ProjectileTargetLayerMask))
+                                        {
+                                            targetPoint = aimHit.point;
+                                        }
+                                        else
+                                        {
+                                            targetPoint = eyePosition +
+                                                (float3)pelletDirection * targetRange;
+                                        }
 
-                                    uint sourceWeaponId = WeaponManager.Instance.GetWeaponId(
-                                        runtimeProfile.SourceProfile,
-                                        abilityWeaponId);
-                                    controllerLink.Controller.SpawnPredictedProjectile(
-                                        shotTick,
-                                        sourceWeaponId,
-                                        shotOriginPosition,
-                                        spawnRotation,
-                                        targetPoint,
-                                        runtimeProfile.IsHoming,
-                                        runtimeProfile.HomingTurnSpeed,
-                                        runtimeProfile.ProjectileSpeed,
-                                        shotOutput.ProjectileScale,
-                                        runtimeProfile.GrowsOverDistance,
-                                        runtimeProfile.MaxBounces,
-                                        runtimeProfile.GrowthPerMetre,
-                                        runtimeProfile.BounceVelocityRetention,
-                                        runtimeProfile.WallPenetrations,
-                                        runtimeProfile.WallDamageRetention,
-                                        !runtimeProfile.TracksPlayers,
-                                        runtimeProfile.IsLobbedProjectile,
-                                        runtimeProfile.LobUpwardSpeed,
-                                        runtimeProfile.ProjectileGravity,
-                                        shotOutput.GravityWellPullStrength);
+                                        Vector3 directionToTarget =
+                                            runtimeProfile.ProjectileDownwardAcceleration > 0f
+                                            ? pelletDirection
+                                            : (targetPoint - (Vector3)shotOriginPosition).normalized;
+                                        float launchSpeed =
+                                            input.HasProjectileLaunchRequest != 0
+                                                ? input.ProjectileLaunchSpeed
+                                                : runtimeProfile.ProjectileSpeed;
+                                        float downwardAcceleration =
+                                            input.HasProjectileLaunchRequest != 0
+                                                ? input.ProjectileDownwardAcceleration
+                                                : runtimeProfile.ProjectileDownwardAcceleration;
+                                        ProjectileShotSpec shotSpec = ProjectileShotBuilder.Build(
+                                            directionToTarget, launchSpeed,
+                                            downwardAcceleration, shotTick, localNetworkId,
+                                            sourceWeaponId, pelletIndex);
+                                        if (pelletIndex == 0 &&
+                                            (runtimeProfile.HasExplosion ||
+                                             downwardAcceleration > 0f))
+                                        {
+                                            // Projectile trajectory launch diagnostic disabled.
+                                        }
+
+                                        controllerLink.Controller.SpawnPredictedProjectile(
+                                            shotTick,
+                                            sourceWeaponId,
+                                            shotOriginPosition,
+                                            Quaternion.LookRotation(shotSpec.Direction),
+                                            targetPoint,
+                                            shotSpec.InitialVelocity,
+                                            shotSpec.Acceleration,
+                                            pelletIndex,
+                                            runtimeProfile.IsHoming,
+                                            runtimeProfile.HomingTurnSpeed,
+                                            runtimeProfile.ProjectileSpeed,
+                                            shotOutput.ProjectileScale,
+                                            runtimeProfile.GrowsOverDistance,
+                                            runtimeProfile.MaxBounces,
+                                            runtimeProfile.GrowthPerMetre,
+                                            runtimeProfile.BounceVelocityRetention,
+                                            runtimeProfile.WallPenetrations,
+                                            runtimeProfile.WallDamageRetention,
+                                            !runtimeProfile.TracksPlayers,
+                                            shotOutput.GravityWellPullStrength);
+                                    }
                                 }
                             }
 

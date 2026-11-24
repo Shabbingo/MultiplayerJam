@@ -22,6 +22,7 @@ namespace Unity.MP_FPS
         public int OwnerNetworkId;
         public uint SpawnTick;
         public uint WeaponId;
+        public int PelletIndex;
         public float3 TargetPosition;
         public float SignedSizeDelta;
         public byte IsHoming;
@@ -46,9 +47,6 @@ namespace Unity.MP_FPS
         public int WallPenetrations;
         public float WallDamageRetention;
         public float GravityWellPullStrength;
-        public byte IsLobbedProjectile;
-        public float LobUpwardSpeed;
-        public float ProjectileGravity;
         public byte UsesTrajectory;
         public float3 TrajectoryOrigin;
         public float3 TrajectoryInitialVelocity;
@@ -80,6 +78,10 @@ namespace Unity.MP_FPS
     {
         private const int k_NumHistoryTicks = 20;
         private const string k_UnpenetrableTag = "Unpenetrable";
+        private const float k_MaxClientLaunchPositionError = 1.5f;
+        private const float k_MinClientLaunchDirectionDot = 0.70710678f;
+        private const float k_MaxClientProjectileSpeed = 250f;
+        private const float k_MaxClientProjectileDownwardAcceleration = 200f;
         private static readonly int s_ShootableLayerMask = LayerMask.GetMask(
             "Ground", "Default");
         private NativeList<ClientCommandInput> m_ProcessedClientInputCommands;
@@ -722,6 +724,61 @@ namespace Unity.MP_FPS
                             shotOriginPosition = playerGhost.ApplyShotOriginClearance(
                                 shotOriginPosition,
                                 abilityWeaponId);
+                            float launchSpeed = runtimeProfile.ProjectileSpeed;
+                            float downwardAcceleration =
+                                runtimeProfile.ProjectileDownwardAcceleration;
+                            bool acceptedClientLaunchMotion = false;
+                            // Accept the exact predicting-client launch pose when it
+                            // is plausible for this authoritative player state. Card
+                            // stats, pellet count, damage and acceleration remain
+                            // server-owned below.
+                            if (commandInput.PlayerInput.HasProjectileLaunchRequest != 0)
+                            {
+                                float3 requestedPosition = commandInput.PlayerInput
+                                    .ProjectileLaunchPosition;
+                                float3 requestedDirection = commandInput.PlayerInput
+                                    .ProjectileAimDirection;
+                                bool finiteRequest = math.all(math.isfinite(
+                                    requestedPosition)) && math.all(math.isfinite(
+                                    requestedDirection));
+                                float requestedDirectionLengthSq = math.lengthsq(
+                                    requestedDirection);
+                                if (finiteRequest &&
+                                    requestedDirectionLengthSq > 0.000001f)
+                                {
+                                    requestedDirection = math.normalize(
+                                        requestedDirection);
+                                    bool positionIsPlausible = math.distancesq(
+                                        requestedPosition, shotOriginPosition) <=
+                                        k_MaxClientLaunchPositionError *
+                                        k_MaxClientLaunchPositionError;
+                                    bool directionIsPlausible = math.dot(
+                                        requestedDirection,
+                                        math.normalizesafe(aimDirection)) >=
+                                        k_MinClientLaunchDirectionDot;
+                                    if (positionIsPlausible && directionIsPlausible)
+                                    {
+                                        shotOriginPosition = requestedPosition;
+                                        aimDirection = requestedDirection;
+                                        float requestedSpeed = commandInput.PlayerInput
+                                            .ProjectileLaunchSpeed;
+                                        float requestedAcceleration = commandInput.PlayerInput
+                                            .ProjectileDownwardAcceleration;
+                                        if (math.isfinite(requestedSpeed) &&
+                                            math.isfinite(requestedAcceleration) &&
+                                            requestedSpeed >= 0f &&
+                                            requestedSpeed <= k_MaxClientProjectileSpeed &&
+                                            requestedAcceleration >= 0f &&
+                                            requestedAcceleration <=
+                                            k_MaxClientProjectileDownwardAcceleration)
+                                        {
+                                            launchSpeed = requestedSpeed;
+                                            downwardAcceleration = requestedAcceleration;
+                                            acceptedClientLaunchMotion = true;
+                                        }
+                                    }
+                                }
+                            }
                             playerGhost.Controller.ApplyAirborneShotThrust(
                                 ref predictedPlayer.ValueRW, aimDirection);
 
@@ -738,11 +795,9 @@ namespace Unity.MP_FPS
                                 abilityWeaponId);
                             for (int pelletIndex = 0; pelletIndex < pelletCount; pelletIndex++)
                             {
-                                Vector3 shotDirection = pelletCount > 1
-                                    ? Cards.WeaponModifierResolver.ApplyScatterDirection(
-                                        aimDirection, runtimeProfile.ScatterHalfAngleDegrees,
-                                        shotTick, shooterNetworkId, pelletIndex)
-                                    : (Vector3)aimDirection;
+                                Vector3 shotDirection = ProjectileShotBuilder.ResolvePelletDirection(
+                                    in runtimeProfile, aimDirection, shotTick,
+                                    shooterNetworkId, pelletIndex);
 
                                 if (weaponData.Type == WeaponType.Hitscan)
                                 {
@@ -848,10 +903,22 @@ namespace Unity.MP_FPS
                                         }
 
                                         // Use calculated shotOriginPosition for direction calculation
-                                        Vector3 directionToTarget = runtimeProfile.IsLobbedProjectile
+                                        Vector3 directionToTarget =
+                                            downwardAcceleration > 0f
                                             ? shotDirection
                                             : (targetPoint - (Vector3)shotOriginPosition).normalized;
-                                        Quaternion spawnRotation = Quaternion.LookRotation(directionToTarget);
+                                        ProjectileShotSpec shotSpec = ProjectileShotBuilder.Build(
+                                            directionToTarget, launchSpeed,
+                                            downwardAcceleration, shotTick, shooterNetworkId,
+                                            sourceWeaponId, pelletIndex);
+                                        if (pelletIndex == 0 &&
+                                            (runtimeProfile.HasExplosion ||
+                                             downwardAcceleration > 0f))
+                                        {
+                                            // Projectile trajectory launch diagnostic disabled.
+                                        }
+                                        Quaternion spawnRotation = Quaternion.LookRotation(
+                                            shotSpec.Direction);
 
                                         projectileSpawnList.Add(new ProjectileSpawnData
                                         {
@@ -861,6 +928,7 @@ namespace Unity.MP_FPS
                                             OwnerNetworkId = ghostOwnerLookup[entity].NetworkId,
                                             SpawnTick = commandInput.Tick.TickIndexForValidTick,
                                             WeaponId = sourceWeaponId,
+                                            PelletIndex = pelletIndex,
                                             TargetPosition = targetPoint,
                                             SignedSizeDelta = shotSignedSizeDelta,
                                             IsHoming = runtimeProfile.IsHoming ? (byte)1 : (byte)0,
@@ -886,32 +954,15 @@ namespace Unity.MP_FPS
                                             WallPenetrations = runtimeProfile.WallPenetrations,
                                             WallDamageRetention = runtimeProfile.WallDamageRetention,
                                             GravityWellPullStrength = shotOutput.GravityWellPullStrength,
-                                            IsLobbedProjectile = runtimeProfile.IsLobbedProjectile ? (byte)1 : (byte)0,
-                                            LobUpwardSpeed = runtimeProfile.LobUpwardSpeed,
-                                            ProjectileGravity = runtimeProfile.ProjectileGravity,
                                             UsesTrajectory = Projectile.SupportsTrajectory(
                                                 runtimeProfile.IsHoming,
-                                                runtimeProfile.IsLobbedProjectile,
-                                                runtimeProfile.MaxBounces,
                                                 runtimeProfile.WallPenetrations,
                                                 shotOutput.GravityWellPullStrength)
                                                 ? (byte)1
                                                 : (byte)0,
                                             TrajectoryOrigin = shotOriginPosition,
-                                            TrajectoryInitialVelocity =
-                                                (float3)(spawnRotation * Vector3.forward) *
-                                                runtimeProfile.ProjectileSpeed +
-                                                (runtimeProfile.IsLobbedProjectile
-                                                    ? new float3(0f,
-                                                        runtimeProfile.LobUpwardSpeed,
-                                                        0f)
-                                                    : float3.zero),
-                                            TrajectoryAcceleration =
-                                                runtimeProfile.IsLobbedProjectile
-                                                    ? new float3(0f,
-                                                        -runtimeProfile.ProjectileGravity,
-                                                        0f)
-                                                    : float3.zero,
+                                            TrajectoryInitialVelocity = shotSpec.InitialVelocity,
+                                            TrajectoryAcceleration = shotSpec.Acceleration,
                                             TrajectoryStartTick =
                                                 commandInput.Tick.TickIndexForValidTick,
                                             TrajectoryAgeOffset = 0f,
@@ -960,6 +1011,7 @@ namespace Unity.MP_FPS
                             OwnerNetworkId = spawnData.OwnerNetworkId,
                             SpawnTick = spawnData.SpawnTick,
                             WeaponID = spawnData.WeaponId,
+                            PelletIndex = spawnData.PelletIndex,
                             TargetPosition = spawnData.TargetPosition,
                             SignedSizeDelta = spawnData.SignedSizeDelta,
                             IsHoming = spawnData.IsHoming,
@@ -984,9 +1036,6 @@ namespace Unity.MP_FPS
                             WallPenetrations = spawnData.WallPenetrations,
                             WallDamageRetention = spawnData.WallDamageRetention,
                             GravityWellPullStrength = spawnData.GravityWellPullStrength,
-                            IsLobbedProjectile = spawnData.IsLobbedProjectile,
-                            LobUpwardSpeed = spawnData.LobUpwardSpeed,
-                            ProjectileGravity = spawnData.ProjectileGravity,
                             UsesTrajectory = spawnData.UsesTrajectory,
                             TrajectoryOrigin = spawnData.TrajectoryOrigin,
                             TrajectoryInitialVelocity =

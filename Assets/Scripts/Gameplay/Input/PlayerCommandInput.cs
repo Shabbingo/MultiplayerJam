@@ -27,6 +27,15 @@ public struct PlayerInput
     public float2 MoveInput;
     public float2 LookYawPitchDegrees;
 
+    // Captured from the predicting client's actual camera/hand pose for this
+    // command tick. The server treats this as a launch request and validates it
+    // against the authoritative player pose before accepting it.
+    public byte HasProjectileLaunchRequest;
+    public float3 ProjectileLaunchPosition;
+    public float3 ProjectileAimDirection;
+    public float ProjectileLaunchSpeed;
+    public float ProjectileDownwardAcceleration;
+
     public uint InputFlags; // 4 bytes (32 flags)
 
     public bool Jump => (InputFlags & (uint)InputFlag.Jump) != 0;
@@ -61,6 +70,15 @@ public struct PlayerInput
         // like one-frame events.
         InputFlags = (InputFlags & ~HeldStateMask) |
                      (input.InputFlags & HeldStateMask);
+        if (input.HasProjectileLaunchRequest != 0)
+        {
+            HasProjectileLaunchRequest = 1;
+            ProjectileLaunchPosition = input.ProjectileLaunchPosition;
+            ProjectileAimDirection = input.ProjectileAimDirection;
+            ProjectileLaunchSpeed = input.ProjectileLaunchSpeed;
+            ProjectileDownwardAcceleration =
+                input.ProjectileDownwardAcceleration;
+        }
         MergeTransientFlagsFrom(input);
     }
 

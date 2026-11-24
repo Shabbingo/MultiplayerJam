@@ -185,8 +185,6 @@ namespace Unity.MP_FPS
                     grenadeLauncher.ProjectileSpeedMultiplierPerStack;
                 tuning.GrenadeExplosionRadius =
                     grenadeLauncher.EffectRadiusMetres;
-                tuning.LobUpwardSpeedPerStack =
-                    grenadeLauncher.LobUpwardSpeedPerStack;
                 tuning.ProjectileGravityPerStack =
                     grenadeLauncher.ProjectileGravityPerStack;
             }

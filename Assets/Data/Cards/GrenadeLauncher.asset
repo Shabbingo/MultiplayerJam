@@ -38,7 +38,6 @@ MonoBehaviour:
   m_MagazineDeltaPerStack: 0
   m_ProjectileScalePerStack: 0
   m_ProjectileSpeedMultiplierPerStack: 0.55
-  m_LobUpwardSpeedPerStack: 6
   m_ProjectileGravityPerStack: 16
   m_ProjectileScaleMultiplierPerStack: 1
   m_AoeRadiusAdjustmentPerStack: 0

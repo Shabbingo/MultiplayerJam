@@ -192,6 +192,7 @@ public interface IGhostGameObjectUpdateSystem
 
     public uint GetCurrentServerTick();
     public uint GetCurrentInterpolationTick();
+    public float GetSimulationFixedTimeStep();
 }
 
 public abstract partial class GhostGameObjectUpdateSystemBase<T> : SingletonSystem<GhostGameObjectUpdateSystemBase<T>>, IGhostGameObjectUpdateSystem
@@ -204,6 +205,7 @@ public abstract partial class GhostGameObjectUpdateSystemBase<T> : SingletonSyst
 
     private NetworkTick m_ServerTick;
     private NetworkTick m_InterpolationTick;
+    private float m_SimulationFixedTimeStep;
     
 #if USE_GHOST_GROUP_PROFILE_MARKERS
     private static readonly ProfilerMarker s_OnUpdatePrepareMarker = new ProfilerMarker("GhostGameObjectUpdateSystemBase.Prepare");
@@ -254,6 +256,11 @@ public abstract partial class GhostGameObjectUpdateSystemBase<T> : SingletonSyst
         return m_InterpolationTick.IsValid ? m_InterpolationTick.TickIndexForValidTick : 0;
     }
 
+    public float GetSimulationFixedTimeStep()
+    {
+        return m_SimulationFixedTimeStep;
+    }
+
     protected virtual void OnBeforeGhostUpdates() { }
     protected virtual void OnAfterGhostUpdates() { }
 
@@ -281,6 +288,11 @@ public abstract partial class GhostGameObjectUpdateSystemBase<T> : SingletonSyst
         var networkTime = SystemAPI.GetSingleton<NetworkTime>();
         m_ServerTick = networkTime.ServerTick;
         m_InterpolationTick = networkTime.InterpolationTick;
+        // Some Ghost bridge worlds do not contain the optional tick-rate
+        // singleton. Netcode's resolved default is authoritative in that case.
+        SystemAPI.TryGetSingleton(out ClientServerTickRate tickRate);
+        tickRate.ResolveDefaults();
+        m_SimulationFixedTimeStep = tickRate.SimulationFixedTimeStep;
 
         GhostGameObject.UpdateInterface = this;
         GhostGameObject.UpdateInterfaceType = typeof(T);

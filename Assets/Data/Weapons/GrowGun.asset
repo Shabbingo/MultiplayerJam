@@ -76,9 +76,6 @@ MonoBehaviour:
   GuidedAcceleration: 35
   GuidedLaunchUpwardSpeed: 8
   GuidedTargetRange: 250
-  IsLobbedProjectile: 0
-  LobUpwardSpeed: 3
-  ProjectileGravity: 20
   ProjectileBounces: 0
   FirstBounceVelocityRetention: 0.3
   ConsecutiveBounceVelocityRetentions:

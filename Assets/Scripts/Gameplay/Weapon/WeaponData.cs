@@ -108,18 +108,6 @@ namespace Unity.MP_FPS
         [Tooltip("Maximum distance used by the targeting raycast.")]
         public float GuidedTargetRange = 250f;
 
-        [Header("Grenade Projectile")]
-        [Tooltip("Launches this projectile in an arc and allows it to bounce before impact detonation.")]
-        public bool IsLobbedProjectile;
-
-        [Min(0f)]
-        [Tooltip("Extra upward launch velocity added to the projectile.")]
-        public float LobUpwardSpeed = 8f;
-
-        [Min(0f)]
-        [Tooltip("Downward acceleration applied to a lobbed projectile.")]
-        public float ProjectileGravity = 20f;
-
         [Min(0)]
         [Tooltip("Number of map-geometry impacts that bounce before the next impact detonates.")]
         public int ProjectileBounces;

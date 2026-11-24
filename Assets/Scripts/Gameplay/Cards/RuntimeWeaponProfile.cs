@@ -47,7 +47,6 @@ namespace Unity.MP_FPS.Cards
         [Min(0f)] public float LastWordDamagePerStack;
         [Min(0f)] public float GrenadeSpeedMultiplier;
         [Min(0f)] public float GrenadeExplosionRadius;
-        [Min(0f)] public float LobUpwardSpeedPerStack;
         [Min(0f)] public float ProjectileGravityPerStack;
 
         public static ModifierGameplayTuning Default => new()
@@ -87,7 +86,6 @@ namespace Unity.MP_FPS.Cards
             LastWordDamagePerStack = 0.2f,
             GrenadeSpeedMultiplier = 0.55f,
             GrenadeExplosionRadius = 1.5f,
-            LobUpwardSpeedPerStack = 6f,
             ProjectileGravityPerStack = 16f
         };
     }
@@ -150,9 +148,7 @@ namespace Unity.MP_FPS.Cards
         public readonly float WallDamageRetention;
         public readonly float GravityWellPullStrength;
         public readonly float LastWordDamageMultiplier;
-        public readonly bool IsLobbedProjectile;
-        public readonly float LobUpwardSpeed;
-        public readonly float ProjectileGravity;
+        public readonly float ProjectileDownwardAcceleration;
 
         public float SignedSizeDelta => Hand == WeaponHand.Right
             ? Mathf.Abs(Damage)
@@ -192,8 +188,8 @@ namespace Unity.MP_FPS.Cards
             bool growsOverDistance, float growthPerMetre,
             float bounceVelocityRetention, int wallPenetrations,
             float wallDamageRetention, float gravityWellPullStrength,
-            float lastWordDamageMultiplier, bool isLobbedProjectile,
-            float lobUpwardSpeed, float projectileGravity)
+            float lastWordDamageMultiplier,
+            float projectileDownwardAcceleration)
         {
             SourceProfile = sourceProfile;
             Hand = hand;
@@ -227,9 +223,8 @@ namespace Unity.MP_FPS.Cards
             WallDamageRetention = wallDamageRetention;
             GravityWellPullStrength = gravityWellPullStrength;
             LastWordDamageMultiplier = lastWordDamageMultiplier;
-            IsLobbedProjectile = isLobbedProjectile;
-            LobUpwardSpeed = lobUpwardSpeed;
-            ProjectileGravity = projectileGravity;
+            ProjectileDownwardAcceleration =
+                Mathf.Max(0f, projectileDownwardAcceleration);
         }
     }
 
@@ -369,15 +364,10 @@ namespace Unity.MP_FPS.Cards
             explosionRadius *= Mathf.Pow(tuning.BulletSpeedExplosionMultiplier,
                 bulletSpeedStacks);
 
-            bool isLobbedProjectile = source.IsLobbedProjectile ||
-                                      grenadeLauncherStacks > 0;
-            float lobUpwardSpeed = (source.IsLobbedProjectile
-                ? Mathf.Max(0f, source.LobUpwardSpeed)
-                : 0f) + grenadeLauncherStacks *
-                Mathf.Max(0f, tuning.LobUpwardSpeedPerStack);
-            float projectileGravity = (source.IsLobbedProjectile
-                ? Mathf.Max(0f, source.ProjectileGravity)
-                : 0f) + grenadeLauncherStacks *
+            // Grenade motion belongs to the card, never the source weapon.
+            // It preserves the shot's forward launch direction and contributes
+            // only downward acceleration; there is no artificial upward kick.
+            float projectileDownwardAcceleration = grenadeLauncherStacks *
                 Mathf.Max(0f, tuning.ProjectileGravityPerStack);
 
             return new RuntimeWeaponProfile(
@@ -423,9 +413,7 @@ namespace Unity.MP_FPS.Cards
                     tuning.GravityWellPullPerStack),
                 1f + lastWordStacks * Mathf.Max(0f,
                     tuning.LastWordDamagePerStack),
-                isLobbedProjectile,
-                lobUpwardSpeed,
-                projectileGravity);
+                projectileDownwardAcceleration);
         }
 
         public static Vector3 ApplyScatterDirection(Vector3 forward,

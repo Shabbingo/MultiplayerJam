@@ -1917,13 +1917,14 @@ public class FirstPersonController : MonoBehaviour
 
     public async void SpawnPredictedProjectile(uint spawnTick, uint weaponId, Vector3 spawnPosition,
         Quaternion spawnRotation, Vector3 targetPosition,
+        float3 trajectoryInitialVelocity, float3 trajectoryAcceleration,
+        int pelletIndex = 0,
         bool isHoming = false, float homingTurnSpeed = 0f,
         float projectileSpeed = 0f, float projectileScale = 1f,
         bool growsOverDistance = false, int maxBounces = 0,
         float growthPerMetre = 0f, float bounceVelocityRetention = 1f,
         int wallPenetrations = 0, float wallDamageRetention = 0.4f,
-        bool hasHomingTarget = true, bool isLobbedProjectile = false,
-        float lobUpwardSpeed = 0f, float projectileGravity = 0f,
+        bool hasHomingTarget = true,
         float gravityWellPullStrength = 0f)
     {
         try
@@ -1932,7 +1933,8 @@ public class FirstPersonController : MonoBehaviour
             for (var i = 0; i < Projectile.PredictedProjectiles.Count; i++)
             {
                 var proj = Projectile.PredictedProjectiles[i];
-                if (proj.SpawnTick == spawnTick)
+                if (proj.SpawnTick == spawnTick && proj.WeaponId == weaponId &&
+                    proj.PelletIndex == pelletIndex)
                 {
                     alreadyExists = true;
                     break;
@@ -1970,7 +1972,7 @@ public class FirstPersonController : MonoBehaviour
             // connection the authoritative ghost can already have its GameObject by
             // the time this predicted visual finishes loading. Keeping both produces
             // a double image/jitter immediately after firing.
-            if (AuthoritativeProjectileAlreadyLinked(spawnTick, weaponId))
+            if (AuthoritativeProjectileAlreadyLinked(spawnTick, weaponId, pelletIndex))
             {
                 predictedProjectile.SetActive(false);
                 Destroy(predictedProjectile);
@@ -1982,20 +1984,23 @@ public class FirstPersonController : MonoBehaviour
 
             var projectile = predictedProjectile.GetComponent<Projectile>();
             projectile.SetWeaponId(weaponId);
+            projectile.SetDebugPelletIndex(pelletIndex);
             projectile.SetGuidedTarget(targetPosition, hasHomingTarget);
             projectile.SetRuntimeMotion(isHoming, homingTurnSpeed);
             projectile.SetRuntimeProjectileProperties(projectileSpeed, projectileScale,
                 growsOverDistance, maxBounces, growthPerMetre,
                 bounceVelocityRetention, wallPenetrations,
-                wallDamageRetention, isLobbedProjectile,
-                lobUpwardSpeed, projectileGravity);
+                wallDamageRetention, trajectoryAcceleration);
             projectile.SetPredictedTrajectory(spawnTick, spawnPosition,
-                spawnRotation, gravityWellPullStrength);
+                trajectoryInitialVelocity, trajectoryAcceleration,
+                gravityWellPullStrength);
 
             var projectileInfo = new Projectile.PredictedProjectileInfo
             {
                 Instance = predictedProjectile,
-                SpawnTick = spawnTick
+                SpawnTick = spawnTick,
+                WeaponId = weaponId,
+                PelletIndex = pelletIndex
             };
 
             Projectile.PredictedProjectiles.Add(projectileInfo);
@@ -2006,7 +2011,8 @@ public class FirstPersonController : MonoBehaviour
         }
     }
 
-    private static bool AuthoritativeProjectileAlreadyLinked(uint spawnTick, uint weaponId)
+    private static bool AuthoritativeProjectileAlreadyLinked(uint spawnTick, uint weaponId,
+        int pelletIndex)
     {
         var clientWorld = GhostBridgeBootstrap.Instance?.ClientWorld;
         if (clientWorld == null || !clientWorld.IsCreated)
@@ -2032,6 +2038,7 @@ public class FirstPersonController : MonoBehaviour
         foreach (var data in projectileData)
         {
             if (data.SpawnTick == spawnTick && data.WeaponID == weaponId &&
+                data.PelletIndex == pelletIndex &&
                 data.OwnerNetworkId == localNetworkId)
             {
                 return true;

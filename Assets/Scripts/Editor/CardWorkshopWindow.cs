@@ -372,10 +372,8 @@ namespace Unity.MP_FPS.Cards.EditorTools
                     DrawProperty("m_ProjectileSpeedMultiplierPerStack",
                         "Projectile Speed Multiplier");
                     DrawProperty("m_EffectRadiusMetres", "Blast Radius");
-                    DrawProperty("m_LobUpwardSpeedPerStack",
-                        "Lob Upward Speed");
                     DrawProperty("m_ProjectileGravityPerStack",
-                        "Projectile Gravity");
+                        "Downward Acceleration");
                     break;
                 case CardModifierKind.ConservationOfMass:
                     DrawProperty("m_EffectRadiusMetres", "Shockwave Radius");
@@ -450,7 +448,7 @@ namespace Unity.MP_FPS.Cards.EditorTools
                 "m_MinimumReloadMultiplier", "m_MagazineDeltaPerStack",
                 "m_ProjectileScalePerStack",
                 "m_ProjectileSpeedMultiplierPerStack",
-                "m_LobUpwardSpeedPerStack", "m_ProjectileGravityPerStack",
+                "m_ProjectileGravityPerStack",
                 "m_ProjectileScaleMultiplierPerStack",
                 "m_AoeRadiusAdjustmentPerStack",
                 "m_ExplosionRadiusMultiplierPerStack",

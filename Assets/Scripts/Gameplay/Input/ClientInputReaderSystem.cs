@@ -1,6 +1,7 @@
 using Gameplay.Leaderboard;
 using Unity.Entities;
 using Unity.MP_FPS;
+using Unity.MP_FPS.Cards;
 using Unity.Mathematics;
 using Unity.NetCode;
 using Unity.Transforms;
@@ -20,18 +21,21 @@ public partial class ClientInputReaderSystem : SystemBase
         Entity currentLocalPlayer = Entity.Null;
         float3 playerPosition = float3.zero;
         PredictedPlayerGhost currentLocalPlayerData = default;
+        PlayerModifierStacks currentLocalModifiers = default;
         FirstPersonController currentLocalPlayerController = null;
 
         // 1. Find the local player entity and its position
-        foreach (var (transform, ghost, owner, entity) in SystemAPI.Query<
+        foreach (var (transform, ghost, modifiers, owner, entity) in SystemAPI.Query<
                          RefRO<LocalTransform>,
                          RefRO<PredictedPlayerGhost>,
+                         RefRO<PlayerModifierStacks>,
                          RefRO<GhostOwnerIsLocal>>()
                      .WithEntityAccess())
         {
             currentLocalPlayer = entity;
             playerPosition = transform.ValueRO.Position;
             currentLocalPlayerData = ghost.ValueRO;
+            currentLocalModifiers = modifiers.ValueRO;
             if (EntityManager.HasComponent<PlayerControllerLink>(entity))
             {
                 currentLocalPlayerController = EntityManager
@@ -161,6 +165,41 @@ public partial class ClientInputReaderSystem : SystemBase
 
                 // Assign the full, accumulated angle to the input struct
                 playerInput.LookYawPitchDegrees = _accumulatedLook;
+
+                // Capture the launch pose on the client at input-sampling time.
+                // Prediction and the server will consume these exact values from
+                // the tick command instead of independently rebuilding the shot.
+                if (playerInput.Shoot && currentLocalPlayerController != null)
+                {
+                    PlayerGhost playerGhost = currentLocalPlayerController
+                        .GetComponent<PlayerGhost>();
+                    if (playerGhost != null && playerGhost.CameraTarget != null)
+                    {
+                        quaternion launchRotation = playerGhost.CameraTarget.rotation;
+                        float3 launchDirection = playerGhost.CameraTarget.forward;
+                        float3 launchPosition = (float3)playerGhost.CameraTarget.position +
+                            math.mul(launchRotation,
+                                playerGhost.GetScaledHandShotOffset(
+                                    WeaponManager.PrimaryWeaponId));
+                        launchPosition = playerGhost.ApplyShotOriginClearance(
+                            launchPosition, WeaponManager.PrimaryWeaponId);
+
+                        playerInput.HasProjectileLaunchRequest = 1;
+                        playerInput.ProjectileLaunchPosition = launchPosition;
+                        playerInput.ProjectileAimDirection = launchDirection;
+                        if (WeaponManager.Instance != null)
+                        {
+                            RuntimeWeaponProfile launchProfile = WeaponManager.Instance
+                                .ResolveRuntimeProfile(
+                                    WeaponManager.PrimaryWeaponId,
+                                    in currentLocalModifiers);
+                            playerInput.ProjectileLaunchSpeed =
+                                launchProfile.ProjectileSpeed;
+                            playerInput.ProjectileDownwardAcceleration =
+                                launchProfile.ProjectileDownwardAcceleration;
+                        }
+                    }
+                }
 
                 input.ValueRW.SetInput(0, playerInput);
                 movementInput.ValueRW.SetInput(0, playerInput);
