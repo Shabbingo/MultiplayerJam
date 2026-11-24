@@ -209,9 +209,11 @@ namespace Unity.MP_FPS.UI
             _rootElement.style.display = DisplayStyle.Flex;
             _scoreTable.style.display = DisplayStyle.None;
             _draftPanel.style.display = DisplayStyle.Flex;
-            _draftTitleLabel.text = manager.IsLateJoinCatchUpDraft
-                ? $"LATE-JOIN CATCH-UP — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
-                : $"ROUND {manager.CurrentRound} COMPLETE — CHOOSE A CARD";
+            _draftTitleLabel.text = manager.IsOpeningDraft
+                ? "OPENING DRAFT — EVERY PLAYER CHOOSES A CARD"
+                : manager.IsLateJoinCatchUpDraft
+                    ? $"LATE-JOIN CATCH-UP — {manager.ActiveDraftPlayerName.ToUpperInvariant()} ONLY"
+                    : $"ROUND {manager.CurrentRound} COMPLETE — CHOOSE A CARD";
 
             int offerHash = 17;
             for (int i = 0; i < _cardButtons.Length; i++)
@@ -239,12 +241,16 @@ namespace Unity.MP_FPS.UI
                 _draftTimerLabel.text =
                     $"{Mathf.CeilToInt(manager.DraftSecondsRemaining)} SECONDS";
                 _draftHelpLabel.text = manager.IsLocalDraftTurn
-                    ? manager.IsLateJoinCatchUpDraft
-                        ? $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} • OFFER {manager.CurrentOfferPointTotal}/{manager.OfferPointBudget} POINTS • CHOOSE AN ALLOWED TARGET"
-                        : $"OFFER {manager.CurrentOfferPointTotal}/{manager.OfferPointBudget} POINTS • SELECT ONE CARD, THEN CHOOSE ITS TARGET"
-                    : manager.IsLateJoinCatchUpDraft
-                        ? $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — CHOOSING A CARD AND TARGET"
-                        : "WEAPON CARDS CAN APPLY TO EITHER HAND • SELF CARDS APPLY TO YOU";
+                    ? manager.IsOpeningDraft
+                        ? $"OPENING PICK • OFFER {manager.CurrentOfferPointTotal}/{manager.OfferPointBudget} POINTS • SELECT ONE CARD, THEN CHOOSE ITS TARGET"
+                        : manager.IsLateJoinCatchUpDraft
+                            ? $"PICK {manager.CatchUpPickNumber} OF {manager.CatchUpPickTotal} • OFFER {manager.CurrentOfferPointTotal}/{manager.OfferPointBudget} POINTS • CHOOSE AN ALLOWED TARGET"
+                            : $"OFFER {manager.CurrentOfferPointTotal}/{manager.OfferPointBudget} POINTS • SELECT ONE CARD, THEN CHOOSE ITS TARGET"
+                    : manager.IsOpeningDraft
+                        ? "EVERY PLAYER GETS ONE CARD BEFORE ROUND 1 • WAITING FOR THE ACTIVE PLAYER"
+                        : manager.IsLateJoinCatchUpDraft
+                            ? $"ONLY {manager.ActiveDraftPlayerName.ToUpperInvariant()} CAN PICK — CHOOSING A CARD AND TARGET"
+                            : "WEAPON CARDS CAN APPLY TO EITHER HAND • SELF CARDS APPLY TO YOU";
             }
             else
             {

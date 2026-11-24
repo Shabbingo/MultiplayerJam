@@ -14,6 +14,7 @@ namespace Unity.MP_FPS
     {
         public static bool IsOpen { get; private set; }
 
+        private readonly VisualElement m_Host;
         private readonly VisualElement m_Overlay;
         private readonly ScrollView m_List;
         private readonly TextField m_Search;
@@ -41,8 +42,11 @@ namespace Unity.MP_FPS
 
             TemplateContainer view = template.Instantiate();
             view.AddToClassList("card-test-host");
+            view.pickingMode = PickingMode.Ignore;
             hudRoot.Add(view);
+            m_Host = view;
             m_Overlay = view.Q<VisualElement>("cardTestingOverlay");
+            m_Overlay.pickingMode = PickingMode.Ignore;
             m_List = view.Q<ScrollView>("cardTestingList");
             m_Search = view.Q<TextField>("cardTestingSearch");
             m_Status = view.Q<Label>("cardTestingStatus");
@@ -110,6 +114,7 @@ namespace Unity.MP_FPS
             {
                 Close();
             }
+            m_Host?.RemoveFromHierarchy();
         }
 
         private void OnTogglePerformed(InputAction.CallbackContext context)
@@ -133,6 +138,7 @@ namespace Unity.MP_FPS
             }
 
             IsOpen = true;
+            m_Overlay.pickingMode = PickingMode.Position;
             m_Overlay.AddToClassList("card-test-open");
             Utils.SetCursorVisible(true);
             m_RefreshTimer = 0f;
@@ -143,6 +149,10 @@ namespace Unity.MP_FPS
         private void Close()
         {
             IsOpen = false;
+            if (m_Overlay != null)
+            {
+                m_Overlay.pickingMode = PickingMode.Ignore;
+            }
             m_Overlay?.RemoveFromClassList("card-test-open");
             if (GameSettings.Instance.GameState == GlobalGameState.InGame &&
                 !GameSettings.Instance.IsPauseMenuOpen)

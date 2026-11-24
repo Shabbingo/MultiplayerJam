@@ -52,6 +52,8 @@ namespace Gameplay.Leaderboard
         private float _draftSyncTimer;
         private float _pickRevealTimer;
         private bool _beginDraftPending;
+        private bool _isOpeningDraft;
+        private bool _respawnAllAfterOpeningDraft;
         private bool _preparePlayersPending;
         private float _roundStartTimer;
         private bool _finalAnnouncementPending;
@@ -98,6 +100,7 @@ namespace Gameplay.Leaderboard
         }
         public int ActiveDraftNetworkId => _activeDraftNetworkId;
         public string ActiveDraftPlayerName => _activeDraftPlayerName.ToString();
+        public bool IsOpeningDraft => _isOpeningDraft;
         public bool IsLateJoinCatchUpDraft => _activeDraftIsLateJoinCatchUp;
         public int CatchUpPickNumber => _activeCatchUpPickNumber;
         public int CatchUpPickTotal => _activeCatchUpPickTotal;
@@ -112,7 +115,7 @@ namespace Gameplay.Leaderboard
         public int LocalNetworkId => _localNetworkId;
         public bool IsWaitingInLobby => _phase == RoundPhase.WaitingForPlayers;
         public bool BlocksGameplayInput => _phase is RoundPhase.WaitingForPlayers
-            or RoundPhase.PreparingRound;
+            or RoundPhase.PreparingRound or RoundPhase.Drafting;
         public int LobbyPlayerCount => GetLobbyPlayerCount();
         public bool IsLocalLobbyHost => IsWaitingInLobby &&
                                         _localNetworkId >= 0 &&
@@ -406,6 +409,7 @@ namespace Gameplay.Leaderboard
                 _currentRound = draftRpc.RoundNumber;
                 _activeDraftNetworkId = draftRpc.ActiveNetworkId;
                 _activeDraftPlayerName = draftRpc.ActivePlayerName;
+                _isOpeningDraft = draftRpc.IsOpeningDraft != 0;
                 _activeDraftIsLateJoinCatchUp = draftRpc.IsLateJoinCatchUp != 0;
                 _activeCatchUpPickNumber = draftRpc.CatchUpPickNumber;
                 _activeCatchUpPickTotal = draftRpc.CatchUpPickTotal;
@@ -542,13 +546,26 @@ namespace Gameplay.Leaderboard
                 }
                 else if (_phase == RoundPhase.Drafting)
                 {
-                    // A late joiner observes the in-progress draft and enters with
-                    // everyone else when the following round starts. Append their
-                    // catch-up event to the end of this draft.
                     _waitingForNextRound.Add(networkId);
-                    _lateJoinersAwaitingCatchUp.Add(networkId);
-                    QueueLateJoinCatchUpTurns(buffer);
-                    _preparePlayersPending = true;
+                    if (_isOpeningDraft)
+                    {
+                        // The first combat round has not begun. Give this player an
+                        // opening pick at the end of the current draft, then spawn
+                        // only the players who joined after the lobby closed.
+                        _draftOrder.Add(new DraftTurnEntry
+                        {
+                            NetworkId = networkId
+                        });
+                    }
+                    else
+                    {
+                        // A late joiner observes the in-progress draft and enters
+                        // with everyone else when the following round starts. Append
+                        // their catch-up event to the end of this draft.
+                        _lateJoinersAwaitingCatchUp.Add(networkId);
+                        QueueLateJoinCatchUpTurns(buffer);
+                        _preparePlayersPending = true;
+                    }
                 }
                 else if (_phase == RoundPhase.MatchEnded)
                 {
@@ -568,7 +585,6 @@ namespace Gameplay.Leaderboard
                 return false;
             }
 
-            _currentRound = 1;
             _matchEnded = false;
             _winnerName = default;
             _eliminatedThisRound.Clear();
@@ -577,23 +593,41 @@ namespace Gameplay.Leaderboard
             _lateJoinersAwaitingCatchUp.Clear();
             _waitingForNextRound.Clear();
             _currentOffers.Clear();
-            _activeDraftNetworkId = -1;
-            _phase = RoundPhase.PreparingRound;
-            _roundStartTimer = GetRules().RoundStartDelay;
-
-            // Lobby participants already own fully spawned player ghosts. Reusing
-            // them avoids a destroy/respawn race where a remote client can remain
-            // spectating if its old ghost disappears before the replacement ghost
-            // and respawn-state RPC arrive.
-            BroadcastRPC(new RoundPreparingRpc
-            {
-                RoundNumber = _currentRound,
-                Delay = _roundStartTimer
-            });
-            BroadcastRoundState();
-            Debug.Log($"[Server] Lobby host {requesterNetworkId} started the match " +
-                      $"with {buffer.Length} players.");
+            BeginOpeningDraft(buffer, false);
+            Debug.Log($"[Server] Lobby host {requesterNetworkId} started the " +
+                      $"opening draft with {buffer.Length} players.");
             return true;
+        }
+
+        private void BeginOpeningDraft(
+            DynamicBuffer<PlayerScoreEntry> buffer, bool respawnAllAfterDraft)
+        {
+            _currentRound = 1;
+            _phase = RoundPhase.Drafting;
+            _isOpeningDraft = true;
+            _respawnAllAfterOpeningDraft = respawnAllAfterDraft;
+            _activeDraftNetworkId = -1;
+            _currentOffers.Clear();
+            _draftOrder.Clear();
+            _waitingForNextRound.Clear();
+
+            var openingOrder = new List<int>(buffer.Length);
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                openingOrder.Add(buffer[i].NetworkId);
+            }
+            openingOrder.Sort();
+            foreach (int networkId in openingOrder)
+            {
+                _draftOrder.Add(new DraftTurnEntry
+                {
+                    NetworkId = networkId
+                });
+            }
+
+            _draftIndex = 0;
+            _beginDraftPending = true;
+            BroadcastRoundState();
         }
 
         private void BroadcastRoundState()
@@ -789,7 +823,14 @@ namespace Gameplay.Leaderboard
 
             if (_draftIndex >= _draftOrder.Count)
             {
-                BeginNextRound();
+                if (_isOpeningDraft)
+                {
+                    BeginFirstRoundAfterOpeningDraft();
+                }
+                else
+                {
+                    BeginNextRound();
+                }
                 return;
             }
 
@@ -804,11 +845,16 @@ namespace Gameplay.Leaderboard
                 ? store.GetOrCreate(_activeDraftNetworkId)
                 : default;
             var catalog = WeaponManager.Instance?.CardModifierCatalog;
-            int finishingPosition = _finishingOrder.IndexOf(_activeDraftNetworkId);
+            int finishingPosition = _isOpeningDraft
+                ? 0
+                : _finishingOrder.IndexOf(_activeDraftNetworkId);
             if (finishingPosition < 0) finishingPosition = _draftIndex;
+            int finishingPlayerCount = _isOpeningDraft
+                ? 1
+                : Mathf.Max(1, _finishingOrder.Count);
             RoundCardRules rules = GetRules();
             var generated = CardOfferGenerator.Generate(catalog, in owned,
-                finishingPosition, Mathf.Max(1, _finishingOrder.Count),
+                finishingPosition, finishingPlayerCount,
                 rules.CardsPerOffer,
                 rules.OfferPointBudget,
                 (_currentRound * 73856093) ^ (_activeDraftNetworkId * 19349663) ^
@@ -839,6 +885,7 @@ namespace Gameplay.Leaderboard
                 RoundNumber = _currentRound,
                 ActiveNetworkId = _activeDraftNetworkId,
                 ActivePlayerName = FindPlayerName(buffer, _activeDraftNetworkId, "Player"),
+                IsOpeningDraft = _isOpeningDraft ? (byte)1 : (byte)0,
                 IsLateJoinCatchUp = _activeDraftIsLateJoinCatchUp ? (byte)1 : (byte)0,
                 CatchUpPickNumber = _activeCatchUpPickNumber,
                 CatchUpPickTotal = _activeCatchUpPickTotal,
@@ -941,6 +988,36 @@ namespace Gameplay.Leaderboard
             });
         }
 
+        private void BeginFirstRoundAfterOpeningDraft()
+        {
+            bool respawnAll = _respawnAllAfterOpeningDraft;
+            _isOpeningDraft = false;
+            _respawnAllAfterOpeningDraft = false;
+            _phase = RoundPhase.PreparingRound;
+            _matchEnded = false;
+            _activeDraftNetworkId = -1;
+            _currentOffers.Clear();
+            _draftOrder.Clear();
+            _roundStartTimer = GetRules().RoundStartDelay;
+
+            if (respawnAll)
+            {
+                QueueAllPlayersForRespawn(_roundStartTimer);
+            }
+            else
+            {
+                QueueWaitingPlayersForRespawn(_roundStartTimer);
+            }
+            _waitingForNextRound.Clear();
+
+            BroadcastRPC(new RoundPreparingRpc
+            {
+                RoundNumber = _currentRound,
+                Delay = _roundStartTimer
+            });
+            BroadcastRoundState();
+        }
+
         private void UpdateFinalMatch(float deltaTime,
             DynamicBuffer<PlayerScoreEntry> buffer)
         {
@@ -983,7 +1060,7 @@ namespace Gameplay.Leaderboard
             _matchEnded = false;
             _winnerName = default;
             BroadcastRPC(new MatchRestartedRpc());
-            BeginNextRound();
+            BeginOpeningDraft(buffer, true);
         }
 
         private void EliminateRemainingPlayerGhosts()
@@ -1023,6 +1100,40 @@ namespace Gameplay.Leaderboard
             }
         }
 
+        private void QueueWaitingPlayersForRespawn(float delay)
+        {
+            if (_waitingForNextRound.Count == 0)
+            {
+                return;
+            }
+
+            var entityManager = World.EntityManager;
+            using var query = entityManager.CreateEntityQuery(
+                ComponentType.ReadOnly<NetworkId>(),
+                ComponentType.ReadOnly<JoinedClient>());
+            using var entities = query.ToEntityArray(Allocator.Temp);
+            foreach (var entity in entities)
+            {
+                int networkId = entityManager.GetComponentData<NetworkId>(entity)
+                    .Value;
+                if (!_waitingForNextRound.Contains(networkId))
+                {
+                    continue;
+                }
+
+                if (entityManager.HasComponent<PendingRespawn>(entity))
+                {
+                    entityManager.SetComponentData(entity,
+                        new PendingRespawn { RespawnTimer = delay });
+                }
+                else
+                {
+                    entityManager.AddComponentData(entity,
+                        new PendingRespawn { RespawnTimer = delay });
+                }
+            }
+        }
+
         private void RefreshLocalNetworkId()
         {
             if (World == null || !World.IsCreated) return;
@@ -1037,6 +1148,7 @@ namespace Gameplay.Leaderboard
         {
             _activeDraftNetworkId = -1;
             _activeDraftPlayerName = default;
+            _isOpeningDraft = false;
             _activeDraftIsLateJoinCatchUp = false;
             _activeCatchUpPickNumber = 0;
             _activeCatchUpPickTotal = 0;
@@ -1242,6 +1354,7 @@ namespace Gameplay.Leaderboard
         public int RoundNumber;
         public int ActiveNetworkId;
         public FixedString64Bytes ActivePlayerName;
+        public byte IsOpeningDraft;
         public byte IsLateJoinCatchUp;
         public int CatchUpPickNumber;
         public int CatchUpPickTotal;

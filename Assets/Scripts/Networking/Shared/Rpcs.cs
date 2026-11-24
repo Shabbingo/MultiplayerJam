@@ -31,7 +31,7 @@ namespace Unity.MP_FPS
     {
         // Increment this when gameplay/network rules change in a way that should
         // prevent older builds from joining, even if their NetCode schema matches.
-        public const int GameProtocolVersion = 1;
+        public const int GameProtocolVersion = 2;
     }
 
     /// <summary>
