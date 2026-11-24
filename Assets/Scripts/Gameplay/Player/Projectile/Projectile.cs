@@ -24,6 +24,8 @@ namespace Unity.MP_FPS
         private const float BounceSurfaceOffset = 0.025f;
         private const float BounceCollisionGrace = 0.04f;
         private const float HardReconciliationDistance = 2f;
+        private const float RemoteBounceCorrectionSeconds = 0.075f;
+        private const float OwnedBounceCorrectionSeconds = 0.1f;
         private const string UnpenetrableTag = "Unpenetrable";
 
         private Vector3 _velocity;
@@ -44,6 +46,8 @@ namespace Unity.MP_FPS
             [GhostField] public float3 TrajectoryInitialVelocity;
             [GhostField] public float3 TrajectoryAcceleration;
             [GhostField] public uint TrajectoryStartTick;
+            [GhostField] public float TrajectoryAgeOffset;
+            [GhostField] public float TrajectoryDistanceOffset;
             [GhostField] public float3 TargetPosition;
             [GhostField] public int BounceCount;
             [GhostField] public float Age;
@@ -96,7 +100,7 @@ namespace Unity.MP_FPS
                 if (weaponData != null)
                 {
                     if (_trajectoryInitialized &&
-                        SimulatePredictedTrajectory())
+                        SimulatePredictedTrajectory(weaponData))
                     {
                         return;
                     }
@@ -133,6 +137,11 @@ namespace Unity.MP_FPS
         private ProjectileTrajectory _trajectory;
         private bool _trajectoryInitialized;
         private uint _predictedTrajectoryStartTick;
+        private float _trajectoryAgeOffset;
+        private float _trajectoryDistanceOffset;
+        private bool _pendingTrajectoryVisualCorrection;
+        private Vector3 _trajectoryVisualOffset;
+        private float _trajectoryVisualCorrectionRemaining;
 
         private float CurrentProjectileScale => Mathf.Max(0.1f,
             _runtimeProjectileScale * (_growsOverDistance
@@ -187,9 +196,18 @@ namespace Unity.MP_FPS
             }
 
             float launchSpeed = Mathf.Max(0f, _runtimeProjectileSpeed);
-            _trajectory = new ProjectileTrajectory(origin,
-                rotation * Vector3.forward * launchSpeed, float3.zero);
+            Vector3 initialVelocity = rotation * Vector3.forward * launchSpeed;
+            float3 acceleration = float3.zero;
+            if (_runtimeLobbedProjectile)
+            {
+                initialVelocity += Vector3.up * _runtimeLobUpwardSpeed;
+                acceleration = new float3(0f, -_runtimeProjectileGravity, 0f);
+            }
+            _trajectory = new ProjectileTrajectory(origin, initialVelocity,
+                acceleration);
             _predictedTrajectoryStartTick = startTick;
+            _trajectoryAgeOffset = 0f;
+            _trajectoryDistanceOffset = 0f;
             _trajectoryInitialized = true;
             _velocity = _trajectory.InitialVelocity;
             _motionInitialized = true;
@@ -199,8 +217,8 @@ namespace Unity.MP_FPS
             bool isLobbedProjectile, int maxBounces, int wallPenetrations,
             float gravityWellPullStrength)
         {
-            return !isHoming && !isLobbedProjectile && maxBounces <= 0 &&
-                   wallPenetrations <= 0 && gravityWellPullStrength <= 0f;
+            return !isHoming && wallPenetrations <= 0 &&
+                   gravityWellPullStrength <= 0f;
         }
 
         public override void OnGhostLinked()
@@ -438,6 +456,8 @@ namespace Unity.MP_FPS
 
         public void UpdateClient(float deltaTime)
         {
+            var weaponData = WeaponManager.Instance.WeaponRegistry
+                .GetWeaponData(_weaponId);
             if (GhostGameObject != null && GhostGameObject.IsGhostLinked())
             {
                 var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
@@ -445,8 +465,27 @@ namespace Unity.MP_FPS
                     projectileData.HomingTurnSpeed);
                 if (projectileData.UsesTrajectory != 0)
                 {
-                    ApplyTrajectoryState(projectileData);
-                    if (SimulateClientTrajectory(projectileData))
+                    bool retainUnconfirmedOwnedBounce =
+                        GhostGameObject.Role == MultiplayerRole.ClientOwned &&
+                        _trajectoryInitialized &&
+                        _bounceCount > projectileData.BounceCount;
+                    if (!retainUnconfirmedOwnedBounce)
+                    {
+                        ApplyTrajectoryState(projectileData);
+                    }
+
+                    bool predictOwnedBounce =
+                        GhostGameObject.Role == MultiplayerRole.ClientOwned &&
+                        weaponData != null &&
+                        (retainUnconfirmedOwnedBounce ||
+                         (!_pendingTrajectoryVisualCorrection &&
+                          _trajectoryVisualCorrectionRemaining <= 0f));
+                    if (predictOwnedBounce &&
+                        SimulatePredictedTrajectory(weaponData))
+                    {
+                        return;
+                    }
+                    if (SimulateClientTrajectory(projectileData, deltaTime))
                     {
                         return;
                     }
@@ -454,7 +493,6 @@ namespace Unity.MP_FPS
                 ApplyServerMotionState(projectileData);
             }
 
-            var weaponData = WeaponManager.Instance.WeaponRegistry.GetWeaponData(_weaponId);
             if (weaponData != null)
             {
                 SimulateCosmeticProjectile(deltaTime, weaponData);
@@ -498,15 +536,16 @@ namespace Unity.MP_FPS
                 return true;
             }
 
-            if (CheckForCollision(weaponData, displacement))
+            if (CheckForCollision(weaponData, displacement, elapsedSeconds))
             {
                 return true;
             }
 
             Move(displacement);
-            _distanceTravelled = Vector3.Distance(_trajectory.Origin,
-                transform.position);
-            _localTime = elapsedSeconds;
+            _distanceTravelled = _trajectoryDistanceOffset +
+                                 Vector3.Distance(_trajectory.Origin,
+                                     transform.position);
+            _localTime = _trajectoryAgeOffset + elapsedSeconds;
             if (_growsOverDistance)
             {
                 transform.localScale = Vector3.one * _runtimeProjectileScale *
@@ -521,7 +560,8 @@ namespace Unity.MP_FPS
             return true;
         }
 
-        private bool SimulateClientTrajectory(in ProjectileData projectileData)
+        private bool SimulateClientTrajectory(in ProjectileData projectileData,
+            float deltaTime)
         {
             bool usePredictedTimeline = GhostGameObject.Role ==
                                         MultiplayerRole.ClientOwned;
@@ -534,10 +574,36 @@ namespace Unity.MP_FPS
 
             Vector3 targetPosition = _trajectory.EvaluatePosition(elapsedSeconds);
             _velocity = _trajectory.EvaluateVelocity(elapsedSeconds);
+            if (_pendingTrajectoryVisualCorrection)
+            {
+                _trajectoryVisualOffset = transform.position - targetPosition;
+                _trajectoryVisualCorrectionRemaining =
+                    GhostGameObject.Role == MultiplayerRole.ClientOwned
+                        ? OwnedBounceCorrectionSeconds
+                        : RemoteBounceCorrectionSeconds;
+                _pendingTrajectoryVisualCorrection = false;
+            }
+
+            if (_trajectoryVisualCorrectionRemaining > 0f)
+            {
+                float correctionDelta = Mathf.Max(0f, deltaTime);
+                float blend = Mathf.Clamp01(correctionDelta /
+                    Mathf.Max(0.001f, _trajectoryVisualCorrectionRemaining));
+                _trajectoryVisualOffset = Vector3.Lerp(
+                    _trajectoryVisualOffset, Vector3.zero, blend);
+                _trajectoryVisualCorrectionRemaining = Mathf.Max(0f,
+                    _trajectoryVisualCorrectionRemaining - correctionDelta);
+                targetPosition += _trajectoryVisualOffset;
+            }
+            else
+            {
+                _trajectoryVisualOffset = Vector3.zero;
+            }
             Move(targetPosition - transform.position);
-            _distanceTravelled = Vector3.Distance(_trajectory.Origin,
-                transform.position);
-            _localTime = elapsedSeconds;
+            _distanceTravelled = _trajectoryDistanceOffset +
+                                 Vector3.Distance(_trajectory.Origin,
+                                     transform.position);
+            _localTime = _trajectoryAgeOffset + elapsedSeconds;
             if (_growsOverDistance)
             {
                 transform.localScale = Vector3.one * _runtimeProjectileScale *
@@ -547,7 +613,7 @@ namespace Unity.MP_FPS
             return true;
         }
 
-        private bool SimulatePredictedTrajectory()
+        private bool SimulatePredictedTrajectory(WeaponData weaponData)
         {
             if (!TryGetTrajectoryElapsedSeconds(_predictedTrajectoryStartTick,
                     true, out float elapsedSeconds))
@@ -557,10 +623,78 @@ namespace Unity.MP_FPS
 
             Vector3 targetPosition = _trajectory.EvaluatePosition(elapsedSeconds);
             _velocity = _trajectory.EvaluateVelocity(elapsedSeconds);
+            Vector3 displacement = targetPosition - transform.position;
+            _collisionGraceTimer = Mathf.Max(0f,
+                _collisionGraceTimer - Time.deltaTime);
+            bool predictedBounce = false;
+            if (_collisionGraceTimer <= 0f && _runtimeMaxBounces > 0 &&
+                _bounceCount < _runtimeMaxBounces &&
+                displacement.sqrMagnitude > 0.000001f &&
+                UnityEngine.Physics.SphereCast(
+                    transform.position,
+                    CurrentCollisionRadius,
+                    displacement.normalized,
+                    out RaycastHit hit,
+                    displacement.magnitude,
+                    LayerMask.GetMask("Ground", "Default"),
+                    QueryTriggerInteraction.Ignore) &&
+                !IsPlayerCollider(hit.collider))
+            {
+                float previousElapsed = Mathf.Max(0f,
+                    _localTime - _trajectoryAgeOffset);
+                float hitFraction = Mathf.Clamp01(hit.distance /
+                    displacement.magnitude);
+                float impactElapsed = Mathf.Lerp(previousElapsed,
+                    elapsedSeconds, hitFraction);
+                float impactAge = _trajectoryAgeOffset + impactElapsed;
+                float impactDistance = _distanceTravelled + hit.distance;
+                Vector3 impactVelocity =
+                    _trajectory.EvaluateVelocity(impactElapsed);
+                Vector3 normal = hit.normal.sqrMagnitude > 0.0001f
+                    ? hit.normal.normalized
+                    : -impactVelocity.normalized;
+                Vector3 bounceOrigin = hit.point + normal *
+                    (CurrentCollisionRadius + BounceSurfaceOffset);
+                Vector3 bounceVelocity = Vector3.Reflect(
+                    impactVelocity, normal) * _bounceVelocityRetention;
+
+                if (TryGetTrajectoryFixedTimeStep(out float fixedTimeStep))
+                {
+                    float previousStartFraction = Mathf.Repeat(
+                        _trajectoryAgeOffset / fixedTimeStep, 1f);
+                    float ticksFromPreviousStart = previousStartFraction +
+                        impactElapsed / fixedTimeStep;
+                    uint wholeTickOffset = (uint)Mathf.Max(0,
+                        Mathf.FloorToInt(ticksFromPreviousStart));
+                    _predictedTrajectoryStartTick += wholeTickOffset;
+                }
+
+                float3 acceleration = IsLobbedProjectile(weaponData)
+                    ? new float3(0f, -GetProjectileGravity(weaponData), 0f)
+                    : float3.zero;
+                _trajectory = new ProjectileTrajectory(bounceOrigin,
+                    bounceVelocity, acceleration);
+                _trajectoryAgeOffset = impactAge;
+                _trajectoryDistanceOffset = impactDistance;
+                _bounceCount++;
+                _collisionGraceTimer = BounceCollisionGrace;
+
+                float remainingSeconds = Mathf.Max(0f,
+                    elapsedSeconds - impactElapsed);
+                targetPosition = _trajectory.EvaluatePosition(remainingSeconds);
+                _velocity = _trajectory.EvaluateVelocity(remainingSeconds);
+                _localTime = impactAge + remainingSeconds;
+                _distanceTravelled = impactDistance + Vector3.Distance(
+                    bounceOrigin, targetPosition);
+                predictedBounce = true;
+            }
             Move(targetPosition - transform.position);
-            _distanceTravelled = Vector3.Distance(_trajectory.Origin,
-                transform.position);
-            _localTime = elapsedSeconds;
+            if (!predictedBounce)
+            {
+                _distanceTravelled = _trajectoryDistanceOffset +
+                    Vector3.Distance(_trajectory.Origin, transform.position);
+                _localTime = _trajectoryAgeOffset + elapsedSeconds;
+            }
             if (_growsOverDistance)
             {
                 transform.localScale = Vector3.one * _runtimeProjectileScale *
@@ -577,14 +711,64 @@ namespace Unity.MP_FPS
                 return;
             }
 
+            bool bounceSegmentChanged = _trajectoryInitialized &&
+                projectileData.BounceCount > 0 &&
+                (projectileData.TrajectoryStartTick !=
+                     _predictedTrajectoryStartTick ||
+                 math.distancesq(projectileData.TrajectoryOrigin,
+                     _trajectory.Origin) > 0.000001f);
             _trajectory = new ProjectileTrajectory(
                 projectileData.TrajectoryOrigin,
                 projectileData.TrajectoryInitialVelocity,
                 projectileData.TrajectoryAcceleration);
             _predictedTrajectoryStartTick = projectileData.TrajectoryStartTick;
+            _trajectoryAgeOffset = projectileData.TrajectoryAgeOffset;
+            _trajectoryDistanceOffset = projectileData.TrajectoryDistanceOffset;
+            _bounceCount = projectileData.BounceCount;
             _trajectoryInitialized = true;
             _velocity = projectileData.TrajectoryInitialVelocity;
             _motionInitialized = true;
+            if (bounceSegmentChanged && GhostGameObject != null &&
+                GhostGameObject.IsGhostLinked() &&
+                GhostGameObject.Role != MultiplayerRole.Server)
+            {
+                _pendingTrajectoryVisualCorrection = true;
+            }
+        }
+
+        private bool TryGetTrajectoryFixedTimeStep(out float fixedTimeStep)
+        {
+            fixedTimeStep = 0f;
+            World world = GhostGameObject != null &&
+                          GhostGameObject.IsGhostLinked()
+                ? GhostGameObject.World
+                : GhostBridgeBootstrap.Instance?.ClientWorld;
+            if (world == null || !world.IsCreated)
+            {
+                return false;
+            }
+
+            ClientServerTickRate tickRate;
+            if (GhostGameObject != null && GhostGameObject.IsGhostLinked())
+            {
+                if (!GhostGameObject.TryReadSingleton(out tickRate))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                using EntityQuery query = world.EntityManager.CreateEntityQuery(
+                    ComponentType.ReadOnly<ClientServerTickRate>());
+                if (!query.TryGetSingleton(out tickRate))
+                {
+                    return false;
+                }
+            }
+
+            tickRate.ResolveDefaults();
+            fixedTimeStep = tickRate.SimulationFixedTimeStep;
+            return fixedTimeStep > 0f;
         }
 
         private bool TryGetTrajectoryElapsedSeconds(uint startTick,
@@ -635,9 +819,13 @@ namespace Unity.MP_FPS
                 return false;
             }
 
+            float fixedTimeStep = tickRate.SimulationFixedTimeStep;
+            float startTickFraction = fixedTimeStep > 0f
+                ? Mathf.Repeat(_trajectoryAgeOffset / fixedTimeStep, 1f)
+                : 0f;
             elapsedSeconds = ProjectileTrajectory.ElapsedSeconds(
                 currentTick.TickIndexForValidTick, fraction, startTick,
-                tickRate.SimulationFixedTimeStep);
+                startTickFraction, fixedTimeStep);
             return true;
         }
 
@@ -684,7 +872,8 @@ namespace Unity.MP_FPS
                                        (1f + _distanceTravelled * _growthPerMetre);
         }
 
-        private bool CheckForCollision(WeaponData weaponData, Vector3 displacement)
+        private bool CheckForCollision(WeaponData weaponData, Vector3 displacement,
+            float trajectoryElapsedSeconds = -1f)
         {
             if (_collisionGraceTimer > 0f || displacement.sqrMagnitude <= 0.000001f)
             {
@@ -693,6 +882,9 @@ namespace Unity.MP_FPS
 
             Vector3 travelDirection = displacement.normalized;
             float distanceThisFrame = displacement.magnitude;
+            float previousTrajectoryElapsed = trajectoryElapsedSeconds >= 0f
+                ? Mathf.Max(0f, _localTime - _trajectoryAgeOffset)
+                : -1f;
             var projectileData = GhostGameObject.ReadGhostComponentData<ProjectileData>();
             var world = GhostGameObject.World;
             var movementSystem = world.GetExistingSystemManaged<ServerPlayerMovementSystem>();
@@ -740,7 +932,8 @@ namespace Unity.MP_FPS
                     return true;
                 }
                 if (TryBounce(overlappingGeometry, impactPosition, impactNormal,
-                        weaponData))
+                        weaponData, previousTrajectoryElapsed,
+                        _distanceTravelled, trajectoryElapsedSeconds))
                 {
                     return true;
                 }
@@ -789,8 +982,19 @@ namespace Unity.MP_FPS
                 return true;
             }
 
+            float hitFraction = distanceThisFrame > 0.000001f
+                ? Mathf.Clamp01(closestHit.distance / distanceThisFrame)
+                : 0f;
+            float impactElapsed = trajectoryElapsedSeconds >= 0f
+                ? Mathf.Lerp(previousTrajectoryElapsed,
+                    trajectoryElapsedSeconds, hitFraction)
+                : -1f;
+            float impactDistance = trajectoryElapsedSeconds >= 0f
+                ? _distanceTravelled + closestHit.distance
+                : -1f;
             if (TryBounce(closestHit.collider, closestHit.point, closestHit.normal,
-                    weaponData))
+                    weaponData, impactElapsed, impactDistance,
+                    trajectoryElapsedSeconds))
             {
                 return true;
             }
@@ -871,7 +1075,10 @@ namespace Unity.MP_FPS
         }
 
         private bool TryBounce(Collider hitCollider, Vector3 impactPosition,
-            Vector3 impactNormal, WeaponData weaponData)
+            Vector3 impactNormal, WeaponData weaponData,
+            float trajectoryImpactElapsedSeconds = -1f,
+            float trajectoryImpactDistance = -1f,
+            float trajectoryEvaluationElapsedSeconds = -1f)
         {
             // Bounce counts apply only to world geometry. Player colliders can live
             // on child objects, so enforce the rule here as well as at call sites.
@@ -886,6 +1093,13 @@ namespace Unity.MP_FPS
                 : -_velocity.normalized;
             transform.position = impactPosition + normal *
                 (CurrentCollisionRadius + BounceSurfaceOffset);
+            if (trajectoryImpactElapsedSeconds >= 0f)
+            {
+                _localTime = _trajectoryAgeOffset +
+                             trajectoryImpactElapsedSeconds;
+                _distanceTravelled = Mathf.Max(_distanceTravelled,
+                    trajectoryImpactDistance);
+            }
             _velocity = Vector3.Reflect(_velocity, normal) *
                         _bounceVelocityRetention;
             _bounceCount++;
@@ -896,8 +1110,83 @@ namespace Unity.MP_FPS
                 transform.rotation = Quaternion.LookRotation(_velocity.normalized);
             }
 
-            PublishServerMotionState();
+            if (!PublishServerTrajectorySegment(weaponData,
+                    trajectoryImpactElapsedSeconds))
+            {
+                PublishServerMotionState();
+            }
+            else if (trajectoryEvaluationElapsedSeconds >=
+                     trajectoryImpactElapsedSeconds &&
+                     trajectoryImpactElapsedSeconds >= 0f)
+            {
+                // The collision happened partway through this tick. Advance the
+                // authoritative presentation through the unused remainder so the
+                // server does not visibly pause at the contact point for one frame.
+                float remainingSeconds = trajectoryEvaluationElapsedSeconds -
+                                         trajectoryImpactElapsedSeconds;
+                Vector3 endOfTickPosition =
+                    _trajectory.EvaluatePosition(remainingSeconds);
+                _velocity = _trajectory.EvaluateVelocity(remainingSeconds);
+                Move(endOfTickPosition - transform.position);
+                _localTime = _trajectoryAgeOffset + remainingSeconds;
+                _distanceTravelled = _trajectoryDistanceOffset +
+                    Vector3.Distance(_trajectory.Origin, transform.position);
+            }
 
+            return true;
+        }
+
+        private bool PublishServerTrajectorySegment(WeaponData weaponData,
+            float trajectoryImpactElapsedSeconds)
+        {
+            if (GhostGameObject == null || !GhostGameObject.IsGhostLinked() ||
+                GhostGameObject.Role != MultiplayerRole.Server)
+            {
+                return false;
+            }
+
+            var projectileData =
+                GhostGameObject.ReadGhostComponentData<ProjectileData>();
+            if (projectileData.UsesTrajectory == 0 ||
+                !GhostGameObject.TryReadSingleton(out NetworkTime networkTime) ||
+                !networkTime.ServerTick.IsValid)
+            {
+                return false;
+            }
+
+            uint segmentStartTick =
+                networkTime.ServerTick.TickIndexForValidTick;
+            if (trajectoryImpactElapsedSeconds >= 0f &&
+                GhostGameObject.TryReadSingleton(out ClientServerTickRate tickRate))
+            {
+                tickRate.ResolveDefaults();
+                float fixedTimeStep = tickRate.SimulationFixedTimeStep;
+                if (fixedTimeStep > 0f)
+                {
+                    uint wholeTickOffset = (uint)Mathf.Max(0,
+                        Mathf.FloorToInt(_localTime / fixedTimeStep));
+                    segmentStartTick = projectileData.SpawnTick +
+                                       wholeTickOffset;
+                }
+            }
+            float3 acceleration = IsLobbedProjectile(weaponData)
+                ? new float3(0f, -GetProjectileGravity(weaponData), 0f)
+                : float3.zero;
+
+            projectileData.Position = transform.position;
+            projectileData.Velocity = _velocity;
+            projectileData.BounceCount = _bounceCount;
+            projectileData.Age = _localTime;
+            projectileData.TrajectoryOrigin = transform.position;
+            projectileData.TrajectoryInitialVelocity = _velocity;
+            projectileData.TrajectoryAcceleration = acceleration;
+            projectileData.TrajectoryStartTick = segmentStartTick;
+            projectileData.TrajectoryAgeOffset = _localTime;
+            projectileData.TrajectoryDistanceOffset = _distanceTravelled;
+            projectileData.MotionRevision++;
+            GhostGameObject.WriteGhostComponentData(projectileData);
+
+            ApplyTrajectoryState(projectileData);
             return true;
         }
 

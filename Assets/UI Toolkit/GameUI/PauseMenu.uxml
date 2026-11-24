@@ -11,9 +11,10 @@
                     <ui:Button text="Self Grow Binding: Shift" name="SelfGrowBindingButton" tabindex="1"/>
                     <ui:Button text="Reflect Shield Binding: F" name="ReflectBindingButton" tabindex="2"/>
                     <ui:Button text="Utility Ability Binding: Right Button" name="UtilityBindingButton" tabindex="3"/>
-                    <ui:Button text="Resume" name="ResumeButton" tabindex="4" selectable="false" focusable="false"/>
-                    <ui:Button text="Main Menu" name="MainMenuButton" tabindex="5"/>
-                    <ui:Button text="Quit" name="QuitButton" tabindex="6"/>
+                    <ui:Button text="Card Testing Binding: F8" name="CardTestingBindingButton" tabindex="4"/>
+                    <ui:Button text="Resume" name="ResumeButton" tabindex="5" selectable="false" focusable="false"/>
+                    <ui:Button text="Main Menu" name="MainMenuButton" tabindex="6"/>
+                    <ui:Button text="Quit" name="QuitButton" tabindex="7"/>
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

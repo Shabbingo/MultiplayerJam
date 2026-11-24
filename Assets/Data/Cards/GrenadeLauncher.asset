@@ -47,3 +47,12 @@ MonoBehaviour:
   m_BounceVelocityRetention: 1
   m_DamageReductionPercent: 0
   m_TeleportFreezeSeconds: 0.1
+  m_UtilityCooldownSeconds: 0
+  m_UtilityForwardSpeed: 18
+  m_UtilityPushForce: 12
+  m_UtilityUpForce: 8
+  m_UtilityFrontDot: 0.35
+  m_UtilityMirageTint: {r: 0.35, g: 0.85, b: 1, a: 1}
+  m_UtilityMirageDistortion: 0.012
+  m_UtilityMirageOpacity: 0.78
+  m_UtilityMirageWobble: 0.009

@@ -1,0 +1,133 @@
+.card-test-host {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.card-test-overlay {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    align-items: flex-start;
+    justify-content: center;
+    background-color: rgba(5, 8, 14, 0.28);
+}
+
+.card-test-overlay.card-test-open {
+    display: flex;
+}
+
+.card-test-window {
+    width: 31%;
+    min-width: 360px;
+    max-width: 520px;
+    height: 92%;
+    margin-left: 14px;
+    padding: 12px;
+    background-color: rgb(19, 25, 37);
+    border-width: 2px;
+    border-color: rgb(78, 101, 139);
+    border-radius: 8px;
+}
+
+.card-test-header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.card-test-title {
+    flex-grow: 1;
+    color: white;
+    font-size: 24px;
+    -unity-font-style: bold;
+}
+
+.card-test-close {
+    width: 42px;
+    height: 34px;
+}
+
+.card-test-help,
+.card-test-status {
+    color: rgb(177, 193, 218);
+    margin-bottom: 8px;
+}
+
+.card-test-search {
+    margin-bottom: 10px;
+}
+
+.card-test-list {
+    flex-grow: 1;
+}
+
+.card-test-row {
+    min-height: 96px;
+    margin-bottom: 5px;
+    padding: 8px;
+    background-color: rgb(29, 38, 55);
+    border-left-width: 5px;
+    border-left-color: rgb(155, 166, 184);
+}
+
+.card-test-row.card-rarity-rare {
+    border-left-color: rgb(53, 145, 255);
+}
+
+.card-test-row.card-rarity-epic {
+    border-left-color: rgb(180, 75, 255);
+}
+
+.card-test-details {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.card-test-name {
+    color: white;
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+.card-test-description {
+    color: rgb(179, 190, 207);
+    white-space: normal;
+}
+
+.card-test-targets {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.card-test-target {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 8px;
+    margin-bottom: 4px;
+}
+
+.card-test-target-label {
+    color: rgb(210, 220, 235);
+    min-width: 52px;
+    -unity-text-align: middle-left;
+}
+
+.card-test-stack {
+    color: white;
+    min-width: 26px;
+    -unity-text-align: middle-center;
+}
+
+.card-test-step {
+    width: 32px;
+    height: 30px;
+    margin-left: 2px;
+}

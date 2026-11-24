@@ -1,0 +1,15 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="CardTestingPanel.uss" />
+    <ui:VisualElement name="cardTestingOverlay" class="card-test-overlay">
+        <ui:VisualElement class="card-test-window">
+            <ui:VisualElement class="card-test-header">
+                <ui:Label text="CARD TESTING" class="card-test-title" />
+                <ui:Button name="cardTestingClose" text="X" class="card-test-close" />
+            </ui:VisualElement>
+            <ui:Label text="Development tool — changes are applied authoritatively to your current character." class="card-test-help" />
+            <ui:TextField name="cardTestingSearch" label="Search" class="card-test-search" />
+            <ui:Label name="cardTestingStatus" text="Waiting for player state..." class="card-test-status" />
+            <ui:ScrollView name="cardTestingList" class="card-test-list" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

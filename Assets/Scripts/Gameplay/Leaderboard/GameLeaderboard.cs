@@ -69,6 +69,8 @@ namespace Gameplay.Leaderboard
         private FixedString128Bytes _lastPickMessage;
         private DraftPickRequestRpc? _pendingClientPick;
         private bool _pendingLobbyStartRequest;
+        private readonly Queue<CardTestChangeRequestRpc>
+            _pendingCardTestChanges = new();
 
         public bool IsMatchEnded => _matchEnded;
         public bool IsDrafting => _phase == RoundPhase.Drafting;
@@ -117,6 +119,8 @@ namespace Gameplay.Leaderboard
                                         _localNetworkId == GetLobbyHostNetworkId();
         public bool CanLocalPlayerStartLobby => IsLocalLobbyHost &&
                                                 LobbyPlayerCount >= 2;
+        public static bool CardTestingEnabled =>
+            Debug.isDebugBuild || Application.isEditor;
 
         private struct KillInfo
         {
@@ -226,6 +230,25 @@ namespace Gameplay.Leaderboard
             _pendingLobbyStartRequest = true;
         }
 
+        public void RequestCardTestChange(int cardId, ModifierTarget target,
+            int delta)
+        {
+            if (!CardTestingEnabled || Role == MultiplayerRole.Server ||
+                _localNetworkId < 0 || cardId <= 0 ||
+                target == ModifierTarget.None || delta == 0)
+            {
+                return;
+            }
+
+            _pendingCardTestChanges.Enqueue(new CardTestChangeRequestRpc
+            {
+                RequesterNetworkId = _localNetworkId,
+                CardId = cardId,
+                Target = (byte)target,
+                Delta = (sbyte)Mathf.Clamp(delta, -1, 1)
+            });
+        }
+
         public void RemovePlayer(int networkId)
         {
             if (Role != MultiplayerRole.Server || GhostGameObject == null ||
@@ -315,6 +338,11 @@ namespace Gameplay.Leaderboard
                 TryStartLobbyMatch(request.RequesterNetworkId, buffer);
             }
 
+            while (ConsumeDirectedRPC(out CardTestChangeRequestRpc request))
+            {
+                TryApplyCardTestChange(request);
+            }
+
             _roundStateSyncTimer -= deltaTime;
             if (_roundStateSyncTimer <= 0f)
             {
@@ -343,6 +371,11 @@ namespace Gameplay.Leaderboard
                     RequesterNetworkId = _localNetworkId
                 });
                 _pendingLobbyStartRequest = false;
+            }
+
+            while (_pendingCardTestChanges.Count > 0)
+            {
+                SendDirectedRPC(_pendingCardTestChanges.Dequeue());
             }
 
             while (ConsumeRPC(out RoundStateSyncRpc stateRpc))
@@ -438,6 +471,41 @@ namespace Gameplay.Leaderboard
             {
                 _matchRestartTimeRemaining = Mathf.Max(0f,
                     _matchRestartTimeRemaining - deltaTime);
+            }
+        }
+
+        private void TryApplyCardTestChange(
+            in CardTestChangeRequestRpc request)
+        {
+            if (!CardTestingEnabled || request.Delta == 0 ||
+                request.RequesterNetworkId < 0)
+            {
+                return;
+            }
+
+            CardModifierDefinition card = GetCardDefinition(request.CardId);
+            ModifierTarget target = (ModifierTarget)request.Target;
+            if (card == null || !card.Allows(target))
+            {
+                return;
+            }
+
+            PlayerRunModifierStoreSystem store = GhostGameObject.World
+                .GetExistingSystemManaged<PlayerRunModifierStoreSystem>();
+            if (store == null)
+            {
+                return;
+            }
+
+            if (request.Delta > 0)
+            {
+                store.TryApplyCard(request.RequesterNetworkId, card, target,
+                    out _);
+            }
+            else
+            {
+                store.TryRemoveCard(request.RequesterNetworkId, card, target,
+                    out _);
             }
         }
 
@@ -1203,6 +1271,16 @@ namespace Gameplay.Leaderboard
     {
         public Unity.Entities.Hash128 TargetGuid;
         public int RequesterNetworkId;
+    }
+
+    public struct CardTestChangeRequestRpc : IRpcCommand,
+        IGhostGameObjectDirectedRPC
+    {
+        public Unity.Entities.Hash128 TargetGuid;
+        public int RequesterNetworkId;
+        public int CardId;
+        public byte Target;
+        public sbyte Delta;
     }
 
     public struct RoundStateSyncRpc : IRpcCommand

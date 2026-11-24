@@ -42,6 +42,7 @@ namespace Unity.MP_FPS
         private Label m_UtilityStatusLabel;
         private Label m_ReloadingLabel;
         private VisualElement m_Reticle;
+        private CardTestingPanelController m_CardTestingPanel;
 
         // UI-side timer to ensure shot feedback is visible for a minimum duration.
         private float m_shotFeedbackTimer = 0f;
@@ -65,6 +66,7 @@ namespace Unity.MP_FPS
         void OnEnable()
         {
             m_RootElement = GetComponent<UIDocument>().rootVisualElement;
+            m_CardTestingPanel = new CardTestingPanelController(m_RootElement);
 
             // Find the UI elements by name
             m_HealthBar = m_RootElement.Q<ProgressBar>("player-health-bar");
@@ -121,6 +123,12 @@ namespace Unity.MP_FPS
             m_Reticle = m_RootElement.Q<VisualElement>("player-reticle");
         }
 
+        void OnDisable()
+        {
+            m_CardTestingPanel?.Dispose();
+            m_CardTestingPanel = null;
+        }
+
         private void InitializeEcs()
         {
             // Find the active client world
@@ -148,6 +156,7 @@ namespace Unity.MP_FPS
 
         void LateUpdate()
         {
+            m_CardTestingPanel?.Update();
             // Toggle HUD visibility based on the overall game state
             bool isInGame = GameSettings.Instance.GameState == GlobalGameState.InGame;
             if (m_RootElement.style.display != (isInGame ? DisplayStyle.Flex : DisplayStyle.None))

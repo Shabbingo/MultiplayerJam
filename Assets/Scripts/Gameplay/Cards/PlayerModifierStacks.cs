@@ -154,6 +154,42 @@ namespace Unity.MP_FPS.Cards
             return TryIncrement(card.Kind, target);
         }
 
+        public bool TryRemove(CardModifierDefinition card, ModifierTarget target)
+        {
+            if (card == null || !card.Allows(target) ||
+                GetStacks(card.Kind, target) <= 0)
+            {
+                return false;
+            }
+
+            var rebuilt = new PlayerModifierStacks();
+            foreach (CardModifierKind kind in
+                     System.Enum.GetValues(typeof(CardModifierKind)))
+            {
+                foreach (ModifierTarget candidateTarget in new[]
+                         {
+                             ModifierTarget.LeftHand,
+                             ModifierTarget.RightHand,
+                             ModifierTarget.Self
+                         })
+                {
+                    int count = GetStacks(kind, candidateTarget);
+                    if (kind == card.Kind && candidateTarget == target)
+                    {
+                        count--;
+                    }
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        rebuilt.TryIncrement(kind, candidateTarget);
+                    }
+                }
+            }
+
+            this = rebuilt;
+            return true;
+        }
+
         public bool TryIncrement(CardModifierKind kind, ModifierTarget target)
         {
             switch (kind, target)

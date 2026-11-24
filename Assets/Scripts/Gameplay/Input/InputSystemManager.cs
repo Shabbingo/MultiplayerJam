@@ -9,11 +9,14 @@ public class InputSystemManager : Singleton<InputSystemManager>
     private const string k_SelfGrowBindingOverridesKey = "SelfGrowBindingOverrides";
     private const string k_ReflectBindingOverridesKey = "ReflectBindingOverrides";
     private const string k_UtilityBindingOverridesKey = "UtilityBindingOverrides";
+    private const string k_CardTestingBindingOverridesKey =
+        "CardTestingBindingOverrides";
 
     public const string SelfShrinkActionName = "SelfShrink";
     public const string SelfGrowActionName = "SelfGrow";
     public const string ReflectActionName = "Reflect";
     public const string UtilityActionName = "Utility";
+    public const string CardTestingActionName = "CardTesting";
 
     protected override bool Persistent => true;
 
@@ -168,6 +171,7 @@ public class InputSystemManager : Singleton<InputSystemManager>
         EnsureAction(fpsMap, SelfGrowActionName, "<Keyboard>/leftShift");
         EnsureAction(fpsMap, ReflectActionName, "<Keyboard>/f");
         EnsureAction(fpsMap, UtilityActionName, "<Mouse>/rightButton");
+        EnsureAction(fpsMap, CardTestingActionName, "<Keyboard>/f8");
 
         ApplySavedBinding(GetGameplayAction(controls, SelfShrinkActionName),
             k_SelfShrinkBindingOverridesKey);
@@ -177,6 +181,8 @@ public class InputSystemManager : Singleton<InputSystemManager>
             k_ReflectBindingOverridesKey);
         ApplySavedBinding(GetGameplayAction(controls, UtilityActionName),
             k_UtilityBindingOverridesKey);
+        ApplySavedBinding(GetGameplayAction(controls, CardTestingActionName),
+            k_CardTestingBindingOverridesKey);
     }
 
     public static InputAction GetGameplayAction(InputSystem_Actions controls,
@@ -234,6 +240,7 @@ public class InputSystemManager : Singleton<InputSystemManager>
             SelfGrowActionName => k_SelfGrowBindingOverridesKey,
             ReflectActionName => k_ReflectBindingOverridesKey,
             UtilityActionName => k_UtilityBindingOverridesKey,
+            CardTestingActionName => k_CardTestingBindingOverridesKey,
             _ => throw new System.ArgumentOutOfRangeException(nameof(actionName), actionName,
                 "No saved binding key is registered for this action.")
         };

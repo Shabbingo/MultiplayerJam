@@ -54,6 +54,8 @@ namespace Unity.MP_FPS
         public float3 TrajectoryInitialVelocity;
         public float3 TrajectoryAcceleration;
         public uint TrajectoryStartTick;
+        public float TrajectoryAgeOffset;
+        public float TrajectoryDistanceOffset;
     }
 
     struct VfxSpawnData
@@ -898,10 +900,22 @@ namespace Unity.MP_FPS
                                             TrajectoryOrigin = shotOriginPosition,
                                             TrajectoryInitialVelocity =
                                                 (float3)(spawnRotation * Vector3.forward) *
-                                                runtimeProfile.ProjectileSpeed,
-                                            TrajectoryAcceleration = float3.zero,
+                                                runtimeProfile.ProjectileSpeed +
+                                                (runtimeProfile.IsLobbedProjectile
+                                                    ? new float3(0f,
+                                                        runtimeProfile.LobUpwardSpeed,
+                                                        0f)
+                                                    : float3.zero),
+                                            TrajectoryAcceleration =
+                                                runtimeProfile.IsLobbedProjectile
+                                                    ? new float3(0f,
+                                                        -runtimeProfile.ProjectileGravity,
+                                                        0f)
+                                                    : float3.zero,
                                             TrajectoryStartTick =
-                                                commandInput.Tick.TickIndexForValidTick
+                                                commandInput.Tick.TickIndexForValidTick,
+                                            TrajectoryAgeOffset = 0f,
+                                            TrajectoryDistanceOffset = 0f
                                         });
                                     }
                                     else
@@ -979,7 +993,10 @@ namespace Unity.MP_FPS
                                 spawnData.TrajectoryInitialVelocity,
                             TrajectoryAcceleration =
                                 spawnData.TrajectoryAcceleration,
-                            TrajectoryStartTick = spawnData.TrajectoryStartTick
+                            TrajectoryStartTick = spawnData.TrajectoryStartTick,
+                            TrajectoryAgeOffset = spawnData.TrajectoryAgeOffset,
+                            TrajectoryDistanceOffset =
+                                spawnData.TrajectoryDistanceOffset
                         });
                     });
             }

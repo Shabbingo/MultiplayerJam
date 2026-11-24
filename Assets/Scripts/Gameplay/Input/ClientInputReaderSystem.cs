@@ -93,7 +93,8 @@ public partial class ClientInputReaderSystem : SystemBase
 
                 ProcessGameplayInput(controls, ref playerInput);
 
-                bool gameplayKeysEnabled = !GameSettings.Instance.IsPauseMenuOpen;
+                bool gameplayKeysEnabled = !GameSettings.Instance.IsPauseMenuOpen &&
+                                           !CardTestingPanelController.IsOpen;
                 bool shrinkHeld = gameplayKeysEnabled &&
                     InputSystemManager.GetGameplayAction(controls,
                         InputSystemManager.SelfShrinkActionName).IsPressed();
@@ -175,7 +176,8 @@ public partial class ClientInputReaderSystem : SystemBase
 
     private void ProcessGameplayInput(in InputSystem_Actions controls, ref PlayerInput playerInput)
     {
-        bool gameplayKeysEnabled = !GameSettings.Instance.IsPauseMenuOpen;
+        bool gameplayKeysEnabled = !GameSettings.Instance.IsPauseMenuOpen &&
+                                   !CardTestingPanelController.IsOpen;
         bool reflectPressed = gameplayKeysEnabled &&
             InputSystemManager.GetGameplayAction(controls,
                 InputSystemManager.ReflectActionName).WasPressedThisFrame();

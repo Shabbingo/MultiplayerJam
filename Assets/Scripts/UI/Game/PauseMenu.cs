@@ -21,6 +21,8 @@ namespace Unity.MP_FPS
             public const string SelfGrowBindingButton = "SelfGrowBindingButton";
             public const string ReflectBindingButton = "ReflectBindingButton";
             public const string UtilityBindingButton = "UtilityBindingButton";
+            public const string CardTestingBindingButton =
+                "CardTestingBindingButton";
         }
 
         Button m_ResumeButton;
@@ -33,6 +35,7 @@ namespace Unity.MP_FPS
         Button m_SelfGrowBindingButton;
         Button m_ReflectBindingButton;
         Button m_UtilityBindingButton;
+        Button m_CardTestingBindingButton;
         InputActionRebindingExtensions.RebindingOperation m_RebindOperation;
         int m_IgnorePauseToggleFrame = -1;
 
@@ -74,10 +77,13 @@ namespace Unity.MP_FPS
             m_SelfGrowBindingButton = root.Q<Button>(UIElementNames.SelfGrowBindingButton);
             m_ReflectBindingButton = root.Q<Button>(UIElementNames.ReflectBindingButton);
             m_UtilityBindingButton = root.Q<Button>(UIElementNames.UtilityBindingButton);
+            m_CardTestingBindingButton = root.Q<Button>(
+                UIElementNames.CardTestingBindingButton);
             m_SelfShrinkBindingButton.clicked += StartSelfShrinkRebind;
             m_SelfGrowBindingButton.clicked += StartSelfGrowRebind;
             m_ReflectBindingButton.clicked += StartReflectRebind;
             m_UtilityBindingButton.clicked += StartUtilityRebind;
+            m_CardTestingBindingButton.clicked += StartCardTestingRebind;
             RefreshBindings();
         }
 
@@ -94,6 +100,7 @@ namespace Unity.MP_FPS
             m_SelfGrowBindingButton.clicked -= StartSelfGrowRebind;
             m_ReflectBindingButton.clicked -= StartReflectRebind;
             m_UtilityBindingButton.clicked -= StartUtilityRebind;
+            m_CardTestingBindingButton.clicked -= StartCardTestingRebind;
 
             if (m_RebindOperation != null)
             {
@@ -169,6 +176,10 @@ namespace Unity.MP_FPS
         void StartUtilityRebind() => StartRebind(
             InputSystemManager.UtilityActionName, m_UtilityBindingButton);
 
+        void StartCardTestingRebind() => StartRebind(
+            InputSystemManager.CardTestingActionName,
+            m_CardTestingBindingButton);
+
         void StartRebind(string actionName, Button bindingButton)
         {
             if (m_RebindOperation != null)
@@ -229,6 +240,8 @@ namespace Unity.MP_FPS
                 m_SelfGrowBindingButton.text = "Self Grow Binding: Unavailable";
                 m_ReflectBindingButton.text = "Reflect Shield Binding: Unavailable";
                 m_UtilityBindingButton.text = "Utility Ability Binding: Unavailable";
+                m_CardTestingBindingButton.text =
+                    "Card Testing Binding: Unavailable";
                 return;
             }
 
@@ -245,6 +258,10 @@ namespace Unity.MP_FPS
             SetBindingButtonText(m_UtilityBindingButton, "Utility Ability Binding",
                 InputSystemManager.GetGameplayAction(controls,
                     InputSystemManager.UtilityActionName));
+            SetBindingButtonText(m_CardTestingBindingButton,
+                "Card Testing Binding",
+                InputSystemManager.GetGameplayAction(controls,
+                    InputSystemManager.CardTestingActionName));
         }
 
         static InputAction GetAction(InputSystem_Actions controls, string actionName)

@@ -34,7 +34,8 @@ namespace Unity.MP_FPS
         }
 
         public static float ElapsedSeconds(uint currentTick,
-            float currentTickFraction, uint startTick, float fixedTimeStep)
+            float currentTickFraction, uint startTick, float startTickFraction,
+            float fixedTimeStep)
         {
             int wholeTicks = unchecked((int)(currentTick - startTick));
             if (wholeTicks < 0)
@@ -42,7 +43,9 @@ namespace Unity.MP_FPS
                 return 0f;
             }
 
-            float ticks = wholeTicks + math.clamp(currentTickFraction, 0f, 1f);
+            float ticks = wholeTicks + math.clamp(currentTickFraction, 0f, 1f) -
+                          math.clamp(startTickFraction, 0f, 1f);
+            ticks = math.max(0f, ticks);
             return ticks * math.max(0f, fixedTimeStep);
         }
     }

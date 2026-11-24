@@ -53,6 +53,25 @@ namespace Unity.MP_FPS.Cards
             return true;
         }
 
+        public bool TryRemoveCard(int networkId, CardModifierDefinition card,
+            ModifierTarget target, out PlayerModifierStacks updated)
+        {
+            updated = GetOrCreate(networkId);
+            PlayerModifierStacks previous = updated;
+            if (!updated.TryRemove(card, target))
+            {
+                return false;
+            }
+
+            m_ByNetworkId[networkId] = updated;
+            if (m_CardPickCounts.TryGetValue(networkId, out int pickedCards))
+            {
+                m_CardPickCounts[networkId] = Mathf.Max(0, pickedCards - 1);
+            }
+            ApplyToLivingPlayer(networkId, in previous, in updated);
+            return true;
+        }
+
         public int GetCardPickCount(int networkId)
         {
             return m_CardPickCounts.TryGetValue(networkId, out int count)
